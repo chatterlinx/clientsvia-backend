@@ -52,6 +52,59 @@ function _isMetaContainer(title) {
 const SEVERITY_RANK = { CRITICAL: 4, HIGH: 3, MED: 2, LOW: 1, INFO: 0 };
 
 // ──────────────────────────────────────────────────────────────────────────
+// Deflection content detector
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Authored section.content (Fixed response, 30-42 words) that ENDS with
+// a dead-air promise like "let me check on that" or "I'd need to confirm"
+// is a content-quality bug — the caller is told to wait while the agent
+// has no async lookup mechanism. Surfaces these so the admin can rewrite.
+//
+// Rules:
+//   - Flags when a deflection phrase appears in the LAST sentence of the
+//     content. Trailing deflections are the problem; mid-content uses like
+//     "let me explain..." followed by a substantive answer are legitimate.
+//   - Matches the most common offenders: see|check|pull|look|confirm|verify.
+//
+// Related: answer-from-kb mode in composeSystemPrompt already bans these
+// as Claude's final words (April 17 2026). DEFLECTION_CONTENT catches the
+// authored-content version of the same failure mode.
+const DEFLECTION_PATTERNS = [
+  /\blet me (see|check|pull|look)\b/i,
+  /\bi(?:'ll| will| would|'d) (need|have) to (check|confirm|verify|look)\b/i,
+  /\bi(?:'ll| will) (check|confirm|verify|look) (on|into) (that|this)\b/i,
+  /\bone (moment|second|sec) while i\b/i,
+  /\bhold on while i\b/i,
+  /\bbear with me while i\b/i,
+  /\bgimme (a |one )?(sec|second|moment)\b/i,
+];
+
+function _contentIsDeflection(content) {
+  if (!content || typeof content !== 'string') return false;
+  const trimmed = content.trim();
+  if (trimmed.length < 15) return false;
+
+  // Split into sentences; inspect the LAST non-empty sentence.
+  // Regex splits on .!? — keeps short trailing fragments too.
+  const sentences = trimmed
+    .split(/[.!?]+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+  if (sentences.length === 0) return false;
+  const lastSentence = sentences[sentences.length - 1];
+
+  // Special case: content that is ONE sentence and starts with a deflection
+  // (e.g. "Let me pull that up for you.") — that IS the whole response,
+  // pure dead-air. Check the first sentence too when there's only one.
+  const firstSentence = sentences[0];
+
+  return DEFLECTION_PATTERNS.some(re =>
+    re.test(lastSentence) || (sentences.length === 1 && re.test(firstSentence))
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Build check entries
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -143,6 +196,20 @@ function _checkSection(section, container) {
       id:           'CONTENT_KEYWORDS_EMPTY',
       severity:     'MED',
       message:      `Section "${label}" has no contentKeywords. GATE 3 keyword fallback degraded.`,
+      sectionLabel: label,
+    });
+  }
+
+  // DEFLECTION_CONTENT — HIGH (authored "let me check" dead-air promise)
+  // Why HIGH: the caller hears a promise of action ("let me pull that up")
+  // but no lookup happens — pure dead air until the next turn. This is the
+  // #1 cause of "did the agent have any intention of coming back?" frustration.
+  if (active && _contentIsDeflection(section.content)) {
+    const _preview = section.content.slice(0, 160) + (section.content.length > 160 ? '…' : '');
+    checks.push({
+      id:           'DEFLECTION_CONTENT',
+      severity:     'HIGH',
+      message:      `Section "${label}" content ends with a dead-air promise (e.g. "let me check / I'd need to confirm"). Rewrite to deliver the answer from KB or hand off explicitly. Preview: "${_preview}"`,
       sectionLabel: label,
     });
   }
@@ -295,6 +362,7 @@ async function runHealthCheck(companyId) {
         'sections.tradeTerms':        1,
         'sections.negativeKeywords':  1,
         'sections.contentKeywords':   1,
+        'sections.content':           1,  // DEFLECTION_CONTENT scans trailing phrase
         'sections.phraseCore':        1,
         'sections.phraseCoreScoredAt': 1,
         'sections.callerPhrases.text':        1,

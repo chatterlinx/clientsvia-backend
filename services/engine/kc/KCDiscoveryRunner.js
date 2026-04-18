@@ -1865,7 +1865,39 @@ class KCDiscoveryRunner {
         }],
       }).catch(() => {});
 
-      // Fall through to _handleKCMatch — Groq reads filtered (or all) sections
+      // ── KC_SECTION_GAP → Claude answer-from-kb (April 17, 2026) ───────
+      // When the container matches but no section clears, Groq synthesis
+      // of the full (or pre-filtered) section list tends to produce
+      // deflections ("let me see what's going on", "I'd need to confirm
+      // that exact pricing") — dead-air promises with no backing lookup.
+      //
+      // Instead, route directly to Claude with answer-from-kb posture:
+      //   - composeSystemPrompt(mode='answer-from-kb') bans "let me check"
+      //     as final words and demands an ANSWER from KB
+      //   - callContext enriches with caller identity, prior visits,
+      //     repeat issues, rejected topics, recent QA
+      //   - kcContext is the top-N sections from THIS container (already
+      //     pre-filtered above) so Claude has focused, relevant content
+      //
+      // This is the "save the call" path for container-matched-no-section
+      // — the caller hit real territory; Claude now delivers a real answer.
+      logger.info('[KC_ENGINE] SECTION GAP → routing to Claude answer-from-kb (bypass Groq deflection)', {
+        companyId, callSid, turn,
+        containerTitle:  _gapContainerTitle,
+        sectionCount:    (match.container.sections || []).length,
+        gapFiltered:     _gapFiltered,
+        filteredTo:      _gapFilteredCount,
+      });
+
+      return await _handleLLMFallback({
+        userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
+        bridgeToken, redis, callerName, onSentence,
+        containers:     [match.container],   // single-container focus for kcContext
+        ehConfig,
+        notes,                               // enriched callContext source
+        cueFrame,                            // for section ranking
+        fallbackReason: 'kc_section_gap',    // distinguishes from no_kc_match in logs
+      });
     }
 
     // ── MATCH → DIRECT ANSWER ─────────────────────────────────────────────
@@ -2767,21 +2799,30 @@ function _buildCallContext(notes, behaviorBlock) {
 async function _handleLLMFallback({
   userInput, companyId, callSid, company, channel, nextState, emit,
   startMs, turn, bridgeToken, redis, callerName, onSentence,
-  containers = [],
-  notes      = null,
-  ehConfig   = null,   // Engine Hub runtime config (null = disabled/passive)
-  cueFrame   = null,   // CueExtractor output — used for KC section ranking
+  containers     = [],
+  notes          = null,
+  ehConfig       = null,   // Engine Hub runtime config (null = disabled/passive)
+  cueFrame       = null,   // CueExtractor output — used for KC section ranking
+  fallbackReason = null,   // Caller-supplied reason override (e.g. 'kc_section_gap')
 }) {
-  logger.info('[KC_ENGINE] No KC match — firing LLM fallback (Claude COMPLEX)', {
+  // Reason resolution: explicit override wins, else default based on container count.
+  // 'kc_section_gap'          → container matched but no section (answer-from-kb save)
+  // 'no_kc_match'             → no container scored above threshold
+  // 'no_containers_configured'→ company has zero scorable containers
+  const _reason = fallbackReason
+    || (containers.length ? 'no_kc_match' : 'no_containers_configured');
+
+  logger.info('[KC_ENGINE] Firing LLM fallback (Claude COMPLEX, answer-from-kb)', {
     companyId, callSid, turn, inputPreview: _clip(userInput, 40),
     containerCount: containers.length,
+    reason:         _reason,
   });
 
   // Emit rich diagnostic payload so Call Intelligence can explain WHY KC
   // fell back and which containers were searched — critical for debugging.
   emit('KC_LLM_FALLBACK_FIRED', {
     companyId, callSid, turn,
-    reason:          containers.length ? 'no_kc_match' : 'no_containers_configured',
+    reason:          _reason,
     inputPreview:    _clip(userInput, 100),
     containerCount:  containers.length,
     containerTitles: containers.map(c => c.title).slice(0, 8),
@@ -2881,13 +2922,20 @@ async function _handleLLMFallback({
       companyId, callSid, latencyMs: Date.now() - startMs,
     });
 
-    // qaLog: record LLM fallback for Calibration dashboard
+    // qaLog: record LLM fallback for Calibration dashboard.
+    // Section-gap calls ride the same Claude path but are tagged distinctly so
+    // the Gaps & Todo page can render them as "container matched, Claude saved
+    // the call" rather than "no KC match" — very different signals for the admin.
+    const _qaType = _reason === 'kc_section_gap'
+      ? 'KC_SECTION_GAP_ANSWERED'
+      : 'KC_LLM_FALLBACK';
     _writeDiscoveryNotes(companyId, callSid, {
       qaLog: [{
-        type:      'KC_LLM_FALLBACK',
+        type:      _qaType,
         turn:      turn ?? 0,
         question:  userInput,
         answer:    llmResult.response?.slice(0, 200) || null,
+        reason:    _reason,
         timestamp: new Date().toISOString(),
       }],
     }).catch(() => {});
