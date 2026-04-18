@@ -3583,9 +3583,11 @@ function _cardHTML(c) {
   let coreFilled = 0, embedded = 0, anchorsOk = 0, tradeOk = 0;
   for (const s of activeSections) {
     if (typeof s.phraseCore === 'string' && s.phraseCore.trim().length > 0) coreFilled++;
-    const emb = s.phraseCoreEmbedding;
-    const embLen = Array.isArray(emb) ? emb.length : (emb && typeof emb.length === 'number' ? emb.length : 0);
-    if (embLen > 0) embedded++;
+    // phraseCoreEmbedding has `select: false` in the schema — never ships to the
+    // client via /knowledge (intentional, saves ~3MB per page load). Use the
+    // phraseCoreScoredAt timestamp as the proxy, matching the server-side
+    // KCHealthCheckService logic (services/kc/KCHealthCheckService.js line 261).
+    if (s.phraseCoreScoredAt) embedded++;
     const phrases = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
     if (phrases.length === 0) {
       anchorsOk++; // no phrases to score — not a blocker
