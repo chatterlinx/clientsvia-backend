@@ -2050,7 +2050,22 @@
 }
 .brs-close:hover { background: rgba(255,255,255,0.3); }
 
-.brs-pane { padding: 22px; }
+.brs-pane {
+  padding: 22px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.brs-pane > .brs-actions {
+  position: sticky;
+  bottom: -22px;
+  margin: 16px -22px -22px;
+  padding: 14px 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85) 0%, #fff 45%);
+  border-top: 1px solid #e2e8f0;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
 
 .brs-confirm-body { display: flex; gap: 16px; align-items: flex-start; }
 .brs-warn-icon { font-size: 32px; }
