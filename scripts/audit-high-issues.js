@@ -162,17 +162,21 @@ async function main() {
   console.log(`Company:  ${company.companyName || '(unnamed)'}\n`);
 
   // ── Load HVAC allowlist from AdminSettings ─────────────────────────────
+  // Shape: globalHub.phraseIntelligence.tradeVocabularies = [{ tradeKey, label, terms[] }]
+  // Match: container.tradeVocabularyKey === vocab.tradeKey (case-exact)
   const adminCol = db.collection('adminsettings');
   const adminDoc = await adminCol.findOne({});
-  const tradeVocab = adminDoc?.globalHub?.tradeVocabulary || {};
+  const vocabs = adminDoc?.globalHub?.phraseIntelligence?.tradeVocabularies || [];
   const allowlists = {};
-  for (const [key, arr] of Object.entries(tradeVocab)) {
-    allowlists[key] = Array.isArray(arr)
-      ? arr.map(t => (typeof t === 'string' ? t.toLowerCase() : '')).filter(Boolean)
+  for (const v of vocabs) {
+    if (!v || !v.tradeKey) continue;
+    const terms = Array.isArray(v.terms)
+      ? v.terms.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
       : [];
+    allowlists[v.tradeKey] = terms;
   }
   const vocabKeys = Object.keys(allowlists);
-  console.log(`GlobalShare tradeVocabulary keys: ${vocabKeys.length}`);
+  console.log(`GlobalShare tradeVocabularies: ${vocabKeys.length}`);
   for (const k of vocabKeys) {
     const list = allowlists[k];
     const preview = list.slice(0, 10).join(', ');
@@ -181,9 +185,10 @@ async function main() {
   console.log('');
 
   // ── Load containers ────────────────────────────────────────────────────
-  const kcCol = db.collection('companyknowledgecontainers');
+  // NOTE: collection name is camelCase, companyId is STRING (not ObjectId)
+  const kcCol = db.collection('companyKnowledgeContainers');
   const containers = await kcCol
-    .find({ companyId: new ObjectId(COMPANY_ID) })
+    .find({ companyId: COMPANY_ID })
     .sort({ title: 1 })
     .toArray();
 

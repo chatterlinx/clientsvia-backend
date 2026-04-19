@@ -194,21 +194,25 @@ async function main() {
   const db = client.db('clientsvia');
 
   // ── Load allowlist ──────────────────────────────────────────────────────
+  // Shape: globalHub.phraseIntelligence.tradeVocabularies = [{ tradeKey, label, terms[] }]
+  // Match: container.tradeVocabularyKey === vocab.tradeKey (case-exact)
   const adminDoc = await db.collection('adminsettings').findOne({});
-  const tradeVocab = adminDoc?.globalHub?.tradeVocabulary || {};
+  const vocabs = adminDoc?.globalHub?.phraseIntelligence?.tradeVocabularies || [];
   const allowlists = {};
-  for (const [key, arr] of Object.entries(tradeVocab)) {
-    allowlists[key] = new Set(
-      (Array.isArray(arr) ? arr : [])
+  for (const v of vocabs) {
+    if (!v || !v.tradeKey) continue;
+    allowlists[v.tradeKey] = new Set(
+      (Array.isArray(v.terms) ? v.terms : [])
         .map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''))
         .filter(Boolean)
     );
   }
 
   // ── Load containers ────────────────────────────────────────────────────
-  const kcCol = db.collection('companyknowledgecontainers');
+  // NOTE: collection name is camelCase, companyId is STRING (not ObjectId)
+  const kcCol = db.collection('companyKnowledgeContainers');
   const containers = await kcCol
-    .find({ companyId: new ObjectId(COMPANY_ID) })
+    .find({ companyId: COMPANY_ID })
     .sort({ title: 1 })
     .toArray();
 

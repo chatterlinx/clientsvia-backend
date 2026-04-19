@@ -169,9 +169,10 @@ async function main() {
   await client.connect();
   const db = client.db('clientsvia');
 
-  const kcCol = db.collection('companyknowledgecontainers');
+  // NOTE: collection name is camelCase, companyId is STRING (not ObjectId)
+  const kcCol = db.collection('companyKnowledgeContainers');
   const containers = await kcCol
-    .find({ companyId: new ObjectId(COMPANY_ID) })
+    .find({ companyId: COMPANY_ID })
     .sort({ title: 1 })
     .toArray();
 
