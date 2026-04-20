@@ -120,7 +120,12 @@ const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContaine
 const logger              = require('../../utils/logger');
 
 // ── Configuration ───────────────────────────────────────────────────────────
-const ADVISOR_MODEL               = process.env.FIX_ADVISOR_MODEL || 'claude-3-5-sonnet-20241022';
+// Model: matches the production pattern in agentConsole.js:2750 and
+// config/llmAgentDefaults.js. Old default 'claude-3-5-sonnet-20241022'
+// is deprecated (404 from Anthropic API). Haiku 4.5 handles the
+// structured JSON advisor task in ~800-1500ms. Override via env
+// FIX_ADVISOR_MODEL (e.g. 'claude-sonnet-4-6' for harder reasoning).
+const ADVISOR_MODEL               = process.env.FIX_ADVISOR_MODEL || 'claude-haiku-4-5-20251001';
 const ADVISOR_MAX_TOKENS          = 1600;
 const ADVISOR_TEMPERATURE         = 0.2;   // deterministic classification
 const NEW_SECTION_VETO_THRESHOLD  = 0.80;  // any existing section ≥ this → NEW_SECTION veto
