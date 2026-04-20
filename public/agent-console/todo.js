@@ -37,6 +37,18 @@ const G = {
   activeTab:    'gaps',   // 'gaps' | 'health'
   healthLoaded: false,
   health:       null,     // last /health response
+
+  // ── Closed-loop verify / resolve state ───────────────────────────────
+  // resolutions    — gapKey → resolution doc from /gaps/resolutions
+  // byNormalized   — normalizedPhrase → resolution doc (row-join lookup)
+  // verifyByIdx    — merged-row index → last verify result (ephemeral, client-only)
+  // verifyingIdx   — Set of merged-row indices currently mid-verify (for UI state)
+  // hideResolved   — filter: hide rows that already have a RESOLVED doc
+  resolutions:   {},
+  byNormalized:  {},
+  verifyByIdx:   {},
+  verifyingIdx:  new Set(),
+  hideResolved:  true,
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -66,16 +78,25 @@ async function loadGaps() {
   document.getElementById('pageContent').style.display = 'none';
 
   try {
-    const qs  = `range=${G.range}&type=${G.typeFilter}${G.showTurn1 ? '&turn1=1' : ''}`;
-    const res = await AgentConsoleAuth.apiFetch(
-      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps?${qs}`
-    );
+    const qs = `range=${G.range}&type=${G.typeFilter}${G.showTurn1 ? '&turn1=1' : ''}`;
 
-    if (!res.success) throw new Error(res.error || 'API error');
+    // Gaps + resolutions in parallel — both are needed before first render
+    const [gapsRes, resolutionsRes] = await Promise.all([
+      AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/company/${G.companyId}/knowledge/gaps?${qs}`
+      ),
+      _loadResolutions(),
+    ]);
 
-    G.gaps    = res.gaps || [];
-    G.summary = res.summary || {};
+    if (!gapsRes.success) throw new Error(gapsRes.error || 'API error');
+
+    G.gaps    = gapsRes.gaps || [];
+    G.summary = gapsRes.summary || {};
     G.merged  = _mergeGapEntries(G.gaps);
+
+    // resolutions loaded into G.resolutions + G.byNormalized by _loadResolutions
+    // (void return — mutates state directly)
+    void resolutionsRes;
 
     // Build prescriptive recommendations from gap data
     const recResult       = _buildRecommendations(G.merged);
@@ -94,6 +115,29 @@ async function loadGaps() {
       `<span style="color:#dc2626;">Error: ${_esc(err.message)}</span>`;
   } finally {
     btn.disabled = false; btn.textContent = 'Refresh';
+  }
+}
+
+// ── Fetch resolutions for this company ──────────────────────────────────────
+// Populates G.resolutions (keyed by gapKey) and G.byNormalized (keyed by
+// normalizedPhrase) for O(1) client-side join with gap rows.
+async function _loadResolutions() {
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/resolutions?status=active`
+    );
+    if (!res.success) throw new Error(res.error || 'resolutions API error');
+
+    G.resolutions  = res.map || {};
+    G.byNormalized = {};
+    for (const doc of (res.resolutions || [])) {
+      if (doc.normalizedPhrase) G.byNormalized[doc.normalizedPhrase] = doc;
+    }
+  } catch (err) {
+    // Don't fail the whole page if resolutions endpoint is cold — log + continue
+    console.warn('[todo] Failed to load resolutions:', err.message);
+    G.resolutions  = {};
+    G.byNormalized = {};
   }
 }
 
@@ -369,9 +413,30 @@ function _renderFilters() {
   // Turn 1 toggle — hidden by default because Turn 1 Engine handles those
   html += '<div class="filter-group">';
   html += `<button class="filter-btn${G.showTurn1 ? ' active' : ''}" onclick="toggleTurn1()">`;
-  html += `${G.showTurn1 ? '✓ ' : ''}Turn 1`;
+  html += `${G.showTurn1 ? '\u2713 ' : ''}Turn 1`;
   html += '</button>';
   html += '</div>';
+
+  html += '<div class="filter-divider"></div>';
+
+  // Hide resolved toggle — default ON (resolved rows hidden from active list)
+  const resolvedCount = Object.keys(G.resolutions || {}).length;
+  html += '<div class="filter-group">';
+  html += `<button class="filter-btn${G.hideResolved ? ' active' : ''}" onclick="toggleHideResolved()" title="Hide gap rows that are already marked resolved">`;
+  html += `${G.hideResolved ? '\u2713 ' : ''}Hide Resolved`;
+  if (resolvedCount > 0) html += ` <span style="opacity:.7;">(${resolvedCount})</span>`;
+  html += '</button>';
+  html += '</div>';
+
+  // Verify All — runs verify on every unresolved row in the current view
+  const _verifyableCount = G.merged.filter(r => r.question && !_getResolution(r)).length;
+  if (_verifyableCount > 0) {
+    html += '<div class="filter-group">';
+    html += `<button class="filter-btn" onclick="verifyAll()" title="Run UAP verify on every unresolved row below" style="background:#eef2ff;border-color:#c7d2fe;color:#4338ca;">`;
+    html += `\ud83e\uddea Verify All (${_verifyableCount})`;
+    html += '</button>';
+    html += '</div>';
+  }
 
   html += '</div>';
   document.getElementById('filterBar').innerHTML = html;
@@ -473,27 +538,51 @@ function _renderTable() {
     return;
   }
 
+  // Filter: optionally hide rows with an active resolution
+  const visibleRows = G.merged
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => {
+      if (!G.hideResolved) return true;
+      const res = _getResolution(row);
+      return !res;   // hide resolved / weak / regressed when toggle is ON
+    });
+
+  if (!visibleRows.length) {
+    const hiddenCount = G.merged.length;
+    document.getElementById('gapTable').innerHTML = `
+      <div class="state-empty">
+        <span class="icon">\u2728</span>
+        <h2>All clear!</h2>
+        <p>${hiddenCount} gap event${hiddenCount > 1 ? 's are' : ' is'} marked resolved.<br>
+        <button class="btn-act" onclick="toggleHideResolved()">Show resolved rows</button></p>
+      </div>`;
+    return;
+  }
+
   let html = '<div class="table-wrap"><table class="gap-table"><thead><tr>';
   html += '<th>Time</th>';
   html += '<th>Caller Phrase</th>';
   html += '<th>Agent Response</th>';
   html += '<th>Container</th>';
   html += '<th>Type</th>';
+  html += '<th>Verify</th>';
   html += '<th>Actions</th>';
   html += '</tr></thead><tbody>';
 
-  G.merged.forEach((row, idx) => {
+  visibleRows.forEach(({ row, idx }) => {
     const time      = _fmtTime(row.timestamp);
     const phrase    = _clip(row.question, 80);
     const answer    = _clip(row.answer, 60);
     const container = row.containerTitle || '—';
     const badge     = _typeBadge(row.displayType);
+    const resolution = _getResolution(row);
+    const resolvedCls = resolution ? ' is-resolved' : '';
 
     // Data row
-    html += `<tr class="data-row" onclick="toggleDetail(${idx})">`;
+    html += `<tr class="data-row${resolvedCls}" onclick="toggleDetail(${idx})">`;
     html += `<td style="white-space:nowrap;font-size:12px;color:var(--text-muted);">${_esc(time)}</td>`;
     html += `<td class="phrase-cell">${_esc(phrase)}</td>`;
-    html += `<td class="response-cell">${answer ? _esc(answer) : '<span style="color:#cbd5e1;">—</span>'}</td>`;
+    html += `<td class="response-cell">${answer ? _esc(answer) : '<span style="color:#cbd5e1;">\u2014</span>'}</td>`;
     html += `<td style="font-size:12px;">${_esc(container)}</td>`;
     // Occurrence badge for containers with multiple section gaps
     const _occ = (row.containerId && row.displayType === 'KC_SECTION_GAP')
@@ -502,14 +591,19 @@ function _renderTable() {
     html += `<td>${badge}`;
     if (_occ > 1) html += ` <span class="occ-badge">${_occ}\u00d7</span>`;
     html += `</td>`;
+
+    // ── Verify column (closed-loop status) ─────────────────────────────
+    html += `<td onclick="event.stopPropagation();">${_renderVerifyCell(row, idx)}</td>`;
+
+    // ── Actions column ────────────────────────────────────────────────
     html += `<td class="actions-cell" onclick="event.stopPropagation();">`;
     html += `  <button class="btn-act" onclick="copyPhrase(${idx})" title="Copy caller phrase to clipboard">Copy</button>`;
     html += `  <button class="btn-act primary" onclick="openFinder(${idx})" title="Open in Phrase Finder">Finder &rarr;</button>`;
     html += `</td>`;
     html += `</tr>`;
 
-    // Detail row (hidden by default)
-    html += `<tr class="detail-row" id="detail-${idx}"><td colspan="6" class="detail-cell">`;
+    // Detail row (hidden by default) — colspan matches 7-column header
+    html += `<tr class="detail-row" id="detail-${idx}"><td colspan="7" class="detail-cell">`;
     html += `<div class="detail-grid">`;
     html += _detailField('Call SID', row.callSid || '—');
     html += _detailField('Turn', row.turn != null ? String(row.turn) : '—');
@@ -590,6 +684,9 @@ function _renderTable() {
       html += `<div class="detail-answer-text">${_esc(row.answer)}</div>`;
       html += `</div>`;
     }
+
+    // ── Verify detail (if verify has run on this row) ────────────────
+    html += `<div id="verify-detail-${idx}">${_renderVerifyDetail(row, idx)}</div>`;
 
     html += '</td></tr>';
   });
@@ -1083,4 +1180,323 @@ function _renderHealthContainers() {
 function toggleKcCard(idx) {
   const body = document.getElementById(`kcBody-${idx}`);
   if (body) body.classList.toggle('open');
+}
+
+// ============================================================================
+// CLOSED-LOOP VERIFY / RESOLVE WORKFLOW
+// ============================================================================
+// The 🧪 Verify button runs the row's caller phrase through the SAME KC gates
+// the production runtime uses (CueExtractor + KCS.findContainer) with zero
+// side effects. On success, admin clicks Mark Done to persist a KCGapResolution
+// record — that row is then hidden from the active list on next page refresh.
+// ============================================================================
+
+// Normalize a phrase the same way the server does (for gapKey / byNormalized
+// lookup). MUST stay in sync with KCGapResolution.normalizePhrase on the server.
+function _normalizePhrase(p) {
+  if (!p || typeof p !== 'string') return '';
+  return p.trim().toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Return the KCGapResolution doc matching this row's caller phrase, or null.
+// Lookup is O(1) via G.byNormalized (keyed by normalizedPhrase).
+function _getResolution(row) {
+  if (!row || !row.question) return null;
+  const norm = _normalizePhrase(row.question);
+  return G.byNormalized[norm] || null;
+}
+
+// ── Filter toggle: hide resolved rows ────────────────────────────────────
+function toggleHideResolved() {
+  G.hideResolved = !G.hideResolved;
+  _renderFilters();
+  _renderTable();
+}
+
+// ── Render: per-row Verify cell ──────────────────────────────────────────
+// Three visual states:
+//   (1) Already resolved  → ✅ RESOLVED pill + Undo button
+//   (2) Just verified now → verdict badge (green/amber/red) + Mark Done btn
+//   (3) Not yet verified  → 🧪 Verify button
+function _renderVerifyCell(row, idx) {
+  if (!row.question) {
+    return '<span style="color:#cbd5e1;font-size:11.5px;">no phrase</span>';
+  }
+
+  // State 1 — persisted resolution exists
+  const resolution = _getResolution(row);
+  if (resolution) {
+    const status = resolution.status || 'RESOLVED';
+    const icon   = status === 'RESOLVED'  ? '\u2705'   // ✅
+                 : status === 'WEAK'      ? '\u26a0\ufe0f'  // ⚠️
+                 : status === 'REGRESSED' ? '\ud83d\udea8'   // 🚨
+                 : '\u2796';                                   // ➖ dismissed
+    let html  = `<span class="resolution-pill ${status}">${icon} ${status}</span>`;
+    html += ` <button class="btn-act" onclick="undoResolve(${idx})" title="Re-open this gap" style="margin-left:4px;">Undo</button>`;
+    return html;
+  }
+
+  // State 2 — client-side verify result exists (fresh, not yet persisted)
+  if (G.verifyByIdx[idx]) {
+    return _renderVerifyBadge(G.verifyByIdx[idx], idx);
+  }
+
+  // State 3 — currently verifying
+  if (G.verifyingIdx.has(idx)) {
+    return '<span class="verify-badge verifying"><span class="vb-icon">\u23f3</span> Verifying\u2026</span>';
+  }
+
+  // State 4 — not verified yet
+  return `<button class="btn-act" onclick="verifyRow(${idx})" title="Run this phrase through KC routing to see if it resolves now">\ud83e\uddea Verify</button>`;
+}
+
+// Render the 3-state verdict badge + Mark Done button after verify
+function _renderVerifyBadge(vr, idx) {
+  const verdict = vr?.verdict || 'failing';
+  const icon    = verdict === 'resolved' ? '\u2713'
+                : verdict === 'weak'     ? '\u26a0\ufe0f'
+                : '\u2717';
+  const label   = verdict.toUpperCase();
+
+  let html = `<span class="verify-badge ${verdict}"><span class="vb-icon">${icon}</span> ${label}</span>`;
+
+  if (verdict === 'resolved') {
+    html += ` <button class="btn-act success" onclick="resolveRow(${idx})" title="Persist this as RESOLVED — row will hide on next refresh" style="margin-left:4px;">Mark Done</button>`;
+  } else if (verdict === 'weak') {
+    html += ` <button class="btn-act warn" onclick="resolveRow(${idx})" title="Persist as WEAK — admin flagged for follow-up" style="margin-left:4px;">Mark Weak</button>`;
+  } else {
+    html += ` <button class="btn-act" onclick="verifyRow(${idx})" title="Re-run verify after adding content" style="margin-left:4px;">Re-verify</button>`;
+  }
+  return html;
+}
+
+// Render the expanded verify detail (gates, matched container, latency)
+// inside the row's detail pane. Returns '' if no verify yet.
+function _renderVerifyDetail(row, idx) {
+  const vr = G.verifyByIdx[idx] || _getResolution(row)?.lastVerifyResult;
+  if (!vr) return '';
+
+  const verdict = vr.verdict || 'failing';
+  const ce      = vr.gates?.cueExtractor    || {};
+  const ks      = vr.gates?.keywordScoring  || {};
+
+  let html = `<div class="verify-detail ${verdict}">`;
+  html += `<div class="verify-detail-title" style="color:${verdict === 'resolved' ? '#166534' : verdict === 'weak' ? '#92400e' : '#991b1b'};">UAP Verify \u2014 ${verdict.toUpperCase()} (${vr.latencyMs || 0}ms)</div>`;
+
+  html += '<div class="verify-gate-grid">';
+
+  // CueExtractor (GATE 2.4)
+  html += `<div><span class="verify-gate-label">CueExtractor field count:</span> `;
+  html += `<span class="verify-gate-value">${ce.fieldCount || 0} / 8</span></div>`;
+
+  html += `<div><span class="verify-gate-label">Trade matches:</span> `;
+  html += `<span class="verify-gate-value">${(ce.tradeMatches || []).length}</span></div>`;
+
+  // Keyword scoring (GATE 3)
+  html += `<div><span class="verify-gate-label">Scored container:</span> `;
+  html += `<span class="verify-gate-value">${_esc(ks.matchedContainerTitle || '\u2014 none')}</span></div>`;
+
+  html += `<div><span class="verify-gate-label">Matched section:</span> `;
+  html += `<span class="verify-gate-value">${_esc(ks.matchedSectionLabel || '\u2014 none')}</span></div>`;
+
+  html += `<div><span class="verify-gate-label">Score:</span> `;
+  html += `<span class="verify-gate-value">${ks.score != null ? ks.score : 0} (threshold ${ks.threshold || 8})</span></div>`;
+
+  html += `<div><span class="verify-gate-label">Would fall to LLM:</span> `;
+  html += `<span class="verify-gate-value">${vr.wouldFallThroughToLLM ? 'YES \u2014 failing' : 'no'}</span></div>`;
+
+  html += '</div>'; // gate-grid
+
+  // Cue fields that fired (if any)
+  const firedFields = Object.entries(ce.fields || {})
+    .filter(([, v]) => !!v)
+    .map(([k, v]) => `<code style="font-size:11px;">${k}=\u201c${_esc(String(v))}\u201d</code>`);
+  if (firedFields.length) {
+    html += `<div style="margin-top:10px;font-size:12px;"><span class="verify-gate-label">Cues fired:</span> ${firedFields.join(' ')}</div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// ── Action: verify a single row ──────────────────────────────────────────
+async function verifyRow(idx) {
+  const row = G.merged[idx];
+  if (!row || !row.question) { _toast('No phrase to verify'); return; }
+
+  G.verifyingIdx.add(idx);
+  _rerenderRow(idx);
+
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/verify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          phrase:              row.question,
+          expectedContainerId: row.containerId || null,
+        }),
+      }
+    );
+    if (!res.success) throw new Error(res.error || 'verify failed');
+
+    G.verifyByIdx[idx] = res.verify;
+    const verdict = res.verify?.verdict || 'failing';
+    _toast(
+      verdict === 'resolved' ? '\u2713 Routes cleanly \u2014 ready to mark done' :
+      verdict === 'weak'     ? '\u26a0\ufe0f  Matches but weakly \u2014 review details' :
+                               '\u2717 Still failing \u2014 add more content'
+    );
+  } catch (err) {
+    _toast('Verify error: ' + err.message);
+    console.error('[verifyRow]', err);
+  } finally {
+    G.verifyingIdx.delete(idx);
+    _rerenderRow(idx);
+  }
+}
+
+// ── Action: persist verify result as a KCGapResolution ───────────────────
+async function resolveRow(idx) {
+  const row = G.merged[idx];
+  const vr  = G.verifyByIdx[idx];
+  if (!row || !row.question || !vr) { _toast('Run Verify first'); return; }
+
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          phrase:                 row.question,
+          verifyResult:           vr,
+          originalType:           row.displayType,
+          originalContainerId:    row.containerId   || null,
+          originalContainerTitle: row.containerTitle || null,
+        }),
+      }
+    );
+    if (!res.success) throw new Error(res.error || 'resolve failed');
+
+    // Merge into local state so row flips immediately
+    const doc = res.resolution;
+    G.resolutions[doc.gapKey]          = doc;
+    G.byNormalized[doc.normalizedPhrase] = doc;
+    delete G.verifyByIdx[idx];
+
+    _toast(`\u2705 Marked resolved \u2014 ${doc.status}`);
+    _renderFilters();    // resolvedCount badge updates
+    _renderTable();      // may hide this row immediately if hideResolved=true
+  } catch (err) {
+    _toast('Resolve error: ' + err.message);
+    console.error('[resolveRow]', err);
+  }
+}
+
+// ── Action: undo a previously persisted resolution ───────────────────────
+async function undoResolve(idx) {
+  const row = G.merged[idx];
+  if (!row || !row.question) return;
+  const res = _getResolution(row);
+  if (!res) return;
+
+  if (!confirm(`Re-open this gap?\n\n"${row.question}"\n\nThis removes the resolution record so the row reappears on the active list.`)) return;
+
+  try {
+    const apiRes = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/resolutions/${res.gapKey}`,
+      { method: 'DELETE' }
+    );
+    if (!apiRes.success) throw new Error(apiRes.error || 'undo failed');
+
+    delete G.resolutions[res.gapKey];
+    delete G.byNormalized[res.normalizedPhrase];
+    _toast('Resolution re-opened');
+    _renderFilters();
+    _renderTable();
+  } catch (err) {
+    _toast('Undo error: ' + err.message);
+    console.error('[undoResolve]', err);
+  }
+}
+
+// ── Action: bulk verify every unresolved row in the current view ─────────
+// Runs in sequence (not parallel) to avoid hammering the server on 100+ rows.
+async function verifyAll() {
+  const targets = G.merged
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => row.question && !_getResolution(row) && !G.verifyByIdx[row?._k]);
+
+  if (!targets.length) { _toast('Nothing to verify'); return; }
+
+  if (!confirm(`Run UAP verify on ${targets.length} rows?\n\nThis tests each caller phrase against live KC routing. Takes ~${Math.ceil(targets.length * 0.3)}s.`)) return;
+
+  _toast(`Verifying ${targets.length} rows\u2026`);
+
+  let done = 0;
+  for (const t of targets) {
+    try {
+      // Inlined — avoids toast spam per-row; share state with verifyRow
+      G.verifyingIdx.add(t.idx);
+      _rerenderRow(t.idx);
+
+      const res = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/verify`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            phrase:              t.row.question,
+            expectedContainerId: t.row.containerId || null,
+          }),
+        }
+      );
+      if (res.success) G.verifyByIdx[t.idx] = res.verify;
+    } catch (err) {
+      console.warn('[verifyAll] row failed', t.idx, err.message);
+    } finally {
+      G.verifyingIdx.delete(t.idx);
+      _rerenderRow(t.idx);
+      done++;
+    }
+  }
+
+  // Tally results
+  const tally = { resolved: 0, weak: 0, failing: 0 };
+  for (const t of targets) {
+    const v = G.verifyByIdx[t.idx];
+    if (v) tally[v.verdict] = (tally[v.verdict] || 0) + 1;
+  }
+  _toast(`Done: ${tally.resolved} resolved \u00b7 ${tally.weak} weak \u00b7 ${tally.failing} failing`);
+}
+
+// Re-render a single row's verify cell + detail without full table repaint
+function _rerenderRow(idx) {
+  const row = G.merged[idx];
+  if (!row) return;
+
+  // Find the verify-cell td via the detail-row id reference — rebuild via full
+  // render since each row's verify cell needs both row & idx. Keeps code simple.
+  // For 500 rows at most this is still sub-10ms.
+  _renderTable();
+
+  // Reopen the detail row if it was open (re-render collapses it by default)
+  const detail = document.getElementById(`detail-${idx}`);
+  if (detail) detail.classList.add('open');
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────
+// Reuse existing _toast if defined; otherwise minimal inline fallback.
+if (typeof window._toast === 'undefined' && typeof _toast === 'undefined') {
+  // eslint-disable-next-line no-unused-vars
+  window._toast = function(msg) {
+    const el = document.getElementById('toast');
+    if (!el) { console.log('[toast]', msg); return; }
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(window.__toastT);
+    window.__toastT = setTimeout(() => el.classList.remove('show'), 2400);
+  };
 }
