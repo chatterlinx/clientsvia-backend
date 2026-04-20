@@ -21,6 +21,9 @@
         btnPreview:       document.getElementById('btn-preview'),
         btnApply:         document.getElementById('btn-apply'),
         btnRefresh:       document.getElementById('btn-refresh'),
+        btnDownload:      document.getElementById('btn-download'),
+        scopeSelect:      document.getElementById('scope-select'),
+        scopeHint:        document.getElementById('scope-hint'),
         reason:           document.getElementById('reason'),
         currentState:     document.getElementById('current-state'),
         backupsList:      document.getElementById('backups-list'),
@@ -34,6 +37,9 @@
         removedSample:    document.getElementById('removed-sample'),
         toast:            document.getElementById('toast'),
     };
+
+    // Current state cache so we can update scope hint (per-token counts)
+    let currentCountsCache = {};
 
     // File contents parsed & validated client-side
     let parsedPatterns = null;
@@ -95,13 +101,43 @@
         els.backupsList.innerHTML = '<div class="muted">Loading…</div>';
         try {
             const data = await api('GET', '/state');
-            els.currentState.innerHTML = renderCounts(data.counts || {}, data.total);
+            currentCountsCache = data.counts || {};
+            els.currentState.innerHTML = renderCounts(currentCountsCache, data.total);
             renderBackups(data.backups || []);
+            updateScopeUI();
         } catch (err) {
             els.currentState.innerHTML = `<span class="text-red-600">Failed to load: ${err.message}</span>`;
             els.backupsList.innerHTML = `<span class="text-red-600">${err.message}</span>`;
         }
     }
+
+    // ── Scope selector ──────────────────────────────────────────────────────
+    // Rewires the Download Current button href and shows a scope-aware hint.
+    function updateScopeUI() {
+        const scope = els.scopeSelect?.value || 'all';
+        if (els.btnDownload) {
+            els.btnDownload.href = scope === 'all'
+                ? '/api/admin/cue-phrases-import/export'
+                : `/api/admin/cue-phrases-import/export/${encodeURIComponent(scope)}`;
+        }
+        if (els.scopeHint) {
+            if (scope === 'all') {
+                els.scopeHint.textContent = 'Full dictionary export (all 7 tokens).';
+            } else {
+                const n = currentCountsCache[scope] || 0;
+                els.scopeHint.textContent = `${scope}: ${n} pattern${n === 1 ? '' : 's'} in current dictionary.`;
+            }
+        }
+        // Any pending file is invalidated by scope change (mismatched intent)
+        if (parsedPatterns) {
+            parsedPatterns = null;
+            els.fileInput.value = '';
+            els.fileStatus.innerHTML = '<span class="muted">Scope changed — reselect file.</span>';
+            els.btnPreview.disabled = true;
+            els.btnApply.disabled = true;
+        }
+    }
+    els.scopeSelect?.addEventListener('change', updateScopeUI);
 
     function renderBackups(backups) {
         if (backups.length === 0) {
@@ -171,8 +207,20 @@
                 return;
             }
 
+            // Scope-aware validation: in token mode, every row must match selected token
+            const scope = els.scopeSelect?.value || 'all';
+            if (scope !== 'all') {
+                const mismatched = patterns.filter(p => p && p.token !== scope);
+                if (mismatched.length > 0) {
+                    toast(`Scope is "${scope}" but ${mismatched.length} row(s) have different tokens. Use "All tokens" scope or fix the file.`, 'error');
+                    els.fileStatus.innerHTML = `<span class="text-red-600">${mismatched.length} rows don't match scope "${scope}"</span>`;
+                    return;
+                }
+            }
+
             parsedPatterns = patterns;
-            els.fileStatus.innerHTML = `<span class="text-green-700">${f.name} — ${patterns.length} rows ready</span>`;
+            const scopeLabel = scope === 'all' ? 'all tokens' : scope;
+            els.fileStatus.innerHTML = `<span class="text-green-700">${f.name} — ${patterns.length} rows ready · scope: ${scopeLabel}</span>`;
             els.btnPreview.disabled = false;
         } catch (err) {
             toast('Invalid JSON: ' + err.message, 'error');
@@ -186,7 +234,9 @@
         els.btnPreview.disabled = true;
         els.btnPreview.textContent = 'Validating…';
         try {
-            const data = await api('POST', '/preview', { cuePhrases: parsedPatterns });
+            const scope = els.scopeSelect?.value || 'all';
+            const path = scope === 'all' ? '/preview' : `/preview/${encodeURIComponent(scope)}`;
+            const data = await api('POST', path, { cuePhrases: parsedPatterns });
             renderPreview(data);
             els.modal.showModal();
             els.btnApply.disabled = false;
@@ -254,8 +304,13 @@
     els.btnApply.addEventListener('click', async () => {
         if (!parsedPatterns) return;
         const reason = (els.reason.value || '').trim() || 'manual-import';
+        const scope = els.scopeSelect?.value || 'all';
+        const scopeLine = scope === 'all'
+            ? '• Replaces the ENTIRE dictionary (all 7 tokens).'
+            : `• Replaces ONLY the "${scope}" slice — all other tokens pass through untouched.`;
         const confirmMsg =
-            `Replace the live cuePhrases dictionary with ${parsedPatterns.length} patterns?\n\n` +
+            `Apply ${parsedPatterns.length} patterns to the live cuePhrases dictionary?\n\n` +
+            scopeLine + `\n` +
             `• Current state will be snapshotted to backups before the replace.\n` +
             `• CueExtractor cache flushes immediately — no restart.\n` +
             `• This affects ALL tenants platform-wide.\n\n` +
@@ -266,8 +321,12 @@
         els.btnApply.disabled = true;
         els.btnApply.textContent = 'Applying…';
         try {
-            const data = await api('POST', '/apply', { cuePhrases: parsedPatterns, reason });
-            toast(`Imported ${data.afterTotal} patterns (was ${data.beforeTotal}, Δ${deltaStr(data.delta)}). Backup ${data.backupId.slice(0, 8)}. Cache flushed.`, 'success');
+            const path = scope === 'all' ? '/apply' : `/apply/${encodeURIComponent(scope)}`;
+            const data = await api('POST', path, { cuePhrases: parsedPatterns, reason });
+            const msg = scope === 'all'
+                ? `Imported ${data.afterTotal} patterns (was ${data.beforeTotal}). Backup ${data.backupId.slice(0, 8)}. Cache flushed.`
+                : `Replaced ${scope}: ${data.tokenBefore} → ${data.tokenAfter} (Δ${deltaStr(data.tokenDelta)}). Dict total now ${data.afterTotal}. Backup ${data.backupId.slice(0, 8)}.`;
+            toast(msg, 'success');
             parsedPatterns = null;
             els.fileInput.value = '';
             els.fileStatus.textContent = '';

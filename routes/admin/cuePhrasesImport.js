@@ -137,8 +137,8 @@ function _diff(before, after) {
 }
 
 // ── GET /export ─────────────────────────────────────────────────────────────
-// Download current cuePhrases as a standalone JSON file (bare array).
-// Shape matches what POST /apply expects — round-trips cleanly.
+// Download current cuePhrases as a standalone JSON file.
+// Full-dictionary (all 7 tokens) export.
 router.get('/export', async (req, res) => {
     try {
         const { current } = await _getCurrent();
@@ -148,12 +148,44 @@ router.get('/export', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(JSON.stringify({
             exportedAt: new Date().toISOString(),
+            scope: 'all',
             total: current.length,
             counts: _countByToken(current),
             cuePhrases: current,
         }, null, 2));
     } catch (err) {
         logger.error('[cuePhrasesImport /export]', { error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── GET /export/:token ──────────────────────────────────────────────────────
+// Download only patterns for a single cue token (e.g. actionCore only).
+// Produces a smaller, focused JSON for surgical review + per-token cleanup.
+router.get('/export/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        if (!VALID_TOKENS.has(token)) {
+            return res.status(400).json({
+                success: false,
+                error: `invalid token "${token}". Valid: ${[...VALID_TOKENS].join(', ')}`
+            });
+        }
+        const { current } = await _getCurrent();
+        const filtered = current.filter(p => p.token === token);
+        const stamp = new Date().toISOString().slice(0, 10);
+        const filename = `cuePhrases-${token}-${stamp}.json`;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify({
+            exportedAt: new Date().toISOString(),
+            scope: 'single-token',
+            token,
+            total: filtered.length,
+            cuePhrases: filtered,
+        }, null, 2));
+    } catch (err) {
+        logger.error('[cuePhrasesImport /export/:token]', { error: err.message });
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -279,6 +311,168 @@ router.post('/apply', async (req, res) => {
         });
     } catch (err) {
         logger.error('[cuePhrasesImport /apply]', { error: err.message, stack: err.stack });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── POST /preview/:token ────────────────────────────────────────────────────
+// Preview a token-scoped import. Incoming payload must contain ONLY patterns
+// for the selected token. We splice them into the full current dictionary
+// (replacing only that token's slice) and produce the standard diff report.
+router.post('/preview/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        if (!VALID_TOKENS.has(token)) {
+            return res.status(400).json({
+                success: false,
+                error: `invalid token "${token}". Valid: ${[...VALID_TOKENS].join(', ')}`
+            });
+        }
+
+        const v = _validatePatterns(req.body?.cuePhrases);
+        if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
+
+        // Enforce scope: every incoming row MUST match the selected token
+        const mismatched = v.clean.filter(p => p.token !== token);
+        if (mismatched.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `scope mismatch — ${mismatched.length} row(s) have a token other than "${token}". Import aborted.`,
+                mismatched: mismatched.slice(0, 10),
+            });
+        }
+
+        const { current } = await _getCurrent();
+        // Replace only this token's slice; keep all others intact
+        const otherTokens = current.filter(p => p.token !== token);
+        const merged = [...otherTokens, ...v.clean];
+
+        const beforeCounts = _countByToken(current);
+        const afterCounts = _countByToken(merged);
+
+        const tokens = new Set([...Object.keys(beforeCounts), ...Object.keys(afterCounts)]);
+        const byToken = {};
+        for (const t of [...tokens].sort()) {
+            const before = beforeCounts[t] || 0;
+            const after = afterCounts[t] || 0;
+            byToken[t] = { before, after, delta: after - before };
+        }
+
+        const { added, removed } = _diff(current, merged);
+
+        res.json({
+            success: true,
+            scope: 'single-token',
+            token,
+            beforeTotal: current.length,
+            afterTotal: merged.length,
+            delta: merged.length - current.length,
+            byToken,
+            addedCount: added.length,
+            addedSample: added.slice(0, 30),
+            removedCount: removed.length,
+            removedSample: removed.slice(0, 30),
+            skippedRows: v.skipped.length,
+        });
+    } catch (err) {
+        logger.error('[cuePhrasesImport /preview/:token]', { error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ── POST /apply/:token ──────────────────────────────────────────────────────
+// Apply a token-scoped import. Replaces only the selected token's slice of
+// the dictionary; all other tokens pass through untouched. Full dictionary
+// snapshot (pre-apply) is still pushed to backups so restore works as-is.
+router.post('/apply/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        if (!VALID_TOKENS.has(token)) {
+            return res.status(400).json({
+                success: false,
+                error: `invalid token "${token}". Valid: ${[...VALID_TOKENS].join(', ')}`
+            });
+        }
+
+        const v = _validatePatterns(req.body?.cuePhrases);
+        if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
+
+        // Enforce scope
+        const mismatched = v.clean.filter(p => p.token !== token);
+        if (mismatched.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `scope mismatch — ${mismatched.length} row(s) have a token other than "${token}". Import aborted.`,
+                mismatched: mismatched.slice(0, 10),
+            });
+        }
+
+        const { current } = await _getCurrent();
+        const otherTokens = current.filter(p => p.token !== token);
+        const merged = [...otherTokens, ...v.clean];
+
+        const now = new Date();
+        const userEmail = req.user?.email || 'api';
+        const reason = (req.body?.reason || `token-import:${token}`).toString().slice(0, 120);
+
+        const newBackup = {
+            backupId: randomUUID(),
+            createdAt: now,
+            createdBy: userEmail,
+            reason: `pre-apply:${reason}`,
+            patterns: current,
+            counts: _countByToken(current),
+        };
+
+        await AdminSettings.findOneAndUpdate(
+            {},
+            {
+                $set: {
+                    'globalHub.phraseIntelligence.cuePhrases': merged,
+                    'globalHub.phraseIntelligenceUpdatedAt': now,
+                    'globalHub.phraseIntelligenceUpdatedBy': userEmail,
+                },
+                $push: {
+                    'globalHub.phraseIntelligenceBackups': {
+                        $each: [newBackup],
+                        $slice: -MAX_BACKUPS,
+                    },
+                },
+            },
+            { upsert: true, strict: false }
+        );
+
+        PhraseReducerService.invalidateCache();
+
+        const tokenBefore = current.filter(p => p.token === token).length;
+        const tokenAfter = v.clean.length;
+
+        logger.info('[cuePhrasesImport /apply/:token]', {
+            user: userEmail,
+            token,
+            tokenBefore,
+            tokenAfter,
+            dictBefore: current.length,
+            dictAfter: merged.length,
+            backupId: newBackup.backupId,
+            reason,
+        });
+
+        res.json({
+            success: true,
+            scope: 'single-token',
+            token,
+            tokenBefore,
+            tokenAfter,
+            tokenDelta: tokenAfter - tokenBefore,
+            beforeTotal: current.length,
+            afterTotal: merged.length,
+            counts: _countByToken(merged),
+            backupId: newBackup.backupId,
+            cacheInvalidated: true,
+        });
+    } catch (err) {
+        logger.error('[cuePhrasesImport /apply/:token]', { error: err.message, stack: err.stack });
         res.status(500).json({ success: false, error: err.message });
     }
 });

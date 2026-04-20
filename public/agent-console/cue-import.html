@@ -64,15 +64,32 @@
         <p class="text-sm muted mt-1">Live cuePhrases in <span class="mono">AdminSettings.globalHub.phraseIntelligence</span>.</p>
       </div>
       <div class="flex items-center gap-2">
-        <a id="btn-download" href="/api/admin/cue-phrases-import/export" class="btn btn-ghost" download>⬇ Download Current</a>
         <button id="btn-refresh" class="btn btn-ghost">↻ Refresh</button>
       </div>
     </div>
 
     <div id="current-state" class="text-sm muted">Loading…</div>
-    <p class="text-xs muted mt-3">
-      Download produces a clean <span class="mono">cuePhrases</span>-only JSON (bare list, round-trips into the importer). Use this to share for review / cleanup — no other GlobalShare sections included.
-    </p>
+
+    <div class="mt-5 pt-5 border-t border-slate-200">
+      <div class="flex items-center gap-3 flex-wrap">
+        <label class="text-sm font-medium text-slate-700">Scope:</label>
+        <select id="scope-select" class="px-3 py-2 border border-slate-300 rounded-md text-sm">
+          <option value="all">All tokens (full dictionary)</option>
+          <option value="actionCore">actionCore only</option>
+          <option value="modifierCore">modifierCore only</option>
+          <option value="permissionCue">permissionCue only</option>
+          <option value="urgencyCore">urgencyCore only</option>
+          <option value="infoCue">infoCue only</option>
+          <option value="directiveCue">directiveCue only</option>
+          <option value="requestCue">requestCue only</option>
+        </select>
+        <a id="btn-download" href="/api/admin/cue-phrases-import/export" class="btn btn-ghost" download>⬇ Download Selected</a>
+        <span id="scope-hint" class="text-xs muted"></span>
+      </div>
+      <p class="text-xs muted mt-3">
+        Pick a scope to download just that token's slice, review / clean offline, then import the same slice back. Full-dictionary download is still available via "All tokens". Both shapes round-trip into the importer.
+      </p>
+    </div>
   </section>
 
   <!-- IMPORT FLOW -->
