@@ -1339,17 +1339,24 @@
     const path = scope === 'all'
       ? `${CUE_IE_BASE}/export`
       : `${CUE_IE_BASE}/export/${encodeURIComponent(scope)}`;
-    // Use apiFetch-like flow manually so we can hand back a Blob (apiFetch expects JSON)
-    const token = (window.AgentConsoleAuth && AgentConsoleAuth.getToken && AgentConsoleAuth.getToken()) || null;
-    if (!token) {
-      alert('Session expired — please log in again.');
-      return;
-    }
+    // AgentConsoleAuth.getToken() is private to the IIFE — read localStorage directly.
+    // Key matches TOKEN_KEY in /agent-console/lib/auth.js ("adminToken"). Bearer header
+    // is optional for these routes today (no auth middleware declared) but we send it
+    // anyway so this code keeps working if auth is added later.
+    const token = localStorage.getItem('adminToken');
+    const origText = els.download.textContent;
     try {
       els.download.disabled = true;
-      const origText = els.download.textContent;
       els.download.textContent = 'Downloading…';
-      const res = await fetch(path, { headers: { 'Authorization': `Bearer ${token}` } });
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(path, { headers, credentials: 'include' });
+      if (res.status === 401) {
+        if (window.AgentConsoleAuth && AgentConsoleAuth.clearAndRedirect) {
+          AgentConsoleAuth.clearAndRedirect('Session expired - please log in again');
+          return;
+        }
+        throw new Error('Unauthorized');
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const cd = res.headers.get('Content-Disposition') || '';
@@ -1361,13 +1368,12 @@
       document.body.appendChild(a); a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      els.download.textContent = origText;
-      els.download.disabled = false;
     } catch (err) {
       console.error('[GlobalShare] cue-ie download failed:', err);
       alert('Download failed: ' + err.message);
+    } finally {
       els.download.disabled = false;
-      els.download.textContent = '⬇ Download JSON';
+      els.download.textContent = origText || '⬇ Download JSON';
     }
   }
 
