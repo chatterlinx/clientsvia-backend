@@ -1335,11 +1335,12 @@ function _renderVerifyDetail(row, idx) {
   html += `</div>`;
 
   // ── Final match summary ────────────────────────────────────────────────
+  // Prefer vr.finalMatch (v2). Legacy fallback: old gates{}.keywordScoring shape.
   const fm = vr.finalMatch || (kw.matched ? {
-    containerId:    kw.matchedContainerId,
-    containerTitle: kw.matchedContainerTitle,
-    sectionIdx:     kw.matchedSectionIdx,
-    sectionLabel:   kw.matchedSectionLabel,
+    containerId:    kw.matchedContainerId    || kw.containerId,
+    containerTitle: kw.matchedContainerTitle || kw.containerTitle,
+    sectionIdx:     kw.matchedSectionIdx     ?? kw.sectionIdx,
+    sectionLabel:   kw.matchedSectionLabel   || kw.sectionLabel,
     score:          kw.score,
   } : null);
 
@@ -1383,31 +1384,44 @@ function _renderVerifyDetail(row, idx) {
   });
 
   // Word Gate (only present if UAP matched)
+  // Trace fields (from GapReplayService._runWordGate):
+  //   required, matched, coverage, threshold, hits[], missing[], pass, reason, skipped?
   if (wg) {
+    const wgRequired = wg.required != null ? wg.required : 0;
+    const wgMatched  = wg.matched  != null ? wg.matched  : 0;
     html += _renderGateCard({
       title: 'Word Gate (\u226590% anchor)',
       pass:  wg.pass === true,
       rows: [
-        ['Anchor words', `${(wg.anchorWords || []).length}`],
-        ['Present', wg.presentCount != null ? `${wg.presentCount} / ${(wg.anchorWords || []).length}` : '\u2014'],
-        ['Coverage', wg.coverage != null ? `${(wg.coverage * 100).toFixed(0)}%` : '\u2014'],
+        ['Anchor words', String(wgRequired)],
+        ['Present',      wgRequired > 0 ? `${wgMatched} / ${wgRequired}` : '\u2014'],
+        ['Coverage',     wg.coverage != null ? `${Math.round(wg.coverage * 100)}%` : '\u2014'],
       ],
-      footer: (wg.missingWords || []).length
-        ? `<span style="color:#991b1b;">Missing: ${(wg.missingWords || []).map(w => `<code>${_esc(w)}</code>`).join(' ')}</span>`
-        : '',
+      footer: wg.skipped
+        ? `<span style="color:#64748b;">${_esc(wg.reason || 'Skipped')}</span>`
+        : ((wg.missing || []).length
+            ? `<span style="color:#991b1b;">Missing: ${(wg.missing || []).map(w => `<code>${_esc(w)}</code>`).join(' ')}</span>`
+            : ''),
     });
   }
 
   // Core Confirm (only present if Word Gate passed)
+  // Trace fields (from GapReplayService._runCoreConfirm):
+  //   pass, skipped, cosine, threshold, callerCore?, phraseCore?, reason
   if (cc) {
     html += _renderGateCard({
       title: 'Core Confirm (cosine \u22650.80)',
       pass:  cc.pass === true,
       rows: [
-        ['Cosine', cc.cosine != null ? cc.cosine.toFixed(3) : '\u2014'],
-        ['Threshold', cc.threshold != null ? cc.threshold.toFixed(2) : '0.80'],
-        ['Bypass', cc.exactBypass ? 'EXACT \u2014 skipped' : 'no'],
+        ['Cosine',    cc.cosine != null ? Number(cc.cosine).toFixed(3) : '\u2014'],
+        ['Threshold', cc.threshold != null ? Number(cc.threshold).toFixed(2) : '0.80'],
+        ['Status',    cc.skipped ? 'SKIPPED' : (cc.pass ? 'confirmed' : 'mismatch')],
       ],
+      footer: cc.skipped
+        ? `<span style="color:#64748b;">${_esc(cc.reason || 'Skipped')}</span>`
+        : (cc.callerCore
+            ? `<span style="color:#475569;">caller core: <code>${_esc(String(cc.callerCore).slice(0, 80))}</code></span>`
+            : ''),
     });
   }
 
@@ -1424,13 +1438,18 @@ function _renderVerifyDetail(row, idx) {
   });
 
   // GATE 3 — Keyword scoring
+  // Fresh v2 trace fields: containerTitle, sectionLabel, score, threshold,
+  //                        anchorBoosted, anchorFloor, anchorFloorApplied, ctxAnchor
+  // Legacy fallback fields: matchedContainerTitle, matchedSectionLabel, matched
+  const kwContainer = kw.containerTitle || kw.matchedContainerTitle;
+  const kwSection   = kw.sectionLabel   || kw.matchedSectionLabel;
   html += _renderGateCard({
     title: 'GATE 3 \u2014 Keyword scoring',
     pass:  kw.pass === true || kw.matched === true,
     rows: [
-      ['Container', _esc(kw.matchedContainerTitle || '\u2014 none')],
-      ['Section', _esc(kw.matchedSectionLabel || '\u2014 none')],
-      ['Score', `${kw.score != null ? kw.score : 0} (threshold ${kw.threshold || 8})`],
+      ['Container',      _esc(kwContainer || '\u2014 none')],
+      ['Section',        _esc(kwSection   || '\u2014 none')],
+      ['Score',          `${kw.score != null ? kw.score : 0} (threshold ${kw.threshold || 8})`],
       ['Anchor boosted', kw.anchorBoosted ? `yes (floor ${kw.anchorFloor || 24})` : 'no'],
     ],
   });
@@ -1529,24 +1548,55 @@ function _renderFixAdvisorCard(row, idx) {
     h += `<div style="font-size:12px;color:#334155;margin-bottom:8px;line-height:1.5;"><span style="color:#64748b;">Why:</span> ${_esc(advisor.reasoning)}</div>`;
   }
 
-  // Proposal body
+  // Proposal body — field names per FixAdvisorService docstring:
+  //   newPhrases[{text, anchorWords}], augmentedContent, augmentedGroqContent,
+  //   sectionLabel, contentSkeleton, groqContentSkeleton,
+  //   misfiringGate, recommendation, _overrideNotice
   const prop = advisor.proposal || {};
-  if (Array.isArray(prop.phrasesToAdd) && prop.phrasesToAdd.length) {
+
+  // Server veto notice (rendered first so admin sees it prominently)
+  if (prop._overrideNotice) {
+    h += `<div style="font-size:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:8px;margin-bottom:8px;color:#92400e;"><strong>\u26a0\ufe0f Server veto:</strong> ${_esc(prop._overrideNotice)}</div>`;
+  }
+
+  if (Array.isArray(prop.newPhrases) && prop.newPhrases.length) {
     h += `<div style="font-size:12px;margin-bottom:6px;"><span style="color:#64748b;">Phrases to add:</span></div>`;
     h += `<ul style="margin:0 0 8px 18px;padding:0;font-size:12px;color:#0f172a;">`;
-    for (const p of prop.phrasesToAdd.slice(0, 12)) {
-      h += `<li>\u201c${_esc(p)}\u201d</li>`;
+    for (const p of prop.newPhrases.slice(0, 15)) {
+      // newPhrases may be strings (lenient) or {text, anchorWords} objects
+      const text   = typeof p === 'string' ? p : (p?.text || '');
+      const anchor = typeof p === 'object' && Array.isArray(p?.anchorWords) ? p.anchorWords : null;
+      if (!text) continue;
+      h += `<li>\u201c${_esc(text)}\u201d`;
+      if (anchor && anchor.length) {
+        h += ` <span style="color:#64748b;font-size:11px;">anchors: ${anchor.map(a => `<code>${_esc(a)}</code>`).join(' ')}</span>`;
+      }
+      h += `</li>`;
     }
     h += `</ul>`;
   }
-  if (prop.sectionLabel || prop.sectionContent) {
+
+  // NEW_SECTION / AUGMENT content blocks
+  const label         = prop.sectionLabel;
+  const contentFixed  = prop.contentSkeleton  || prop.augmentedContent      || null;
+  const contentGroq   = prop.groqContentSkeleton || prop.augmentedGroqContent || null;
+  if (label || contentFixed || contentGroq) {
     h += `<div style="font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;">`;
-    if (prop.sectionLabel)   h += `<div><strong>${_esc(prop.sectionLabel)}</strong></div>`;
-    if (prop.sectionContent) h += `<div style="margin-top:4px;color:#334155;">${_esc(prop.sectionContent)}</div>`;
+    if (label)         h += `<div><strong>${_esc(label)}</strong></div>`;
+    if (contentFixed)  h += `<div style="margin-top:4px;color:#334155;"><span style="color:#64748b;font-size:11px;">Fixed:</span> ${_esc(contentFixed)}</div>`;
+    if (contentGroq)   h += `<div style="margin-top:4px;color:#334155;"><span style="color:#64748b;font-size:11px;">Groq seed:</span> ${_esc(contentGroq)}</div>`;
+    if (prop.suggestedContainerTitle) {
+      h += `<div style="margin-top:4px;color:#64748b;font-size:11px;">Attach to: <strong>${_esc(prop.suggestedContainerTitle)}</strong></div>`;
+    }
     h += `</div>`;
   }
-  if (prop.routingIssue) {
-    h += `<div style="font-size:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;margin-bottom:8px;color:#991b1b;"><strong>Routing issue:</strong> ${_esc(prop.routingIssue)}</div>`;
+
+  // ROUTING_PROBLEM block
+  if (prop.misfiringGate || prop.recommendation) {
+    h += `<div style="font-size:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;margin-bottom:8px;color:#991b1b;">`;
+    if (prop.misfiringGate) h += `<strong>Misfiring gate:</strong> ${_esc(prop.misfiringGate)}`;
+    if (prop.recommendation) h += `<div style="margin-top:4px;">${_esc(prop.recommendation)}</div>`;
+    h += `</div>`;
   }
 
   // Near-misses
@@ -1555,10 +1605,10 @@ function _renderFixAdvisorCard(row, idx) {
     h += `<table style="width:100%;margin-top:6px;font-size:11px;border-collapse:collapse;">`;
     for (const nm of advisor.nearMisses.slice(0, 5)) {
       h += `<tr style="border-bottom:1px solid #e2e8f0;">`;
-      h += `<td style="padding:3px 6px;font-weight:600;">${nm.similarity != null ? nm.similarity.toFixed(3) : '\u2014'}</td>`;
+      h += `<td style="padding:3px 6px;font-weight:600;">${nm.similarity != null ? Number(nm.similarity).toFixed(3) : '\u2014'}</td>`;
       h += `<td style="padding:3px 6px;color:#334155;">${_esc(nm.containerTitle || '\u2014')}</td>`;
       h += `<td style="padding:3px 6px;color:#64748b;">${_esc(nm.sectionLabel || '\u2014')}</td>`;
-      h += `<td style="padding:3px 6px;color:#94a3b8;font-size:10px;">${_esc(nm.source || '\u2014')}</td>`;
+      h += `<td style="padding:3px 6px;color:#94a3b8;font-size:10px;">${_esc(nm.matchSource || nm.source || '\u2014')}</td>`;
       h += `</tr>`;
     }
     h += `</table></details>`;

@@ -508,6 +508,8 @@ function _postProcess({ parsed, nearMisses, vetoNewSection, topSimilarity, catal
     proposal:   {},
     reasoning:  'Advisor response could not be parsed — defaulting to NEW_SECTION at LOW confidence. Review manually.',
     nearMisses,
+    vetoed:     false,
+    vetoReason: null,
   };
 
   if (!parsed || typeof parsed !== 'object') return defaultReturn;
@@ -518,10 +520,12 @@ function _postProcess({ parsed, nearMisses, vetoNewSection, topSimilarity, catal
   if (!CONF.includes(confidence))  confidence = 'LOW';
 
   // ── Enforce the over-build veto on the server even if the LLM ignored it ──
+  let vetoed     = false;
+  let vetoReason = null;
   if (vetoNewSection && type === 'NEW_SECTION') {
     // Find the top near-miss and downgrade to AUGMENT
     const top = nearMisses[0];
-    type = 'AUGMENT_SECTION';
+    type   = 'AUGMENT_SECTION';
     target = {
       containerId: top.containerId,
       sectionIdx:  top.sectionIdx,
@@ -533,6 +537,8 @@ function _postProcess({ parsed, nearMisses, vetoNewSection, topSimilarity, catal
     };
     confidence = 'MED';
     reasoning  = `Server veto: existing section "${top.sectionLabel}" is too similar (${top.similarity}) for a new section. Extend it instead.`;
+    vetoed     = true;
+    vetoReason = `similarity ${top.similarity} ≥ ${NEW_SECTION_VETO_THRESHOLD}`;
   }
 
   // ── Hydrate target with container title + section label from catalog ────
@@ -555,6 +561,8 @@ function _postProcess({ parsed, nearMisses, vetoNewSection, topSimilarity, catal
     proposal:  proposal || {},
     reasoning: reasoning || '',
     nearMisses,
+    vetoed,
+    vetoReason,
   };
 }
 

@@ -140,6 +140,24 @@ const FAILURE_MODE = Object.freeze({
 });
 
 // ============================================================================
+// PRODUCTION _stem — MUST mirror KCDiscoveryRunner._stem exactly.
+// If that function changes, change this. No local alternative is permitted.
+// Order matters — longer suffixes stripped first to avoid double-stripping.
+// ============================================================================
+function _stem(word) {
+  return String(word || '')
+    .replace(/ings?$/,   '')
+    .replace(/ing$/,     '')
+    .replace(/ations?$/, '')
+    .replace(/ers?$/,    '')
+    .replace(/ed$/,      '')
+    .replace(/ly$/,      '')
+    .replace(/ies$/,     'y')
+    .replace(/ves$/,     'f')
+    .replace(/s$/,       '');
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
@@ -426,40 +444,57 @@ function _captureUapGate(uap) {
   };
 }
 
+/**
+ * Word Gate — mirrors KCDiscoveryRunner lines 1332-1339 exactly.
+ *
+ * Production:
+ *   const rawWords   = userInput.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean);
+ *   const inputStems = new Set(rawWords.map(_stem));
+ *   const inputExact = new Set(rawWords);
+ *   const anchorHits = anchorWords.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
+ *
+ * UAP normalises anchorWords upstream — they arrive lowercased / stripped.
+ */
 function _runWordGate(rawInput, uapResult) {
-  const required = Array.isArray(uapResult.anchorWords) ? uapResult.anchorWords.length : 0;
+  const anchorWords = Array.isArray(uapResult.anchorWords) ? uapResult.anchorWords : [];
+  const required    = anchorWords.length;
+
   if (required === 0) {
-    // No anchor words on the matched phrase → gate passes trivially
+    // No anchor words on the matched phrase → gate passes trivially (production behavior).
     return {
       required: 0, matched: 0, coverage: 1.0,
+      threshold: WORD_GATE_THRESHOLD,
       pass: true, reason: 'No anchor words on matched phrase — gate not applicable.',
     };
   }
 
-  const inputNorm = String(rawInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  const inputWords = new Set(inputNorm.split(/\s+/).filter(Boolean));
+  const rawWords = String(rawInput || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const inputExact = new Set(rawWords);
+  const inputStems = new Set(rawWords.map(_stem));
 
   let matched = 0;
   const missing = [];
-  for (const aw of uapResult.anchorWords) {
-    const awNorm = String(aw || '').toLowerCase().trim();
-    if (!awNorm) continue;
-    // Substring match handles stem / plural variants cheaply
-    let found = inputWords.has(awNorm);
-    if (!found) {
-      for (const w of inputWords) {
-        if (w.includes(awNorm) || awNorm.includes(w)) { found = true; break; }
-      }
-    }
-    if (found) matched++;
-    else missing.push(awNorm);
+  const hits    = [];
+  for (const aw of anchorWords) {
+    const ok = inputExact.has(aw) || inputStems.has(_stem(aw));
+    if (ok) { matched++; hits.push(aw); }
+    else { missing.push(aw); }
   }
 
-  const coverage = required > 0 ? matched / required : 1;
+  const coverage = matched / required;
   const pass     = coverage >= WORD_GATE_THRESHOLD;
   return {
-    required, matched, coverage: Number(coverage.toFixed(3)), missing,
+    required,
+    matched,
+    coverage: Number(coverage.toFixed(3)),
     threshold: WORD_GATE_THRESHOLD,
+    hits,
+    missing,
     pass,
     reason: pass
       ? null
@@ -468,20 +503,48 @@ function _runWordGate(rawInput, uapResult) {
 }
 
 /**
- * Core Confirmation — cosine(utterance embedding, phraseCoreEmbedding).
- * Uses the OpenAI embedding for the raw utterance (via SemanticMatchService),
- * then compares to the matched section's stored phraseCoreEmbedding.
+ * Core Confirmation — cosine(caller-core embedding, section phraseCoreEmbedding).
  *
- * Skipped if:
- *   - The section has no phraseCoreEmbedding (not yet scored)
- *   - OPENAI_API_KEY missing (SemanticMatchService.embedText returns null)
+ * Mirrors KCDiscoveryRunner lines 1367-1412 precisely, EXCEPT we use
+ * SemanticMatchService.embedText (not .embed) — the production code calls
+ * SemanticMatchService.embed(callerCore) which does NOT exist on that module
+ * (only embedText is exported). That production call throws every time and is
+ * silently swallowed by the try/catch at line 1413, meaning Logic 2 Core
+ * Confirm is effectively DISABLED in production. This has been logged in the
+ * audit report as AUDIT-BUG-01 for separate remediation. Here we use the
+ * function production intended (embedText) so admins get a real diagnostic.
+ *
+ * What production does compute (when it works):
+ *   callerCore = (uapResult.topicWords || []).join(' ')
+ *   callerCoreEmb = embed(callerCore)   // ← broken in production
+ *   phraseCoreEmb = section.phraseCoreEmbedding
+ *   coreScore = cosine(callerCoreEmb, phraseCoreEmb)
+ *   pass if coreScore >= 0.80
+ *
+ * Skipped cleanly (pass=true, skipped=true) when:
+ *   - Section identification missing
+ *   - topicWords empty (no caller core to embed)
+ *   - phraseCoreEmbedding absent (Re-score not yet run → production routes on L1)
+ *   - OPENAI_API_KEY missing (embedText returns null → production graceful)
  */
 async function _runCoreConfirm({ companyId, rawPhrase, uapResult }) {
+  void rawPhrase; // retained for API parity; production embeds topicWords, not rawPhrase
   try {
     if (!uapResult.containerId || uapResult.sectionIdx === null || uapResult.sectionIdx === undefined) {
       return {
         pass: true, skipped: true, reason: 'No section identified — core confirm not applicable.',
         cosine: null, threshold: CORE_CONFIRM_THRESHOLD,
+      };
+    }
+
+    // Production: const callerCore = (uapResult.topicWords || []).join(' ');
+    const callerCore = Array.isArray(uapResult.topicWords) ? uapResult.topicWords.join(' ').trim() : '';
+    if (!callerCore) {
+      return {
+        pass: true, skipped: true,
+        reason: 'UAP returned no topicWords — Core Confirm skipped (matches production behavior).',
+        cosine: null, threshold: CORE_CONFIRM_THRESHOLD,
+        callerCore: null,
       };
     }
 
@@ -497,28 +560,31 @@ async function _runCoreConfirm({ companyId, rawPhrase, uapResult }) {
         pass: true, skipped: true,
         reason: 'Section has no phraseCoreEmbedding (not yet scored). Runtime bypasses Core Confirm in this case.',
         cosine: null, threshold: CORE_CONFIRM_THRESHOLD,
+        callerCore,
       };
     }
 
-    const utteranceVec = await SemanticMatchService.embedText(rawPhrase);
-    if (!utteranceVec) {
+    const callerCoreEmb = await SemanticMatchService.embedText(callerCore);
+    if (!callerCoreEmb) {
       return {
         pass: true, skipped: true,
         reason: 'OpenAI embed unavailable — Core Confirm skipped (matches runtime graceful path).',
         cosine: null, threshold: CORE_CONFIRM_THRESHOLD,
+        callerCore,
       };
     }
 
-    const cosine = SemanticMatchService.cosineSimilarity(utteranceVec, section.phraseCoreEmbedding);
+    const cosine = SemanticMatchService.cosineSimilarity(callerCoreEmb, section.phraseCoreEmbedding);
     const pass   = cosine >= CORE_CONFIRM_THRESHOLD;
     return {
       pass, skipped: false,
       cosine: Number(cosine.toFixed(3)),
       threshold: CORE_CONFIRM_THRESHOLD,
+      callerCore,
       phraseCore: section.phraseCore || null,
       reason: pass
         ? null
-        : `Cosine ${cosine.toFixed(3)} below threshold ${CORE_CONFIRM_THRESHOLD}. Caller phrasing is semantically distant from section's phraseCore.`,
+        : `Cosine ${cosine.toFixed(3)} below threshold ${CORE_CONFIRM_THRESHOLD}. topicWords "${callerCore}" are semantically distant from section's phraseCore.`,
     };
   } catch (err) {
     logger.warn('[GapReplay] Core confirm error', { companyId, err: err.message });
@@ -695,4 +761,5 @@ module.exports = {
   _computeVerdict,
   _deriveFailureMode,
   _runWordGate,
+  _stem,
 };

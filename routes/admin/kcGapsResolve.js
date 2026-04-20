@@ -259,6 +259,10 @@ router.post('/:companyId/knowledge/gaps/resolve', async (req, res) => {
         const normPh = KCGapResolution.normalizePhrase(phrase);
         const now    = new Date();
 
+        // NOTE: verifyCount is NOT in $setOnInsert — MongoDB forbids the same
+        // field appearing in both $setOnInsert and $inc on an upsert (path
+        // conflict). On insert, $inc creates verifyCount=1 automatically; on
+        // update it increments. Same net effect, no conflict.
         const setOnInsert = {
             companyId,
             gapKey,
@@ -266,7 +270,6 @@ router.post('/:companyId/knowledge/gaps/resolve', async (req, res) => {
             normalizedPhrase: normPh,
             createdAt:        now,
             resolvedAt:       now,
-            verifyCount:      1,
         };
 
         const setFields = {
