@@ -2195,8 +2195,11 @@ function _renderFixAdvisorCard(row, idx) {
   }
 
   // Deep-link to editor
+  // ⚠️ services-item.html reads `itemId` (NOT `containerId` / `kcId`) — see
+  // services-item.html L1953-1956. Missing `itemId` → S.isEdit=false →
+  // opens blank "Add Knowledge Container" form.
   if (advisor.target?.containerId) {
-    const url = `/agent-console/services-item.html?companyId=${G.companyId}&kcId=${advisor.target.kcId || ''}&containerId=${advisor.target.containerId}${advisor.target.sectionIdx != null ? `&sectionIdx=${advisor.target.sectionIdx}` : ''}`;
+    const url = `/agent-console/services-item.html?companyId=${G.companyId}&itemId=${advisor.target.containerId}${advisor.target.sectionIdx != null ? `&sectionIdx=${advisor.target.sectionIdx}` : ''}`;
     h += `<a href="${url}" class="btn-act success" style="font-size:11px;text-decoration:none;display:inline-block;">\u270f\ufe0f Open in editor</a>`;
   }
 
