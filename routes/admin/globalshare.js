@@ -635,7 +635,15 @@ const CUE_STARTER_PATTERNS = [
     { pattern: 'check', token: 'actionCore' },
     { pattern: 'inspect', token: 'actionCore' },
     { pattern: 'install', token: 'actionCore' },
-    { pattern: 'service', token: 'actionCore' },
+    // NOTE: 'service' intentionally REMOVED from actionCore.
+    // It's predominantly a NOUN in HVAC context ("service call", "service fee",
+    // "service plan", "service area"), but the CueExtractor uses longest-match
+    // substring matching with no POS awareness. When 'service' was in actionCore,
+    // it would beat shorter financial verbs like 'pay' in phrases like
+    // "do I have to pay for a service call", producing a misleading
+    // actionCore='service' while the real action intent ('pay') was masked.
+    // The verb intent of servicing a unit is already covered by 'check',
+    // 'repair', 'fix', 'diagnose', 'tune up', 'maintain', 'inspect'.
     { pattern: 'diagnose', token: 'actionCore' },
     { pattern: 'set up', token: 'actionCore' },
     { pattern: 'send someone', token: 'actionCore' },
