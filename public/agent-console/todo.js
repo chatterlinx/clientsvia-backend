@@ -154,13 +154,21 @@ async function _loadResolutions() {
 }
 
 // ── Turn-merge ───────────────────────────────────────────────────────────────
-// KC_SECTION_GAP + KC_LLM_FALLBACK from same callSid+turn → one row.
-// GAP has container info, FALLBACK has the answer. Merge them.
+// Collapses multiple qaLog events from same callSid+turn into one row.
+// Different events carry different info: GAP has container, FALLBACK has the
+// answer, UAP_MISS_KEYWORD_RESCUED has the rescued container + cueFrame, etc.
+//
+// Pre-filter: UAP_LAYER1 events with hit=false are telemetry noise for this
+// page (represented in Call Review instead). We only surface hit=true for
+// UAP Health aggregates; individual row rendering skips them entirely.
 function _mergeGapEntries(gaps) {
   const byKey = {};
   const order = [];
 
   for (const g of gaps) {
+    // Skip non-hit UAP_LAYER1 telemetry entries (noise for the gap table)
+    if (g.type === 'UAP_LAYER1' && !g.hit) continue;
+
     const key = `${g.callSid || ''}:${g.turn ?? ''}`;
 
     if (!byKey[key]) {
@@ -174,6 +182,8 @@ function _mergeGapEntries(gaps) {
         containerId:    null,
         kcId:           null,
         timestamp:      g.timestamp,
+        gapKey:         g.gapKey || null,
+        normalizedPhrase: g.normalizedPhrase || null,
         types:          [],
       };
       order.push(key);
@@ -190,6 +200,10 @@ function _mergeGapEntries(gaps) {
     // Question — prefer the one that exists
     if (g.question && !row.question) row.question = g.question;
 
+    // Preserve gapKey / normalizedPhrase stamped by server
+    if (g.gapKey && !row.gapKey) row.gapKey = g.gapKey;
+    if (g.normalizedPhrase && !row.normalizedPhrase) row.normalizedPhrase = g.normalizedPhrase;
+
     // Container + gap filter info comes from KC_SECTION_GAP
     if (g.type === 'KC_SECTION_GAP') {
       row.containerTitle   = g.containerTitle   || row.containerTitle;
@@ -199,6 +213,36 @@ function _mergeGapEntries(gaps) {
       row.gapOriginalCount = g.gapOriginalCount || row.gapOriginalCount || null;
       row.gapFilteredCount = g.gapFilteredCount || row.gapFilteredCount || null;
       row.gapTopSections   = g.gapTopSections   || row.gapTopSections   || [];
+    }
+
+    // UAP_MISS_KEYWORD_RESCUED — "add this phrase to UAP" signal
+    if (g.type === 'UAP_MISS_KEYWORD_RESCUED') {
+      row.rescuedContainerId     = g.rescuedContainerId     || row.rescuedContainerId;
+      row.rescuedContainerTitle  = g.rescuedContainerTitle  || row.rescuedContainerTitle;
+      row.rescuedKcId            = g.rescuedKcId            || row.rescuedKcId;
+      row.rescuedSection         = g.rescuedSection         || row.rescuedSection;
+      row.rescuedSectionIdx      = (g.rescuedSectionIdx ?? row.rescuedSectionIdx) ?? null;
+      row.rescuedScore           = g.rescuedScore           || row.rescuedScore;
+      row.cueFrame               = g.cueFrame               || row.cueFrame;
+      // Treat rescued container as the "container of interest" for this row
+      // (ensures Verify / Fix Advisor can find it, even without KC_SECTION_GAP).
+      row.containerTitle = row.containerTitle || g.rescuedContainerTitle;
+      row.containerId    = row.containerId    || g.rescuedContainerId;
+      row.kcId           = row.kcId           || g.rescuedKcId;
+    }
+
+    // KC_SECTION_GAP_RESCUED — cross-container rescue (near-miss signal)
+    if (g.type === 'KC_SECTION_GAP_RESCUED') {
+      row.rescuedFromContainer = g.originalContainer || row.rescuedFromContainer;
+      row.rescuedToContainer   = g.rescuedContainer   || row.rescuedToContainer;
+      row.rescuedFromScore     = g.originalScore      || row.rescuedFromScore;
+    }
+
+    // NEGATIVE_KEYWORD_BLOCK — suppression visibility
+    if (g.type === 'NEGATIVE_KEYWORD_BLOCK') {
+      row.suppressedContainerTitle = g.suppressedContainerTitle || row.suppressedContainerTitle;
+      row.suppressedContainerId    = g.suppressedContainerId    || row.suppressedContainerId;
+      row.blockedBy                = g.blockedBy                || row.blockedBy;
     }
 
     // Answer comes from KC_LLM_FALLBACK (Claude's response)
@@ -215,13 +259,18 @@ function _mergeGapEntries(gaps) {
     if (g.callReason && !row.callReason) row.callReason = g.callReason;
   }
 
-  // Determine display type for merged row
+  // Determine display type for merged row using verdict priority.
+  // Priority reflects user impact: SECTION_GAP > FULL_MISS_GROQ > UAP_MISS_KEYWORD_SAVE
+  //                               > GRACEFUL_ACK > SECTION_GAP_RESCUED > NEG_BLOCK
   const merged = order.map(k => {
     const row = byKey[k];
-    // Priority: GAP > FALLBACK > ACK
-    if (row.types.includes('KC_SECTION_GAP'))   row.displayType = 'KC_SECTION_GAP';
-    else if (row.types.includes('KC_LLM_FALLBACK')) row.displayType = 'KC_LLM_FALLBACK';
-    else row.displayType = 'KC_GRACEFUL_ACK';
+    if      (row.types.includes('KC_SECTION_GAP'))           row.displayType = 'KC_SECTION_GAP';
+    else if (row.types.includes('KC_LLM_FALLBACK'))          row.displayType = 'KC_LLM_FALLBACK';
+    else if (row.types.includes('UAP_MISS_KEYWORD_RESCUED')) row.displayType = 'UAP_MISS_KEYWORD_RESCUED';
+    else if (row.types.includes('KC_GRACEFUL_ACK'))          row.displayType = 'KC_GRACEFUL_ACK';
+    else if (row.types.includes('KC_SECTION_GAP_RESCUED'))   row.displayType = 'KC_SECTION_GAP_RESCUED';
+    else if (row.types.includes('NEGATIVE_KEYWORD_BLOCK'))   row.displayType = 'NEGATIVE_KEYWORD_BLOCK';
+    else                                                     row.displayType = row.types[0] || 'UNKNOWN';
     return row;
   });
 
@@ -440,33 +489,169 @@ function _buildRecommendations(merged) {
 }
 
 // ── Render: Summary stat cards ───────────────────────────────────────────────
+// 6 cards summarize the UAP pipeline health. Colors encode severity:
+//   UAP Hit Rate     — green >70, amber 40-70, red <40, neutral if no data
+//   UAP Hits         — neutral (what's working today)
+//   UAP Miss (KeySv) — amber (the "add phrase" backlog)
+//   Section Gaps     — red (container matched but no section answered)
+//   UAP Miss → Groq  — red (full miss, most expensive outcome)
+//   Graceful Ack     — gray (worst case, all paths exhausted)
 function _renderSummary() {
-  const s   = G.summary;
+  const s   = G.summary || {};
   const bt  = s.byType || {};
-  const tot = s.total || 0;
+  const uapHits       = s.uapHitsN ?? 0;
+  const uapKeyResc    = s.uapKeyResc ?? 0;
+  const uapConsidered = s.uapConsidered ?? 0;
+  const hitRate       = s.uapHitRate;   // null if no data
   const gap = bt.KC_SECTION_GAP   || 0;
   const fb  = bt.KC_LLM_FALLBACK  || 0;
   const ack = bt.KC_GRACEFUL_ACK  || 0;
 
+  // Hit-rate color coding
+  let hrClass = 'hit-rate-neutral';
+  let hrText  = '—';
+  if (hitRate != null) {
+    const pct = Math.round(hitRate * 100);
+    hrText = `${pct}%`;
+    if      (pct >= 70) hrClass = 'hit-rate-green';
+    else if (pct >= 40) hrClass = 'hit-rate-amber';
+    else                hrClass = 'hit-rate-red';
+  }
+
   document.getElementById('statCards').innerHTML = `
     <div class="stat-row">
-      <div class="stat-card">
-        <div class="stat-label">Total Events</div>
-        <div class="stat-value">${tot}</div>
+      <div class="stat-card ${hrClass}" title="UAP phrase-index hits / (hits + keyword rescues + full misses)">
+        <div class="stat-label">UAP Hit Rate</div>
+        <div class="stat-value">${hrText}</div>
+        <div class="stat-sub">${uapConsidered} turns considered</div>
       </div>
-      <div class="stat-card gap">
+      <div class="stat-card uap-hit" title="GATE 2.5 phrase-index hits (fast path winners)">
+        <div class="stat-label">UAP Hits</div>
+        <div class="stat-value">${uapHits}</div>
+      </div>
+      <div class="stat-card uap-miss-key" title="UAP missed, GATE 3 keyword rescued — each row is a phrase to add to UAP">
+        <div class="stat-label">UAP Miss → Key Save</div>
+        <div class="stat-value">${uapKeyResc}</div>
+      </div>
+      <div class="stat-card gap" title="Container matched but no section covered the utterance">
         <div class="stat-label">Section Gaps</div>
         <div class="stat-value">${gap}</div>
       </div>
-      <div class="stat-card fb">
-        <div class="stat-label">LLM Fallback</div>
+      <div class="stat-card fb" title="Full UAP miss — Groq had to answer from KB context">
+        <div class="stat-label">UAP Miss → Groq</div>
         <div class="stat-value">${fb}</div>
       </div>
-      <div class="stat-card ack">
+      <div class="stat-card ack" title="All paths exhausted — canned safety response">
         <div class="stat-label">Graceful Ack</div>
         <div class="stat-value">${ack}</div>
       </div>
     </div>`;
+
+  _renderUapHealth();
+}
+
+// ── Render: UAP Health card ──────────────────────────────────────────────────
+// Expandable card above Recommendations. Shows the winning-gate breakdown
+// bar and two Top-10 tables: what's working (UAP hits) vs what needs adding
+// (UAP misses rescued by keyword). Tables are clickable → filter gap table.
+function _renderUapHealth() {
+  const el = document.getElementById('uapHealth');
+  if (!el) return;
+  const s = G.summary || {};
+
+  const uapHits    = s.uapHitsN    ?? 0;
+  const uapKeyResc = s.uapKeyResc  ?? 0;
+  const llmFb      = s.llmFbN      ?? 0;
+  const sectionGap = (s.byType || {}).KC_SECTION_GAP || 0;
+  const gracefulAck = (s.byType || {}).KC_GRACEFUL_ACK || 0;
+  const topHits    = Array.isArray(s.topUapHits)   ? s.topUapHits   : [];
+  const topMisses  = Array.isArray(s.topUapMisses) ? s.topUapMisses : [];
+
+  // Total KC pipeline outcomes for percentage math
+  const total = uapHits + uapKeyResc + llmFb + sectionGap + gracefulAck;
+  if (total === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const pct = n => total > 0 ? Math.round((n / total) * 100) : 0;
+
+  // Overall health pill
+  const hitRate = s.uapHitRate;
+  let pillCls = 'amber'; let pillText = 'Warming up';
+  if (hitRate != null) {
+    const hp = Math.round(hitRate * 100);
+    if      (hp >= 70) { pillCls = 'green'; pillText = `Healthy · ${hp}% hit rate`; }
+    else if (hp >= 40) { pillCls = 'amber'; pillText = `Building · ${hp}% hit rate`; }
+    else               { pillCls = 'red';   pillText = `Thin · ${hp}% hit rate`; }
+  }
+
+  const breakdownRow = (label, n, barClass) => `
+    <div class="gate-breakdown-row">
+      <div class="gate-label">${_esc(label)}</div>
+      <div class="gate-bar-wrap"><div class="gate-bar ${barClass}" style="width: ${pct(n)}%"></div></div>
+      <div class="gate-num">${n} · ${pct(n)}%</div>
+    </div>`;
+
+  const topListHtml = (title, rows, onClickFn) => {
+    if (!rows.length) {
+      return `<div class="top-list"><h4>${_esc(title)}</h4>
+        <div style="color: var(--text-muted); font-size: 12px; padding: 8px 0;">No data yet</div></div>`;
+    }
+    return `<div class="top-list">
+      <h4>${_esc(title)}</h4>
+      <table>${rows.map(r => {
+        const t = r.title || 'Unknown';
+        const c = r.count || 0;
+        return `<tr class="clickable" onclick="${onClickFn}('${_esc(t).replace(/'/g, "\\'")}')">
+          <td>${_esc(t)}</td><td class="cnt">${c}</td></tr>`;
+      }).join('')}</table></div>`;
+  };
+
+  const collapsedCls = G.uapHealthCollapsed ? ' collapsed' : '';
+
+  el.innerHTML = `
+    <div class="uap-health${collapsedCls}" id="uapHealthCard">
+      <div class="uap-health-header" onclick="toggleUapHealth()">
+        <div class="uap-health-title">
+          UAP Pipeline Health
+          <span class="uap-health-pill ${pillCls}">${_esc(pillText)}</span>
+        </div>
+        <div class="uap-health-caret">▼</div>
+      </div>
+      <div class="uap-health-body">
+        <div class="breakdown">
+          ${breakdownRow('UAP Hit (GATE 2.5)',      uapHits,      'green')}
+          ${breakdownRow('Keyword Save (GATE 3)',   uapKeyResc,   'amber')}
+          ${breakdownRow('Section Gap',             sectionGap,   'orange')}
+          ${breakdownRow('UAP Miss → Groq',         llmFb,        'red')}
+          ${breakdownRow('Graceful Ack',            gracefulAck,  'gray')}
+        </div>
+        ${topListHtml('Top UAP Hits (working)',   topHits,   'filterByContainer')}
+        ${topListHtml('Top UAP Misses (add phrases)', topMisses, 'filterByContainer')}
+      </div>
+    </div>`;
+}
+
+function toggleUapHealth() {
+  G.uapHealthCollapsed = !G.uapHealthCollapsed;
+  const card = document.getElementById('uapHealthCard');
+  if (card) card.classList.toggle('collapsed', !!G.uapHealthCollapsed);
+}
+
+// Called when a container row in the UAP Health Top-10 tables is clicked.
+// Scrolls to the first gap row whose containerTitle matches.
+function filterByContainer(title) {
+  if (!title || !Array.isArray(G.merged)) return;
+  const idx = G.merged.findIndex(r => (r.containerTitle || '') === title);
+  if (idx < 0) return;
+  const tr = document.querySelector(`tr[data-gap-idx="${idx}"]`);
+  if (tr && tr.scrollIntoView) {
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tr.style.transition = 'background .3s';
+    tr.style.background = '#fef3c7';
+    setTimeout(() => { tr.style.background = ''; }, 1600);
+  }
 }
 
 // ── Render: Filter bar ───────────────────────────────────────────────────────
@@ -477,10 +662,11 @@ function _renderFilters() {
     { key: '30d', label: '30 days' },
   ];
   const typeOpts = [
-    { key: 'all',              label: 'All Types' },
-    { key: 'KC_SECTION_GAP',   label: 'Section Gap' },
-    { key: 'KC_LLM_FALLBACK',  label: 'LLM Fallback' },
-    { key: 'KC_GRACEFUL_ACK',  label: 'Graceful Ack' },
+    { key: 'all',                      label: 'All Types' },
+    { key: 'UAP_MISS_KEYWORD_RESCUED', label: 'UAP Miss → Key Save' },
+    { key: 'KC_SECTION_GAP',           label: 'Section Gap' },
+    { key: 'KC_LLM_FALLBACK',          label: 'UAP Miss → Groq' },
+    { key: 'KC_GRACEFUL_ACK',          label: 'Graceful Ack' },
   ];
 
   let html = '<div class="filter-bar">';
@@ -736,6 +922,32 @@ function _renderTable() {
     if (row.types.length > 1) {
       html += _detailField('Merged', `${row.types.length} events from same call turn`);
     }
+
+    // UAP_MISS_KEYWORD_RESCUED — show rescue target explicitly
+    if (row.displayType === 'UAP_MISS_KEYWORD_RESCUED') {
+      const rtitle = row.rescuedContainerTitle || row.containerTitle || '—';
+      const rsect  = row.rescuedSection ? ` \u2192 "${row.rescuedSection}"` : '';
+      const rscore = row.rescuedScore != null ? ` (score: ${row.rescuedScore})` : '';
+      html += _detailField('Rescued By', `${rtitle}${rsect}${rscore}`);
+      if (row.cueFrame && row.cueFrame.fieldCount != null) {
+        const fc = row.cueFrame.fieldCount;
+        const cueHint = fc < 3 ? ' \u2014 sparse cues (dictionary thin for this topic)' : '';
+        html += _detailField('Cue Fields', `${fc} of 8 populated${cueHint}`);
+      }
+    }
+
+    // KC_SECTION_GAP_RESCUED — show cross-container swap
+    if (row.displayType === 'KC_SECTION_GAP_RESCUED' && row.rescuedFromContainer) {
+      html += _detailField('Cross-Container Rescue',
+        `${row.rescuedFromContainer} \u2192 ${row.rescuedToContainer || '?'}`);
+    }
+
+    // NEGATIVE_KEYWORD_BLOCK — show what was suppressed
+    if (row.displayType === 'NEGATIVE_KEYWORD_BLOCK' && row.suppressedContainerTitle) {
+      const by = row.blockedBy ? ` (by "${row.blockedBy}")` : '';
+      html += _detailField('Suppressed', `${row.suppressedContainerTitle}${by}`);
+    }
+
     html += '</div>';
 
     // Per-call occurrence breakdown — only meaningful when grouped
@@ -993,10 +1205,16 @@ function _fmtTime(iso) {
 }
 
 function _typeBadge(type) {
+  // Verdict enum — user-facing labels match the mental model (UAP miss → Groq),
+  // not the raw qaLog event name.
   const map = {
-    'KC_SECTION_GAP':   { cls: 'gap', label: 'Section Gap' },
-    'KC_LLM_FALLBACK':  { cls: 'fb',  label: 'LLM Fallback' },
-    'KC_GRACEFUL_ACK':  { cls: 'ack', label: 'Graceful Ack' },
+    'KC_SECTION_GAP':           { cls: 'gap',     label: 'Section Gap' },
+    'KC_LLM_FALLBACK':          { cls: 'fb',      label: 'UAP Miss → Groq' },
+    'KC_GRACEFUL_ACK':          { cls: 'ack',     label: 'Graceful Ack' },
+    'UAP_MISS_KEYWORD_RESCUED': { cls: 'keysave', label: 'UAP Miss → Keyword Save' },
+    'UAP_LAYER1':               { cls: 'uaphit',  label: 'UAP Hit' },
+    'KC_SECTION_GAP_RESCUED':   { cls: 'rescued', label: 'Section Gap Rescued' },
+    'NEGATIVE_KEYWORD_BLOCK':   { cls: 'nkblock', label: 'NegKw Block' },
   };
   const info = map[type] || { cls: 'ack', label: type || 'Unknown' };
   return `<span class="type-badge ${info.cls}">${info.label}</span>`;
