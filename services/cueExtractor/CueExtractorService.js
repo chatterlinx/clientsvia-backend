@@ -94,6 +94,26 @@ function _stem(word) {
     .replace(/(\w{4,})e$/,    '$1');// schedule → schedul (4+ char prefix only)
 }
 
+// ── Determiners (April 2026) ────────────────────────────────────────────────
+// Words that strongly signal "what follows is a noun phrase, not a verb".
+// Used by the single-word matcher to skip noun-uses of polysemous words like
+// "call" / "service" / "charge" / "book" / "fee" / "repair".
+//
+// Example: "do i have to pay for a service call"
+//   inputTokens = [do, i, have, to, pay, for, a, service, call]
+//   "call" at i=8 — preceded by "service"(i=7) preceded by "a"(i=6, determiner)
+//   → "call" treated as noun, skipped → "pay"(i=4) wins as actionCore. ✓
+//
+// We look back up to 2 tokens because adjective-like noun modifiers can sit
+// between the determiner and the head noun ("a quick call", "the service fee",
+// "my next appointment"). Beyond 2-back is rare and risks false negatives.
+const DETERMINERS = new Set([
+  'a', 'an', 'the',
+  'my', 'your', 'our', 'his', 'her', 'their',
+  'this', 'that', 'these', 'those',
+  'some', 'any', 'no',
+]);
+
 // ============================================================================
 // TRADE INDEX — build reverse lookup from KC sections' tradeTerms[]
 // ============================================================================
@@ -302,35 +322,66 @@ async function extract(companyId, utterance) {
     byToken[token].sort((a, b) => b.length - a.length);
   }
 
-  // Pre-compute input tokens + stems once for stemmed whole-word matching
-  // of single-word patterns (catches "paying" when pattern is "pay", etc.).
+  // Tokenize once for single-word leftmost-position matching.
   // Multi-word patterns still use substring matching (idiomatic phrases).
   const inputTokens = lower.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
-  const inputExact  = new Set(inputTokens);
-  const inputStems  = new Set(inputTokens.map(_stem));
 
   // Match against each canonical field
+  //
+  // TWO-PASS MATCHING (April 2026):
+  //   PASS A — multi-word patterns (substring, longest-first). Idiomatic
+  //            phrases like "do i have to" / "right now" / "i need to" are
+  //            handled exactly as before.
+  //   PASS B — single-word patterns (leftmost-token wins, with determiner
+  //            gate). Walks input tokens left-to-right; first token whose
+  //            stem matches any pattern wins, UNLESS the previous 1-2 tokens
+  //            include a determiner (in which case the token is being used
+  //            as a noun, not a verb, and we skip it).
+  //
+  //   Why leftmost beats longest-first for singles: in English (S-V-O),
+  //   verbs precede their objects. Longest-first would pick "call" (4ch)
+  //   over "pay" (3ch) in "do i have to pay for a service call" — but
+  //   "pay" is the actual action and "call" is a noun. Leftmost + the
+  //   determiner gate fix this without breaking existing matches.
   for (const field of CUE_FIELDS) {
     const token = field.toLowerCase();
     const patterns = byToken[token];
     if (!patterns) continue;
 
+    let matched = null;
+
+    // ── PASS A: multi-word patterns (substring, longest-first) ──────────
     for (const pat of patterns) {
-      let hit = false;
-      if (pat.includes(' ')) {
-        // Multi-word patterns ("do i have to", "right now") — substring match
-        if (lower.includes(pat)) hit = true;
-      } else {
-        // Single-word patterns — stemmed whole-word match.
-        // Whole-word avoids false positives like "pay" matching "payment"/"paypal".
-        // Stemming catches inflections: "paying"/"pays" → "pay", "scheduling" → "schedule".
-        if (inputExact.has(pat) || inputStems.has(_stem(pat))) hit = true;
+      if (!pat.includes(' ')) continue;
+      if (lower.includes(pat)) { matched = pat; break; }
+    }
+
+    // ── PASS B: single-word patterns (leftmost token wins + det gate) ──
+    if (!matched) {
+      // Build stem → canonical pattern map for this field's single-words.
+      // Stemmed pattern stored too so input-stems hit the canonical form.
+      const singleStemMap = new Map();
+      for (const pat of patterns) {
+        if (pat.includes(' ')) continue;
+        singleStemMap.set(pat, pat);            // exact form
+        singleStemMap.set(_stem(pat), pat);     // stemmed form → canonical
       }
-      if (hit) {
-        frame[field] = pat;
-        break;  // first (longest) match wins
+      if (singleStemMap.size > 0) {
+        for (let i = 0; i < inputTokens.length; i++) {
+          const tok = inputTokens[i];
+          // Determiner gate: if a determiner sits 1 OR 2 tokens back, this
+          // token is part of a noun phrase ("a service CALL", "the FEE",
+          // "my next APPOINTMENT"). Skip — it's a noun in this context.
+          if (i > 0 && DETERMINERS.has(inputTokens[i - 1])) continue;
+          if (i > 1 && DETERMINERS.has(inputTokens[i - 2])) continue;
+          // Resolve token → canonical pattern (exact or stemmed)
+          const canonical = singleStemMap.get(tok) || singleStemMap.get(_stem(tok));
+          if (canonical) { matched = canonical; break; }
+        }
       }
     }
+
+    if (matched) frame[field] = matched;
   }
 
   // ── FIELD 8: Trade terms ───────────────────────────────────────────────
