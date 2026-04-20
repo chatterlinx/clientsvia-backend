@@ -149,6 +149,24 @@ const kcGapResolutionSchema = new mongoose.Schema({
         default: null,
     },
 
+    // Full GapReplayService trace captured at resolve time (6-gate diagnostic:
+    // CueExtractor / UAP / WordGate / CoreConfirm / Semantic / Keyword). Mirrors
+    // production routing module-for-module so the audit trail shows WHY each
+    // gate returned what it did. Null if the resolution predates the v2 replay.
+    replayTrace: {
+        type:    mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+
+    // Fix Advisor output if the admin invoked it before resolving.
+    // Shape: { type, confidence, target, proposal, reasoning, nearMisses,
+    //          advisorModel, latencyMs, vetoed?, vetoReason? }
+    // Captured for audit so we can measure advisor quality over time.
+    fixAdvisor: {
+        type:    mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+
     // Container + section the phrase now routes to (ideal state)
     resolvedContainerId: {
         type:    mongoose.Schema.Types.Mixed,

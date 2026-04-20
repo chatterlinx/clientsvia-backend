@@ -41,13 +41,17 @@ const G = {
   // ── Closed-loop verify / resolve state ───────────────────────────────
   // resolutions    — gapKey → resolution doc from /gaps/resolutions
   // byNormalized   — normalizedPhrase → resolution doc (row-join lookup)
-  // verifyByIdx    — merged-row index → last verify result (ephemeral, client-only)
+  // verifyByIdx    — merged-row index → last GapReplayService trace (client-only)
   // verifyingIdx   — Set of merged-row indices currently mid-verify (for UI state)
+  // advisorByIdx   — merged-row index → last FixAdvisor output (client-only)
+  // advisingIdx    — Set of merged-row indices currently mid-advisor-call
   // hideResolved   — filter: hide rows that already have a RESOLVED doc
   resolutions:   {},
   byNormalized:  {},
   verifyByIdx:   {},
   verifyingIdx:  new Set(),
+  advisorByIdx:  {},
+  advisingIdx:   new Set(),
   hideResolved:  true,
 };
 
@@ -1273,53 +1277,301 @@ function _renderVerifyBadge(vr, idx) {
   return html;
 }
 
-// Render the expanded verify detail (gates, matched container, latency)
-// inside the row's detail pane. Returns '' if no verify yet.
+// Render the expanded replay detail (6 gates, matched container, failure mode,
+// latency) inside the row's detail pane. Returns '' if no verify yet.
+//
+// GapReplayService shape:
+//   { verdict, failureMode, phrase, normalizedPhrase, gapKey,
+//     trace: { gate_2_4_cueExtractor, gate_2_5_uap, wordGate, coreConfirm,
+//              gate_2_8_semantic, gate_3_keyword },
+//     finalMatch, wouldFallThroughToLLM, latencyMs, runnerVersion }
 function _renderVerifyDetail(row, idx) {
-  const vr = G.verifyByIdx[idx] || _getResolution(row)?.lastVerifyResult;
+  const vr = G.verifyByIdx[idx]
+          || _getResolution(row)?.replayTrace
+          || _getResolution(row)?.lastVerifyResult;
   if (!vr) return '';
 
-  const verdict = vr.verdict || 'failing';
-  const ce      = vr.gates?.cueExtractor    || {};
-  const ks      = vr.gates?.keywordScoring  || {};
+  const verdict     = vr.verdict || 'failing';
+  const headerColor = verdict === 'resolved' ? '#166534'
+                    : verdict === 'weak'     ? '#92400e'
+                    : '#991b1b';
+  const failureMode = vr.failureMode || (verdict === 'resolved' ? 'OK' : 'UNKNOWN');
+  const trace       = vr.trace || {};
+
+  // Legacy shape (pre-v2) fallback — old resolutions stored under gates{}.
+  const legacyCe = vr.gates?.cueExtractor;
+  const legacyKw = vr.gates?.keywordScoring;
+
+  const ce = trace.gate_2_4_cueExtractor || (legacyCe ? {
+    fieldCount:   legacyCe.fieldCount,
+    fields:       legacyCe.fields,
+    tradeMatches: legacyCe.tradeMatches,
+    pass:         (legacyCe.fieldCount || 0) > 0,
+  } : {});
+  const uap = trace.gate_2_5_uap     || {};
+  const wg  = trace.wordGate         || null;
+  const cc  = trace.coreConfirm      || null;
+  const sem = trace.gate_2_8_semantic|| {};
+  const kw  = trace.gate_3_keyword   || (legacyKw ? {
+    matched:               legacyKw.matched,
+    score:                 legacyKw.score,
+    threshold:             legacyKw.threshold,
+    anchorFloor:           legacyKw.anchorFloor,
+    matchedContainerId:    legacyKw.matchedContainerId,
+    matchedContainerTitle: legacyKw.matchedContainerTitle,
+    matchedSectionIdx:     legacyKw.matchedSectionIdx,
+    matchedSectionLabel:   legacyKw.matchedSectionLabel,
+    pass:                  legacyKw.matched,
+  } : {});
 
   let html = `<div class="verify-detail ${verdict}">`;
-  html += `<div class="verify-detail-title" style="color:${verdict === 'resolved' ? '#166534' : verdict === 'weak' ? '#92400e' : '#991b1b'};">UAP Verify \u2014 ${verdict.toUpperCase()} (${vr.latencyMs || 0}ms)</div>`;
+  html += `<div class="verify-detail-title" style="color:${headerColor};display:flex;align-items:center;gap:8px;flex-wrap:wrap;">`;
+  html += `Replay \u2014 ${verdict.toUpperCase()}`;
+  html += `<span style="font-weight:500;font-size:11px;background:#f1f5f9;color:#334155;padding:2px 8px;border-radius:10px;">${_esc(failureMode)}</span>`;
+  html += `<span style="font-weight:500;font-size:11px;color:#64748b;">${vr.latencyMs || 0}ms</span>`;
+  if (vr.runnerVersion) {
+    html += `<span style="font-weight:500;font-size:11px;color:#94a3b8;">${_esc(vr.runnerVersion)}</span>`;
+  }
+  html += `</div>`;
+
+  // ── Final match summary ────────────────────────────────────────────────
+  const fm = vr.finalMatch || (kw.matched ? {
+    containerId:    kw.matchedContainerId,
+    containerTitle: kw.matchedContainerTitle,
+    sectionIdx:     kw.matchedSectionIdx,
+    sectionLabel:   kw.matchedSectionLabel,
+    score:          kw.score,
+  } : null);
 
   html += '<div class="verify-gate-grid">';
-
-  // CueExtractor (GATE 2.4)
-  html += `<div><span class="verify-gate-label">CueExtractor field count:</span> `;
-  html += `<span class="verify-gate-value">${ce.fieldCount || 0} / 8</span></div>`;
-
-  html += `<div><span class="verify-gate-label">Trade matches:</span> `;
-  html += `<span class="verify-gate-value">${(ce.tradeMatches || []).length}</span></div>`;
-
-  // Keyword scoring (GATE 3)
-  html += `<div><span class="verify-gate-label">Scored container:</span> `;
-  html += `<span class="verify-gate-value">${_esc(ks.matchedContainerTitle || '\u2014 none')}</span></div>`;
-
-  html += `<div><span class="verify-gate-label">Matched section:</span> `;
-  html += `<span class="verify-gate-value">${_esc(ks.matchedSectionLabel || '\u2014 none')}</span></div>`;
-
-  html += `<div><span class="verify-gate-label">Score:</span> `;
-  html += `<span class="verify-gate-value">${ks.score != null ? ks.score : 0} (threshold ${ks.threshold || 8})</span></div>`;
-
+  html += `<div><span class="verify-gate-label">Final container:</span> `;
+  html += `<span class="verify-gate-value">${_esc(fm?.containerTitle || '\u2014 none')}</span></div>`;
+  html += `<div><span class="verify-gate-label">Final section:</span> `;
+  html += `<span class="verify-gate-value">${_esc(fm?.sectionLabel || '\u2014 none')}</span></div>`;
   html += `<div><span class="verify-gate-label">Would fall to LLM:</span> `;
   html += `<span class="verify-gate-value">${vr.wouldFallThroughToLLM ? 'YES \u2014 failing' : 'no'}</span></div>`;
+  html += '</div>';
 
-  html += '</div>'; // gate-grid
+  // ── Per-gate grid ──────────────────────────────────────────────────────
+  html += `<div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;">`;
 
-  // Cue fields that fired (if any)
-  const firedFields = Object.entries(ce.fields || {})
-    .filter(([, v]) => !!v)
-    .map(([k, v]) => `<code style="font-size:11px;">${k}=\u201c${_esc(String(v))}\u201d</code>`);
-  if (firedFields.length) {
-    html += `<div style="margin-top:10px;font-size:12px;"><span class="verify-gate-label">Cues fired:</span> ${firedFields.join(' ')}</div>`;
+  // GATE 2.4 — CueExtractor
+  html += _renderGateCard({
+    title: 'GATE 2.4 \u2014 CueExtractor',
+    pass:  ce.pass === true || (ce.fieldCount || 0) > 0,
+    rows: [
+      ['Fields fired', `${ce.fieldCount || 0} / 8`],
+      ['Trade matches', String((ce.tradeMatches || []).length)],
+    ],
+    footer: (() => {
+      const fired = Object.entries(ce.fields || {})
+        .filter(([, v]) => !!v)
+        .map(([k, v]) => `<code style="font-size:10px;">${k}=\u201c${_esc(String(v))}\u201d</code>`);
+      return fired.length ? fired.join(' ') : '';
+    })(),
+  });
+
+  // GATE 2.5 — UAP
+  html += _renderGateCard({
+    title: 'GATE 2.5 \u2014 UAP (phrase index)',
+    pass:  uap.pass === true,
+    rows: [
+      ['Match type', _esc(uap.matchType || 'NONE')],
+      ['Confidence', uap.confidence != null ? Number(uap.confidence).toFixed(2) : '\u2014'],
+      ['Matched phrase', uap.matchedPhrase ? `\u201c${_esc(uap.matchedPhrase)}\u201d` : '\u2014'],
+    ],
+  });
+
+  // Word Gate (only present if UAP matched)
+  if (wg) {
+    html += _renderGateCard({
+      title: 'Word Gate (\u226590% anchor)',
+      pass:  wg.pass === true,
+      rows: [
+        ['Anchor words', `${(wg.anchorWords || []).length}`],
+        ['Present', wg.presentCount != null ? `${wg.presentCount} / ${(wg.anchorWords || []).length}` : '\u2014'],
+        ['Coverage', wg.coverage != null ? `${(wg.coverage * 100).toFixed(0)}%` : '\u2014'],
+      ],
+      footer: (wg.missingWords || []).length
+        ? `<span style="color:#991b1b;">Missing: ${(wg.missingWords || []).map(w => `<code>${_esc(w)}</code>`).join(' ')}</span>`
+        : '',
+    });
   }
 
-  html += '</div>';
+  // Core Confirm (only present if Word Gate passed)
+  if (cc) {
+    html += _renderGateCard({
+      title: 'Core Confirm (cosine \u22650.80)',
+      pass:  cc.pass === true,
+      rows: [
+        ['Cosine', cc.cosine != null ? cc.cosine.toFixed(3) : '\u2014'],
+        ['Threshold', cc.threshold != null ? cc.threshold.toFixed(2) : '0.80'],
+        ['Bypass', cc.exactBypass ? 'EXACT \u2014 skipped' : 'no'],
+      ],
+    });
+  }
+
+  // GATE 2.8 — Semantic
+  html += _renderGateCard({
+    title: 'GATE 2.8 \u2014 Semantic',
+    pass:  sem.pass === true,
+    rows: [
+      ['Best similarity', sem.bestSimilarity != null ? sem.bestSimilarity.toFixed(3) : '\u2014'],
+      ['Threshold', sem.threshold != null ? sem.threshold.toFixed(2) : '0.70'],
+      ['Best container', _esc(sem.bestContainerTitle || '\u2014')],
+      ['Best section', _esc(sem.bestSectionLabel || '\u2014')],
+    ],
+  });
+
+  // GATE 3 — Keyword scoring
+  html += _renderGateCard({
+    title: 'GATE 3 \u2014 Keyword scoring',
+    pass:  kw.pass === true || kw.matched === true,
+    rows: [
+      ['Container', _esc(kw.matchedContainerTitle || '\u2014 none')],
+      ['Section', _esc(kw.matchedSectionLabel || '\u2014 none')],
+      ['Score', `${kw.score != null ? kw.score : 0} (threshold ${kw.threshold || 8})`],
+      ['Anchor boosted', kw.anchorBoosted ? `yes (floor ${kw.anchorFloor || 24})` : 'no'],
+    ],
+  });
+
+  html += '</div>'; // per-gate grid
+
+  // ── Fix Advisor card / button ──────────────────────────────────────────
+  html += _renderFixAdvisorCard(row, idx);
+
+  html += '</div>'; // verify-detail
   return html;
+}
+
+// Render a single gate card with pass/fail pill + key/value rows.
+function _renderGateCard({ title, pass, rows, footer }) {
+  const pillColor = pass ? { bg: '#dcfce7', fg: '#166534', label: 'PASS' }
+                         : { bg: '#fee2e2', fg: '#991b1b', label: 'FAIL' };
+  let h = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;">`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
+  h += `<span style="font-size:11px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.4px;">${_esc(title)}</span>`;
+  h += `<span style="background:${pillColor.bg};color:${pillColor.fg};font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">${pillColor.label}</span>`;
+  h += `</div>`;
+  h += `<div style="font-size:12px;color:#334155;display:flex;flex-direction:column;gap:3px;">`;
+  for (const [k, v] of rows) {
+    h += `<div><span style="color:#64748b;">${_esc(k)}:</span> <span style="font-weight:600;">${v}</span></div>`;
+  }
+  h += `</div>`;
+  if (footer) h += `<div style="margin-top:6px;font-size:11px;color:#475569;">${footer}</div>`;
+  h += `</div>`;
+  return h;
+}
+
+// Render the Fix Advisor card: button, loading state, or rendered proposal.
+function _renderFixAdvisorCard(row, idx) {
+  const advisor = G.advisorByIdx[idx] || _getResolution(row)?.fixAdvisor;
+
+  let h = `<div style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;">`;
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">`;
+  h += `<span style="font-weight:700;font-size:12px;color:#0f172a;">\ud83e\udde0 Fix Advisor</span>`;
+
+  if (G.advisingIdx.has(idx)) {
+    h += `<span style="font-size:11px;color:#64748b;">\u23f3 Asking Claude\u2026</span>`;
+  } else if (advisor) {
+    h += `<button class="btn-act" style="font-size:11px;" onclick="askFixAdvisor(${idx})">Re-run</button>`;
+  } else {
+    h += `<button class="btn-act" style="font-size:11px;background:#ede9fe;border-color:#c4b5fd;color:#5b21b6;" onclick="askFixAdvisor(${idx})">\u2728 Ask Fix Advisor</button>`;
+  }
+  h += `</div>`;
+
+  if (!advisor) {
+    h += `<div style="font-size:12px;color:#64748b;">Claude reads the 6-gate trace and classifies the fix as ADD_PHRASES / AUGMENT_SECTION / NEW_SECTION / ROUTING_PROBLEM. A similarity sweep vetoes NEW_SECTION if existing content already covers the phrase \u22650.80 cosine, preventing duplicate sections.</div>`;
+    h += `</div>`;
+    return h;
+  }
+
+  // ── Render the advisor proposal ──────────────────────────────────────
+  const typeColors = {
+    ADD_PHRASES:     { bg: '#dbeafe', fg: '#1e40af' },
+    AUGMENT_SECTION: { bg: '#fef3c7', fg: '#92400e' },
+    NEW_SECTION:     { bg: '#ede9fe', fg: '#5b21b6' },
+    ROUTING_PROBLEM: { bg: '#fee2e2', fg: '#991b1b' },
+  };
+  const tc = typeColors[advisor.type] || { bg: '#e2e8f0', fg: '#334155' };
+  const confColors = {
+    HIGH:   { bg: '#dcfce7', fg: '#166534' },
+    MED:    { bg: '#fef3c7', fg: '#92400e' },
+    LOW:    { bg: '#fee2e2', fg: '#991b1b' },
+  };
+  const cc = confColors[advisor.confidence] || { bg: '#e2e8f0', fg: '#334155' };
+
+  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">`;
+  h += `<span style="background:${tc.bg};color:${tc.fg};font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">${_esc(advisor.type || '\u2014')}</span>`;
+  if (advisor.confidence) {
+    h += `<span style="background:${cc.bg};color:${cc.fg};font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">${_esc(advisor.confidence)} conf</span>`;
+  }
+  if (advisor.vetoed) {
+    h += `<span style="background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;">\ud83d\udea7 veto: ${_esc(advisor.vetoReason || 'similarity sweep')}</span>`;
+  }
+  if (advisor.advisorModel) {
+    h += `<span style="color:#94a3b8;font-size:10px;align-self:center;">${_esc(advisor.advisorModel)} \u00b7 ${advisor.latencyMs || 0}ms</span>`;
+  }
+  h += `</div>`;
+
+  // Target container/section
+  if (advisor.target) {
+    h += `<div style="font-size:12px;color:#334155;margin-bottom:8px;">`;
+    h += `<span style="color:#64748b;">Target:</span> <strong>${_esc(advisor.target.containerTitle || '\u2014')}</strong>`;
+    if (advisor.target.sectionLabel) {
+      h += ` \u203a <strong>${_esc(advisor.target.sectionLabel)}</strong>`;
+    }
+    h += `</div>`;
+  }
+
+  // Reasoning
+  if (advisor.reasoning) {
+    h += `<div style="font-size:12px;color:#334155;margin-bottom:8px;line-height:1.5;"><span style="color:#64748b;">Why:</span> ${_esc(advisor.reasoning)}</div>`;
+  }
+
+  // Proposal body
+  const prop = advisor.proposal || {};
+  if (Array.isArray(prop.phrasesToAdd) && prop.phrasesToAdd.length) {
+    h += `<div style="font-size:12px;margin-bottom:6px;"><span style="color:#64748b;">Phrases to add:</span></div>`;
+    h += `<ul style="margin:0 0 8px 18px;padding:0;font-size:12px;color:#0f172a;">`;
+    for (const p of prop.phrasesToAdd.slice(0, 12)) {
+      h += `<li>\u201c${_esc(p)}\u201d</li>`;
+    }
+    h += `</ul>`;
+  }
+  if (prop.sectionLabel || prop.sectionContent) {
+    h += `<div style="font-size:12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;">`;
+    if (prop.sectionLabel)   h += `<div><strong>${_esc(prop.sectionLabel)}</strong></div>`;
+    if (prop.sectionContent) h += `<div style="margin-top:4px;color:#334155;">${_esc(prop.sectionContent)}</div>`;
+    h += `</div>`;
+  }
+  if (prop.routingIssue) {
+    h += `<div style="font-size:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;margin-bottom:8px;color:#991b1b;"><strong>Routing issue:</strong> ${_esc(prop.routingIssue)}</div>`;
+  }
+
+  // Near-misses
+  if (Array.isArray(advisor.nearMisses) && advisor.nearMisses.length) {
+    h += `<details style="margin-bottom:8px;"><summary style="font-size:11px;color:#475569;cursor:pointer;">Near-misses (${advisor.nearMisses.length}) \u2014 existing content ranked by cosine</summary>`;
+    h += `<table style="width:100%;margin-top:6px;font-size:11px;border-collapse:collapse;">`;
+    for (const nm of advisor.nearMisses.slice(0, 5)) {
+      h += `<tr style="border-bottom:1px solid #e2e8f0;">`;
+      h += `<td style="padding:3px 6px;font-weight:600;">${nm.similarity != null ? nm.similarity.toFixed(3) : '\u2014'}</td>`;
+      h += `<td style="padding:3px 6px;color:#334155;">${_esc(nm.containerTitle || '\u2014')}</td>`;
+      h += `<td style="padding:3px 6px;color:#64748b;">${_esc(nm.sectionLabel || '\u2014')}</td>`;
+      h += `<td style="padding:3px 6px;color:#94a3b8;font-size:10px;">${_esc(nm.source || '\u2014')}</td>`;
+      h += `</tr>`;
+    }
+    h += `</table></details>`;
+  }
+
+  // Deep-link to editor
+  if (advisor.target?.containerId) {
+    const url = `/agent-console/services-item.html?companyId=${G.companyId}&kcId=${advisor.target.kcId || ''}&containerId=${advisor.target.containerId}${advisor.target.sectionIdx != null ? `&sectionIdx=${advisor.target.sectionIdx}` : ''}`;
+    h += `<a href="${url}" class="btn-act success" style="font-size:11px;text-decoration:none;display:inline-block;">\u270f\ufe0f Open in editor</a>`;
+  }
+
+  h += `</div>`;
+  return h;
 }
 
 // ── Action: verify a single row ──────────────────────────────────────────
@@ -1344,11 +1596,14 @@ async function verifyRow(idx) {
     if (!res.success) throw new Error(res.error || 'verify failed');
 
     G.verifyByIdx[idx] = res.verify;
+    // New verify invalidates any previous advisor output for this row
+    delete G.advisorByIdx[idx];
     const verdict = res.verify?.verdict || 'failing';
+    const fm      = res.verify?.failureMode || '';
     _toast(
       verdict === 'resolved' ? '\u2713 Routes cleanly \u2014 ready to mark done' :
-      verdict === 'weak'     ? '\u26a0\ufe0f  Matches but weakly \u2014 review details' :
-                               '\u2717 Still failing \u2014 add more content'
+      verdict === 'weak'     ? `\u26a0\ufe0f  Matches but weakly (${fm}) \u2014 review details` :
+                               `\u2717 Still failing (${fm}) \u2014 run Fix Advisor`
     );
   } catch (err) {
     _toast('Verify error: ' + err.message);
@@ -1373,6 +1628,7 @@ async function resolveRow(idx) {
         body: JSON.stringify({
           phrase:                 row.question,
           verifyResult:           vr,
+          fixAdvisor:             G.advisorByIdx[idx] || undefined,
           originalType:           row.displayType,
           originalContainerId:    row.containerId   || null,
           originalContainerTitle: row.containerTitle || null,
@@ -1386,6 +1642,7 @@ async function resolveRow(idx) {
     G.resolutions[doc.gapKey]          = doc;
     G.byNormalized[doc.normalizedPhrase] = doc;
     delete G.verifyByIdx[idx];
+    delete G.advisorByIdx[idx];
 
     _toast(`\u2705 Marked resolved \u2014 ${doc.status}`);
     _renderFilters();    // resolvedCount badge updates
@@ -1393,6 +1650,51 @@ async function resolveRow(idx) {
   } catch (err) {
     _toast('Resolve error: ' + err.message);
     console.error('[resolveRow]', err);
+  }
+}
+
+// ── Action: ask the Fix Advisor to classify + draft a fix ─────────────────
+// Calls POST /gaps/fix-advisor with the current verify trace so Claude has
+// authoritative gate outcomes. Stores result on G.advisorByIdx[idx] so the
+// Fix Advisor card renders inline. Safe to call repeatedly.
+async function askFixAdvisor(idx) {
+  const row = G.merged[idx];
+  if (!row || !row.question) { _toast('No phrase to advise on'); return; }
+
+  G.advisingIdx.add(idx);
+  _rerenderRow(idx);
+
+  try {
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/gaps/fix-advisor`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          phrase:                 row.question,
+          replayTrace:            G.verifyByIdx[idx] || null,
+          originalContainerId:    row.containerId    || null,
+          originalContainerTitle: row.containerTitle || null,
+        }),
+      }
+    );
+    if (!res.success) throw new Error(res.error || 'advisor failed');
+
+    G.advisorByIdx[idx] = res.advisor;
+    // Backfill verify cache if the server replayed for us
+    if (res.replayTrace && !G.verifyByIdx[idx]) G.verifyByIdx[idx] = res.replayTrace;
+
+    const a = res.advisor || {};
+    _toast(
+      a.vetoed
+        ? `\u2728 Advisor: ${a.type} (veto downgrade applied)`
+        : `\u2728 Advisor: ${a.type || 'unknown'} \u00b7 ${a.confidence || '\u2014'} confidence`
+    );
+  } catch (err) {
+    _toast('Advisor error: ' + err.message);
+    console.error('[askFixAdvisor]', err);
+  } finally {
+    G.advisingIdx.delete(idx);
+    _rerenderRow(idx);
   }
 }
 
