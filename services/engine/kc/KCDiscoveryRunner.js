@@ -1349,6 +1349,19 @@ class KCDiscoveryRunner {
                 threshold:   Math.round(ANCHOR_MATCH_THRESHOLD * 100) + '%',
                 sectionLabel: targetSection?.label,
               });
+            } else if (uapResult.matchType === 'EXACT') {
+              // ── EXACT BYPASS (per UAP.md §6) ──────────────────────────────
+              // Logic 1 confirmed anchor words AND the entire callerPhrase was
+              // a substring of the input → highest possible UAP signal. Skip
+              // Logic 2 embedding round-trip (~50ms saved on every EXACT match).
+              logger.info('[KC_ENGINE] LOGIC 1 PASS — EXACT match, bypassing Logic 2', {
+                companyId, callSid, turn,
+                anchorWords,
+                anchorHits,
+                anchorRatio: Math.round(anchorRatio * 100) + '%',
+                matchType:   uapResult.matchType,
+                sectionLabel: targetSection?.label,
+              });
             } else {
               // ── LOGIC 1 PASS — proceed to Logic 2 ──
               logger.info('[KC_ENGINE] LOGIC 1 PASS — anchor words confirmed', {
@@ -1671,8 +1684,24 @@ class KCDiscoveryRunner {
 
     // ══════════════════════════════════════════════════════════════════════════
     // GATE 3 — KEYWORD FALLBACK — contentKeywords + title scoring  (<1ms)
+    // ──────────────────────────────────────────────────────────────────────────
+    // findContainer() returns bestMatch shapes WITHOUT matchSource. We tag it
+    // here as 'KEYWORD' so downstream gates (UAP_MISS_KEYWORD_RESCUED logging,
+    // GATE 2.9 negKw, NEGATIVE_KEYWORD_BLOCK qaLog) can attribute the source.
+    // Wrapped in try/catch — a corrupted container should fall through to GATE 4
+    // LLM fallback, not crash run() and trigger COMPUTE_CRASH recovery.
     // ══════════════════════════════════════════════════════════════════════════
-    if (!match) match = KCS.findContainer(scorableContainers, userInput, callContext);
+    if (!match) {
+      try {
+        const _kcsMatch = KCS.findContainer(scorableContainers, userInput, callContext);
+        if (_kcsMatch) match = { ..._kcsMatch, matchSource: 'KEYWORD' };
+      } catch (_kcsErr) {
+        logger.warn('[KC_ENGINE] GATE 3 keyword scoring error — falling through to LLM', {
+          companyId, callSid, turn,
+          err: _kcsErr?.message || String(_kcsErr),
+        });
+      }
+    }
 
     // Carry bestSection from findContainer into the match for section routing
     if (match && match.bestSection && !match.targetSection) {
