@@ -136,6 +136,28 @@ function _diff(before, after) {
     return { added, removed };
 }
 
+// ── GET /export ─────────────────────────────────────────────────────────────
+// Download current cuePhrases as a standalone JSON file (bare array).
+// Shape matches what POST /apply expects — round-trips cleanly.
+router.get('/export', async (req, res) => {
+    try {
+        const { current } = await _getCurrent();
+        const stamp = new Date().toISOString().slice(0, 10);
+        const filename = `cuePhrases-${stamp}.json`;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify({
+            exportedAt: new Date().toISOString(),
+            total: current.length,
+            counts: _countByToken(current),
+            cuePhrases: current,
+        }, null, 2));
+    } catch (err) {
+        logger.error('[cuePhrasesImport /export]', { error: err.message });
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ── GET /state ──────────────────────────────────────────────────────────────
 router.get('/state', async (req, res) => {
     try {

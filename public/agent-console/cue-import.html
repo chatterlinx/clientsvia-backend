@@ -63,10 +63,16 @@
         <h2 class="text-base font-semibold text-slate-900">Current Dictionary</h2>
         <p class="text-sm muted mt-1">Live cuePhrases in <span class="mono">AdminSettings.globalHub.phraseIntelligence</span>.</p>
       </div>
-      <button id="btn-refresh" class="btn btn-ghost">↻ Refresh</button>
+      <div class="flex items-center gap-2">
+        <a id="btn-download" href="/api/admin/cue-phrases-import/export" class="btn btn-ghost" download>⬇ Download Current</a>
+        <button id="btn-refresh" class="btn btn-ghost">↻ Refresh</button>
+      </div>
     </div>
 
     <div id="current-state" class="text-sm muted">Loading…</div>
+    <p class="text-xs muted mt-3">
+      Download produces a clean <span class="mono">cuePhrases</span>-only JSON (bare list, round-trips into the importer). Use this to share for review / cleanup — no other GlobalShare sections included.
+    </p>
   </section>
 
   <!-- IMPORT FLOW -->
