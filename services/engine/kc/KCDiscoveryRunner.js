@@ -1383,15 +1383,34 @@ class KCDiscoveryRunner {
 
                 const callerCore = (uapResult.topicWords || []).join(' ');
                 if (callerCore) {
-                  // Embed caller core + load section phraseCoreEmbedding in parallel
+                  // ⚠️ FIX (April 2026, audit): was SemanticMatchService.embed()
+                  // which doesn't exist on the module — silently returned undefined,
+                  // disabling Logic 2 entirely in production for an unknown period.
+                  // The exported function is .embedText (single-string embedder).
+                  // GapReplay's mirrored implementation already used embedText, which
+                  // is why GapReplay diagnostics could show Logic 2 cosine scores
+                  // (e.g. 0.527) while production silently bypassed Logic 2 entirely.
                   const [callerCoreEmb, secDoc] = await Promise.all([
-                    SemanticMatchService.embed(callerCore),
+                    SemanticMatchService.embedText(callerCore),
                     CompanyKnowledgeContainer.findById(uapResult.containerId)
                       .select('+sections.phraseCoreEmbedding')
                       .lean(),
                   ]);
 
                   const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
+
+                  // Defensive observability — if embedding came back falsy on a
+                  // non-empty callerCore, log it loudly so a future broken
+                  // embedder (OpenAI down, function rename, etc.) can't silently
+                  // disable Logic 2 again. Routes on Logic 1 alone (graceful).
+                  if (!callerCoreEmb?.length) {
+                    logger.warn('[KC_ENGINE] LOGIC 2 SKIP — callerCore embed unavailable, routing on Logic 1 alone', {
+                      companyId, callSid, turn,
+                      callerCore:    callerCore.slice(0, 60),
+                      hasPhraseCore: Boolean(phraseCoreEmb?.length),
+                      sectionLabel:  targetSection?.label,
+                    });
+                  }
 
                   if (callerCoreEmb?.length && phraseCoreEmb?.length) {
                     // Cosine similarity
