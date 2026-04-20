@@ -1,6 +1,6 @@
 # UAP Engine Report — Complete A-to-Z Pipeline Reference
 
-**Last verified against code: April 17, 2026**
+**Last verified against code: April 20, 2026**
 
 This document describes the complete caller utterance routing pipeline from speech input to agent response. Paste this into any future conversation for full system context.
 
@@ -27,6 +27,9 @@ This document describes the complete caller utterance routing pipeline from spee
 17. [Agent Studio + Cross-Container KC Recovery](#17-agent-studio--cross-container-kc-recovery-april-2026)
 18. [Speculative Pre-Warm — UAP Runs While Caller Is Speaking](#18-speculative-pre-warm--uap-runs-while-caller-is-speaking-april-2026)
 19. [Design Rationale + Operational Guardrails (Read This First on Every New Session)](#19-design-rationale--operational-guardrails-april-2026)
+20. [CueExtractor Matching Algorithm — Stems + Determiner Gate + Leftmost-Position](#20-cueextractor-matching-algorithm--stems--determiner-gate--leftmost-position-april-2026)
+21. [matchSource Enforcement + Logic 2 EXACT Bypass](#21-matchsource-enforcement--logic-2-exact-bypass-april-2026)
+22. [AUDIT-BUG-01 — Logic 2 Silently Disabled (embed → embedText)](#22-audit-bug-01--logic-2-silently-disabled-embed--embedtext-april-20-2026)
 
 ---
 
@@ -503,10 +506,11 @@ Calls `UtteranceActParser.parse(companyId, userInput)`.
 
 **Logic 2 — Core Confirmation (~50ms):**
 - Only runs if Logic 1 passes AND matchType is NOT EXACT.
-- Takes UAP's `topicWords`, embeds them via OpenAI, computes cosine similarity against `section.phraseCoreEmbedding`.
+- Takes UAP's `topicWords`, embeds them via OpenAI (`SemanticMatchService.embedText`), computes cosine similarity against `section.phraseCoreEmbedding`.
 - If cosine < 0.80 (CORE_MATCH_THRESHOLD): `anchorGatePassed = false`.
 - If `phraseCoreEmbedding` absent (Re-score not yet run): Logic 2 skipped, routes on Logic 1 alone.
 - If `topicWords` empty: Logic 2 skipped.
+- **⚠️ April 20, 2026 — AUDIT-BUG-01 fix:** this block was silently disabled in production for an unknown period due to a method-name typo (`embed` instead of `embedText`). See §22 for full history and the defensive WARN log that now guards against recurrence.
 
 **On hit:** Sets `match` with `matchSource: 'UAP_LAYER1'`.
 **On miss:** Falls through to GATE 2.8. Fuzzy recovery attempts (SYNONYM/FUZZY_PHONETIC) logged to qaLog.
@@ -1491,4 +1495,240 @@ That's the system. If a future session remembers only that paragraph, they'll be
 7. **"LAP swallowed a question"** → trailing content guard — §15
 
 Start with the call report, then the specific section. Don't read the whole pipeline — find the symptom's section first.
+
+---
+
+## 20. CueExtractor Matching Algorithm — Stems + Determiner Gate + Leftmost-Position (April 2026)
+
+**Commits:** `a57be1154` (stemmed whole-word matching) + `531c6e88d` (determiner gate + leftmost-position for single-word patterns)
+
+The CueExtractor has three layered matching rules that together pick the right cue token from a caller's utterance. Without these, simple noun/verb ambiguity (e.g. "call" as noun vs "call" as verb) caused fields like `actionCore` to extract the wrong word, which in turn mis-routed containers.
+
+### 20.1 — The Problem This Solves
+
+**Before these fixes**, on input `"Okay. Uh, do I have to pay for a service call?"`:
+- `actionCore = "call"` (noun, length 4) won over `"pay"` (verb, length 3) because matching was raw substring + longest-first.
+- Result: routing thought the caller was asking about "calling" instead of "paying" — mis-route.
+
+**After the fix**, the same input resolves to `actionCore = "pay"` — correct. The digression to "Maintenance Member Benefits" fires as intended.
+
+### 20.2 — Rule 1: Stemmed Whole-Word Matching (`a57be1154`)
+
+**Replaces:** raw `input.includes(pattern)` substring matching on single-word patterns.
+
+**New behavior:** tokenize input, compare token-by-token against both the raw pattern and its stem. A single-word pattern matches a token iff:
+- `token === pattern` (exact), OR
+- `_stem(token) === _stem(pattern)` (same stem)
+
+**Why:** prevents `"payment"` from matching `"pay"` via substring overlap, and prevents `"called"` from matching a verb pattern via fuzzy substring. Stem equality on whole tokens is the correct gate.
+
+**`_stem()` implementation (CueExtractorService):** simple suffix stripper covering `ing | ings | ation | ations | ers | er | ed | ly | ies | ves | s`. Deliberately not Porter stemmer — we need <1ms latency, not linguistic perfection.
+
+### 20.3 — Rule 2: Two-Pass Matching (`531c6e88d`)
+
+Every cue field runs two passes, in order. First pass that yields a match wins:
+
+**PASS A — Multi-word patterns (substring, longest-first):**
+- Only patterns containing a space are considered.
+- Longest-first iteration ensures `"do i have to"` wins over `"i have to"` on the same input.
+- Substring-based — multi-word patterns are intentionally specific, substring is safe here.
+
+**PASS B — Single-word patterns (leftmost token wins + determiner gate):**
+- Only patterns with no space.
+- Builds a `singleStemMap` mapping both raw pattern and stemmed pattern back to the canonical pattern name.
+- Iterates caller input **left-to-right**, token by token.
+- First token that matches (via raw or stem) wins — **position, not length**.
+
+This replaces the old "longest single-word pattern wins" behavior that caused the `"call"` vs `"pay"` bug.
+
+### 20.4 — Rule 3: The Determiner Gate
+
+**Why PASS B alone isn't enough:** English reuses many words as noun and verb. On `"do I have to pay for a service call"`, `"pay"` at position 4 is the verb actionCore. `"call"` at position 7 is a noun — part of the object noun-phrase `"a service call"`. PASS B without a gate would still let `"pay"` win (leftmost) — but on other inputs where the noun appears first, we'd still mis-match.
+
+**The gate:** skip any candidate token preceded within 2 tokens by a determiner.
+
+```javascript
+const DETERMINERS = new Set([
+  'a', 'an', 'the',
+  'my', 'your', 'our', 'his', 'her', 'their',
+  'this', 'that', 'these', 'those',
+  'some', 'any', 'no',
+]);
+
+// Inside PASS B loop:
+for (let i = 0; i < inputTokens.length; i++) {
+  const tok = inputTokens[i];
+  if (i > 0 && DETERMINERS.has(inputTokens[i - 1])) continue;  // e.g. "a CALL"
+  if (i > 1 && DETERMINERS.has(inputTokens[i - 2])) continue;  // e.g. "a service CALL"
+  const canonical = singleStemMap.get(tok) || singleStemMap.get(_stem(tok));
+  if (canonical) { matched = canonical; break; }
+}
+```
+
+**Why 2 tokens of lookback:** covers adjective-modified nouns (`"a service call"`, `"the water heater"`) without a full POS tagger.
+
+### 20.5 — Combined Effect (Worked Example)
+
+Input: `"Okay. Uh, do I have to pay for a service call?"`
+
+| Pass | Field | Candidate | Outcome |
+|---|---|---|---|
+| A | permissionCue | `"do i have to"` | ✅ matches (multi-word substring) |
+| B | actionCore | token 4 `"pay"` | ✅ matches (leftmost single-word, no preceding determiner) |
+| B | actionCore | token 8 `"call"` | ⏭️ gate skips (preceded by `"a"` at token 7) |
+
+Result: `{ permissionCue: "do i have to", actionCore: "pay" }`. Routes to the correct pay-for-service digression container (Maintenance Member Benefits), not No Cooling.
+
+### 20.6 — Applies To All 8 Cue Fields
+
+The two-pass + determiner gate logic runs for every field: `requestCue`, `permissionCue`, `infoCue`, `directiveCue`, `actionCore`, `urgencyCore`, `modifierCore`, plus the trade-term matching pass. Fields with only multi-word patterns exercise PASS A only. Fields with only single-word patterns exercise PASS B only. Mixed fields use both.
+
+### 20.7 — GapReplay Parity Guarantee
+
+`GapReplayService` imports the same `CueExtractorService` module as the live `KCDiscoveryRunner`. There is no parallel implementation — both paths go through the identical matching algorithm. Whatever the Gap replay shows, live will reproduce. (Previously this was a source of drift concern — verified correct on April 20, 2026.)
+
+---
+
+## 21. matchSource Enforcement + Logic 2 EXACT Bypass (April 2026)
+
+**Commit:** `673da72b4`
+
+Two small but important bugs in GATE 3 (Keyword Scoring) and GATE 2.5 (UAP Layer 1) were fixed together.
+
+### 21.1 — Bug 1: GATE 3 Keyword Fallback Never Set `matchSource='KEYWORD'`
+
+**Before:** when GATE 3 produced a keyword-scored match (no UAP hit, no Semantic hit, just raw keyword overlap), the resulting match object had `matchSource: undefined`.
+
+**Consequences:**
+- Downstream logic that checks `matchSource === 'KEYWORD'` never fired.
+- Reports rendered the source column as `—` instead of `KEYWORD`.
+- Diagnostic tooling under-counted keyword-only matches.
+- The `UAP_MISS_KEYWORD_RESCUED` qaLog event (KCDiscoveryRunner ~line 1742) reads what line 1716 sets — both must align.
+
+**Fix:** explicit `matchSource: 'KEYWORD'` assignment on the GATE 3 match-construction path. Every match now has a non-null source from the fixed enum:
+
+```
+UAP_LAYER1 | CUE_EXTRACT | CUE_PROFILE_SCAN | SEMANTIC | KEYWORD | CROSS_CONTAINER_RESCUE
+```
+
+### 21.2 — Bug 2: EXACT Phrase Match Was Running Logic 2
+
+**Before:** when UAP returned `matchType: 'EXACT'` (phrase index found a verbatim match of the caller's input against an authored callerPhrase), the code still ran Logic 2 Core Confirmation — an OpenAI embed + cosine check.
+
+**Two problems:**
+- Adds ~50ms latency for a phrase that already passed a verbatim-match check — wasted cost + time.
+- On older sections without `phraseCoreEmbedding` populated (Re-score not yet run), Logic 2 would fail even though the phrase was literally authored content → false negative, unnecessary fallback to GATE 2.8 or Groq.
+
+**Fix:** `if (matchType === 'EXACT') { skip Logic 2 }`. EXACT is the highest-confidence tier — no further confirmation needed. This is now captured inline in §6 GATE 2.5 as "EXACT bypass."
+
+### 21.3 — Why These Matter Together
+
+Both bugs silently under-reported correct behavior:
+- `matchSource` missing meant "was this answer from KC or from LLM fallback?" reports couldn't distinguish keyword hits from fallbacks.
+- EXACT-then-Logic-2 meant high-confidence verbatim matches were routed through a slower, lossy secondary check — and sometimes rejected.
+
+After both fixes, every match has clear provenance AND EXACT matches route in <1ms instead of ~51ms.
+
+---
+
+## 22. AUDIT-BUG-01 — Logic 2 Silently Disabled (embed → embedText) (April 20, 2026)
+
+**Commit:** `59650fab6` | **Severity:** production silent failure, unknown duration
+
+The most serious bug found during the April 20 audit pass. Logic 2 Core Confirmation — the 0.80 cosine similarity check that gates UAP Layer 1 matches against semantic drift — was not running at all in production. It had been disabled for an unknown period while everything downstream continued to pretend Logic 2 had passed.
+
+### 22.1 — The Bug
+
+`KCDiscoveryRunner.js` at line ~1388 called:
+
+```javascript
+const [callerCoreEmb, secDoc] = await Promise.all([
+  SemanticMatchService.embed(callerCore),           // ← DOES NOT EXIST
+  CompanyKnowledgeContainer.findById(uapResult.containerId)
+    .select('+sections.phraseCoreEmbedding')
+    .lean(),
+]);
+```
+
+But `SemanticMatchService` only exports:
+
+```
+embedText, embedBatch, embedCallerPhrases, embedSectionContent,
+cosineSimilarity, findBestSection, CONFIG
+```
+
+There is no `embed` method. Never was — the service always used `embedText`.
+
+### 22.2 — Why It Was Silent
+
+Three compounding factors hid the failure:
+
+1. **JavaScript returns `undefined` silently** when you call a non-existent method as an expression, without throwing on `await Promise.all([undefined, ...])` — the promise resolves with undefined for that slot.
+2. **Optional chaining swallowed the undefined:** downstream code used `callerCoreEmb?.length` which short-circuits to `undefined` (falsy) — the Logic 2 block simply skipped.
+3. **Surrounding try/catch** further ensured no log, no throw, no alert escaped.
+
+Net result: every UAP Layer 1 hit was routing on Logic 1 alone (anchor-word ≥90%). The cosine-similarity floor of 0.80 was never enforced — semantic drift had no gate.
+
+### 22.3 — Discovery Path
+
+The bug was **self-documented** in `GapReplayService.js` source comments at line ~510:
+
+> "the production code calls `SemanticMatchService.embed(callerCore)` which does NOT exist on that module (only embedText is exported). That production call throws every time and is silently swallowed by the try/catch at line 1413, meaning Logic 2 Core Confirm is effectively DISABLED in production."
+
+Whoever wrote the GapReplay mirror had noticed the mismatch and documented it in a comment — but the fix never shipped. A second-pass audit of `SemanticMatchService` exports cross-referenced against KCDiscoveryRunner call sites surfaced it in the April 20 session.
+
+### 22.4 — The Fix
+
+```javascript
+const [callerCoreEmb, secDoc] = await Promise.all([
+  SemanticMatchService.embedText(callerCore),       // was .embed()
+  CompanyKnowledgeContainer.findById(uapResult.containerId)
+    .select('+sections.phraseCoreEmbedding')
+    .lean(),
+]);
+
+// Defensive observability — never go silent again:
+if (!callerCoreEmb?.length) {
+  logger.warn('[KC_ENGINE] LOGIC 2 SKIP — callerCore embed unavailable, routing on Logic 1 alone', {
+    companyId, callSid, turn,
+    callerCore:    callerCore.slice(0, 60),
+    hasPhraseCore: Boolean(phraseCoreEmb?.length),
+    sectionLabel:  targetSection?.label,
+  });
+}
+```
+
+Two changes:
+- Method name corrected (`embed` → `embedText`).
+- New WARN log that fires if `callerCore` is non-empty but embedding returns falsy — guards against future renames, OpenAI outages, or any regression that re-breaks Logic 2.
+
+### 22.5 — Operational Impact During the Silent Period
+
+While Logic 2 was disabled:
+- UAP Layer 1 matches that passed Logic 1 (anchor-word ratio ≥ 0.90) but would have failed Logic 2 (cosine < 0.80) were routed anyway.
+- False positives on semantically-drifted phrases — anchor words overlap but the topic is different — could not be caught. In practice, narrow anchor gates limit this, but there is no way to quantify the impact without replaying historical calls.
+- EXACT matches (which correctly bypass Logic 2) were unaffected.
+
+### 22.6 — Class of Bug: Silent Undefined on Method Typo
+
+This bug exemplifies a broader risk pattern — **using optional chaining and try/catch on return values from renamed/missing methods**:
+
+```javascript
+// Safe: obj exists, method exists:
+const x = obj.knownMethod();
+
+// Silent failure: method was renamed, nothing throws if awaited inside Promise.all,
+// nothing logs because optional chaining swallows the undefined:
+const [res] = await Promise.all([obj.missingMethod(arg)]);
+if (res?.length) { /* never runs */ }
+```
+
+**Defense in depth adopted going forward:**
+- On any module-boundary call whose return value is **used later**, add a loud log on falsy return — like the WARN above.
+- Any renaming of a publicly-exported service method requires a grep pass for old call sites before merge.
+- Prefer destructuring exports at import time (`const { embedText } = require('./SemanticMatchService')`) so typos fail at module load — earlier failure mode.
+
+### 22.7 — Cross-Reference
+
+§6 GATE 2.5 "Logic 2 — Core Confirmation" describes the intended behavior. Between the documented design and this fix, that behavior is now actually running in production for the first time in this code generation.
 
