@@ -65,6 +65,35 @@ const CUE_FIELDS = [
   'actionCore', 'urgencyCore', 'modifierCore',
 ];
 
+// ── Stemmer (P3, April 2026) ────────────────────────────────────────────────
+// Mirrors _stem() in KCDiscoveryRunner.js with one extra rule (trailing "e"
+// preceded by 4+ word chars) to collapse "schedule" with "scheduled"/"scheduling".
+// Used ONLY for single-word cue patterns to catch English inflections without
+// expanding the cuePhrases dictionary 3-5x. Multi-word idiomatic patterns
+// ("do i have to", "i need", "right now") remain substring-matched verbatim.
+//
+// Length guard (<4 chars → return as-is) protects short words from collisions
+// like "her" vs "here" or "the" vs "they". The (\w{4,})e$ pattern protects
+// short words like "have", "here", "home" while still collapsing
+// "schedule"→"schedul", "charge"→"charg", "phone"→"phon".
+//
+// Known limitation: irregular past tense ("paid", "made", "took") does NOT
+// stem to base form. Add the irregular form as a separate pattern if needed.
+function _stem(word) {
+  const w = String(word || '').toLowerCase();
+  if (w.length < 4) return w;
+  return w
+    .replace(/ings?$/,        '')   // scheduling/schedulings → schedul
+    .replace(/ations?$/,      '')   // installation/installations → install
+    .replace(/ers?$/,         '')   // installer/installers → install
+    .replace(/ed$/,           '')   // scheduled → schedul
+    .replace(/ly$/,           '')   // currently → current
+    .replace(/ies$/,          'y')  // warranties → warranty
+    .replace(/ves$/,          'f')  // leaves → leaf
+    .replace(/s$/,            '')   // weekends → weekend
+    .replace(/(\w{4,})e$/,    '$1');// schedule → schedul (4+ char prefix only)
+}
+
 // ============================================================================
 // TRADE INDEX — build reverse lookup from KC sections' tradeTerms[]
 // ============================================================================
@@ -273,6 +302,13 @@ async function extract(companyId, utterance) {
     byToken[token].sort((a, b) => b.length - a.length);
   }
 
+  // Pre-compute input tokens + stems once for stemmed whole-word matching
+  // of single-word patterns (catches "paying" when pattern is "pay", etc.).
+  // Multi-word patterns still use substring matching (idiomatic phrases).
+  const inputTokens = lower.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const inputExact  = new Set(inputTokens);
+  const inputStems  = new Set(inputTokens.map(_stem));
+
   // Match against each canonical field
   for (const field of CUE_FIELDS) {
     const token = field.toLowerCase();
@@ -280,7 +316,17 @@ async function extract(companyId, utterance) {
     if (!patterns) continue;
 
     for (const pat of patterns) {
-      if (lower.includes(pat)) {
+      let hit = false;
+      if (pat.includes(' ')) {
+        // Multi-word patterns ("do i have to", "right now") — substring match
+        if (lower.includes(pat)) hit = true;
+      } else {
+        // Single-word patterns — stemmed whole-word match.
+        // Whole-word avoids false positives like "pay" matching "payment"/"paypal".
+        // Stemming catches inflections: "paying"/"pays" → "pay", "scheduling" → "schedule".
+        if (inputExact.has(pat) || inputStems.has(_stem(pat))) hit = true;
+      }
+      if (hit) {
         frame[field] = pat;
         break;  // first (longest) match wins
       }
