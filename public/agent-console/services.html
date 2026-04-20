@@ -6340,7 +6340,7 @@ window.addEventListener('message', e => {
   // ── API ────────────────────────────────────────────────────────────────
   async function loadConfig() {
     const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
-      headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+      headers: { 'x-auth-token': AgentConsoleAuth.getToken() || '' },
     });
     if (!resp.ok) throw new Error(`GET config failed: ${resp.status}`);
     const data = await resp.json();
@@ -6352,7 +6352,7 @@ window.addEventListener('message', e => {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'x-auth-token': AuthLib?.getToken?.() || '',
+        'x-auth-token': AgentConsoleAuth.getToken() || '',
       },
       body: JSON.stringify(partial),
     });
@@ -6685,7 +6685,7 @@ window.addEventListener('message', e => {
 
   async function loadConfig() {
     const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
-      headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+      headers: { 'x-auth-token': AgentConsoleAuth.getToken() || '' },
     });
     if (!resp.ok) throw new Error(`GET config failed: ${resp.status}`);
     const data = await resp.json();
@@ -6695,7 +6695,7 @@ window.addEventListener('message', e => {
   async function saveConfig(partial) {
     const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/config`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-auth-token': AuthLib?.getToken?.() || '' },
+      headers: { 'Content-Type': 'application/json', 'x-auth-token': AgentConsoleAuth.getToken() || '' },
       body: JSON.stringify(partial),
     });
     if (!resp.ok) throw new Error(`PATCH config failed: ${resp.status}`);
@@ -6859,7 +6859,7 @@ window.addEventListener('message', e => {
         const endpoint = provider === 'groq' ? 'ping-groq' : 'ping';
         const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/${endpoint}`, {
           method: 'POST',
-          headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+          headers: { 'x-auth-token': AgentConsoleAuth.getToken() || '' },
         });
         const j = await resp.json();
         pingBtn.textContent = j.ok ? `✓ ${j.latencyMs || '-'}ms` : '✗ Failed';
@@ -7020,7 +7020,7 @@ window.addEventListener('message', e => {
         const endpoint = provider === 'groq' ? 'ping-groq' : 'ping';
         const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/${endpoint}`, {
           method: 'POST',
-          headers: { 'x-auth-token': AuthLib?.getToken?.() || '' },
+          headers: { 'x-auth-token': AgentConsoleAuth.getToken() || '' },
         });
         const j = await resp.json();
         pingBtn.textContent = j.ok ? `✓ ${j.latencyMs || '-'}ms` : '✗ Failed';
@@ -7075,7 +7075,7 @@ window.addEventListener('message', e => {
     try {
       const resp = await fetch(`/api/agent-console/${S.companyId}/llm-agent/preview-prompt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-auth-token': AuthLib?.getToken?.() || '' },
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': AgentConsoleAuth.getToken() || '' },
         body: JSON.stringify({ mode, channel, sampleQuery }),
       });
       if (!resp.ok) {
