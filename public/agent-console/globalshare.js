@@ -154,6 +154,7 @@
       loadStats();
       loadSignals();
       loadPhraseIntelligence();
+      _cueIeBind();
       console.log('[GlobalShare] Initialization complete');
     } catch (err) {
       console.error('[GlobalShare] Initialization error:', err);
@@ -1235,6 +1236,335 @@
       console.error('[GlobalShare] Starter set load failed:', err);
       alert('Failed to load starter set: ' + err.message);
     }
+  }
+
+  // ── Bulk Import / Export (scoped) ──────────────────────────────────
+  // Wires /api/admin/cue-phrases-import/{state,export,preview,apply,restore}
+  // into the Cue Phrases tab. Uses AgentConsoleAuth.apiFetch for Bearer auth.
+  // Mirrors the standalone cue-import.html workflow but inline.
+
+  const CUE_IE_BASE = '/api/admin/cue-phrases-import';
+  const _cueIe = {
+    parsed: null,          // patterns parsed from file
+    lastPreview: null,     // server preview response (for apply confirmation)
+    statusCounts: {},      // per-token counts from /state
+    loaded: false,         // has state been loaded at least once?
+  };
+
+  function _cueIeEls() {
+    return {
+      details:     document.getElementById('pi-cue-ie'),
+      scope:       document.getElementById('pi-cue-ie-scope'),
+      scopeHint:   document.getElementById('pi-cue-ie-scope-hint'),
+      download:    document.getElementById('pi-cue-ie-download'),
+      file:        document.getElementById('pi-cue-ie-file'),
+      fileStatus:  document.getElementById('pi-cue-ie-file-status'),
+      preview:     document.getElementById('pi-cue-ie-preview'),
+      reason:      document.getElementById('pi-cue-ie-reason'),
+      apply:       document.getElementById('pi-cue-ie-apply'),
+      previewBox:  document.getElementById('pi-cue-ie-preview-box'),
+      refresh:     document.getElementById('pi-cue-ie-refresh'),
+      backups:     document.getElementById('pi-cue-ie-backups'),
+    };
+  }
+
+  async function _cueIeLoadState() {
+    const els = _cueIeEls();
+    if (!els.backups) return;
+    els.backups.innerHTML = 'Loading…';
+    try {
+      const data = await AgentConsoleAuth.apiFetch(`${CUE_IE_BASE}/state`, { method: 'GET' });
+      _cueIe.statusCounts = data.counts || {};
+      _cueIeRenderBackups(data.backups || []);
+      _cueIeUpdateScopeHint();
+    } catch (err) {
+      console.error('[GlobalShare] cue-ie state load failed:', err);
+      els.backups.innerHTML = `<span style="color:#dc2626;">Failed to load: ${escapeHtml(err.message || err)}</span>`;
+    }
+  }
+
+  function _cueIeUpdateScopeHint() {
+    const els = _cueIeEls();
+    if (!els.scope || !els.scopeHint) return;
+    const scope = els.scope.value || 'all';
+    if (scope === 'all') {
+      const total = Object.values(_cueIe.statusCounts).reduce((a, b) => a + b, 0);
+      els.scopeHint.textContent = `Full dictionary · ${total} patterns total`;
+    } else {
+      const n = _cueIe.statusCounts[scope] || 0;
+      els.scopeHint.textContent = `${scope}: ${n} pattern${n === 1 ? '' : 's'} in current dictionary`;
+    }
+    // Invalidate any pending file — scope change means mismatched intent
+    if (_cueIe.parsed) {
+      _cueIe.parsed = null;
+      _cueIe.lastPreview = null;
+      els.file.value = '';
+      els.fileStatus.innerHTML = '<span style="color:#64748b;">Scope changed — reselect file.</span>';
+      els.preview.disabled = true;
+      els.apply.disabled = true;
+      els.previewBox.style.display = 'none';
+    }
+  }
+
+  function _cueIeRenderBackups(backups) {
+    const els = _cueIeEls();
+    if (!els.backups) return;
+    if (!backups.length) {
+      els.backups.innerHTML = '<span style="color:#94a3b8;">No backups yet. The first apply creates one.</span>';
+      return;
+    }
+    const rows = backups.map(b => {
+      const when = b.createdAt ? new Date(b.createdAt).toLocaleString() : '—';
+      const shortId = (b.backupId || '').slice(0, 8);
+      const reason = escapeHtml(b.reason || 'no reason');
+      const by = escapeHtml(b.createdBy || '—');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:4px;">
+        <div style="font-size:12px;">
+          <span style="font-weight:600;color:#1e293b;">${escapeHtml(when)}</span>
+          <span style="color:#94a3b8;font-family:ui-monospace,monospace;margin-left:6px;">${escapeHtml(shortId)}</span>
+          <span style="color:#64748b;margin-left:8px;">${b.total} patterns · by ${by} · ${reason}</span>
+        </div>
+        <button class="pi-cue-ie-restore" data-id="${escapeHtml(b.backupId)}" data-total="${b.total}" style="padding:3px 10px;font-size:11px;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;">Restore</button>
+      </div>`;
+    });
+    els.backups.innerHTML = rows.join('');
+    els.backups.querySelectorAll('.pi-cue-ie-restore').forEach(btn => {
+      btn.addEventListener('click', () => _cueIeRestore(btn.dataset.id, btn.dataset.total));
+    });
+  }
+
+  async function _cueIeDownload() {
+    const els = _cueIeEls();
+    const scope = els.scope.value || 'all';
+    const path = scope === 'all'
+      ? `${CUE_IE_BASE}/export`
+      : `${CUE_IE_BASE}/export/${encodeURIComponent(scope)}`;
+    // Use apiFetch-like flow manually so we can hand back a Blob (apiFetch expects JSON)
+    const token = (window.AgentConsoleAuth && AgentConsoleAuth.getToken && AgentConsoleAuth.getToken()) || null;
+    if (!token) {
+      alert('Session expired — please log in again.');
+      return;
+    }
+    try {
+      els.download.disabled = true;
+      const origText = els.download.textContent;
+      els.download.textContent = 'Downloading…';
+      const res = await fetch(path, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="([^"]+)"/);
+      const filename = m ? m[1] : (scope === 'all' ? 'cuePhrases.json' : `cuePhrases-${scope}.json`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      els.download.textContent = origText;
+      els.download.disabled = false;
+    } catch (err) {
+      console.error('[GlobalShare] cue-ie download failed:', err);
+      alert('Download failed: ' + err.message);
+      els.download.disabled = false;
+      els.download.textContent = '⬇ Download JSON';
+    }
+  }
+
+  async function _cueIeOnFile() {
+    const els = _cueIeEls();
+    _cueIe.parsed = null;
+    _cueIe.lastPreview = null;
+    els.preview.disabled = true;
+    els.apply.disabled = true;
+    els.previewBox.style.display = 'none';
+    els.fileStatus.textContent = '';
+
+    const f = els.file.files && els.file.files[0];
+    if (!f) return;
+    if (f.size > 50 * 1024 * 1024) {
+      els.fileStatus.innerHTML = '<span style="color:#dc2626;">File too large (>50MB)</span>';
+      return;
+    }
+    try {
+      const text = await f.text();
+      const json = JSON.parse(text);
+      let patterns = null;
+      if (Array.isArray(json)) patterns = json;
+      else if (Array.isArray(json.cuePhrases)) patterns = json.cuePhrases;
+      else if (Array.isArray(json.phraseIntelligence && json.phraseIntelligence.cuePhrases)) patterns = json.phraseIntelligence.cuePhrases;
+      else if (Array.isArray(json.globalHub && json.globalHub.phraseIntelligence && json.globalHub.phraseIntelligence.cuePhrases)) patterns = json.globalHub.phraseIntelligence.cuePhrases;
+
+      if (!Array.isArray(patterns) || patterns.length === 0) {
+        els.fileStatus.innerHTML = '<span style="color:#dc2626;">Could not find a non-empty cuePhrases array in this JSON.</span>';
+        return;
+      }
+
+      const scope = els.scope.value || 'all';
+      if (scope !== 'all') {
+        const mismatched = patterns.filter(p => p && p.token !== scope);
+        if (mismatched.length > 0) {
+          els.fileStatus.innerHTML = `<span style="color:#dc2626;">Scope is "${escapeHtml(scope)}" but ${mismatched.length} row(s) have different tokens. Use "All tokens" scope or fix the file.</span>`;
+          return;
+        }
+      }
+
+      _cueIe.parsed = patterns;
+      const scopeLabel = scope === 'all' ? 'all tokens' : scope;
+      els.fileStatus.innerHTML = `<span style="color:#166534;">${escapeHtml(f.name)} — ${patterns.length} rows ready · scope: ${escapeHtml(scopeLabel)}</span>`;
+      els.preview.disabled = false;
+    } catch (err) {
+      els.fileStatus.innerHTML = `<span style="color:#dc2626;">Invalid JSON: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  function _cueIeDeltaStr(n) { return n > 0 ? `+${n}` : `${n}`; }
+  function _cueIeDeltaColor(n) { return n > 0 ? '#166534' : n < 0 ? '#991b1b' : '#64748b'; }
+
+  function _cueIeRenderPreview(data) {
+    const els = _cueIeEls();
+    const tokens = data.byToken || {};
+    const tokenRows = Object.keys(tokens).sort().map(t => {
+      const r = tokens[t];
+      return `<tr>
+        <td style="padding:4px 10px;font-family:ui-monospace,monospace;">${escapeHtml(t)}</td>
+        <td style="padding:4px 10px;text-align:right;font-family:ui-monospace,monospace;">${r.before}</td>
+        <td style="padding:4px 10px;text-align:right;font-family:ui-monospace,monospace;">${r.after}</td>
+        <td style="padding:4px 10px;text-align:right;font-family:ui-monospace,monospace;color:${_cueIeDeltaColor(r.delta)};font-weight:600;">${_cueIeDeltaStr(r.delta)}</td>
+      </tr>`;
+    }).join('');
+
+    const skipNote = data.skippedRows > 0
+      ? `<div style="margin-top:8px;padding:6px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e;">Skipped ${data.skippedRows} malformed row(s) during validation.</div>`
+      : '';
+
+    const addedSample = (data.addedSample || []).slice(0, 20)
+      .map(p => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:#dcfce7;color:#166534;border-radius:6px;font-size:11px;font-family:ui-monospace,monospace;">${escapeHtml(p.token)}:${escapeHtml(p.pattern)}</span>`).join('') || '<span style="color:#94a3b8;">none</span>';
+    const removedSample = (data.removedSample || []).slice(0, 20)
+      .map(p => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fee2e2;color:#991b1b;border-radius:6px;font-size:11px;font-family:ui-monospace,monospace;">${escapeHtml(p.token)}:${escapeHtml(p.pattern)}</span>`).join('') || '<span style="color:#94a3b8;">none</span>';
+
+    els.previewBox.innerHTML = `
+      <div style="display:flex;gap:12px;margin-bottom:10px;">
+        <div style="flex:1;padding:8px 10px;background:#f8fafc;border-radius:6px;"><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Before</div><div style="font-size:18px;font-weight:700;">${data.beforeTotal}</div></div>
+        <div style="flex:1;padding:8px 10px;background:#f8fafc;border-radius:6px;"><div style="color:#64748b;text-transform:uppercase;font-size:10px;">After</div><div style="font-size:18px;font-weight:700;">${data.afterTotal}</div></div>
+        <div style="flex:1;padding:8px 10px;background:#f8fafc;border-radius:6px;"><div style="color:#64748b;text-transform:uppercase;font-size:10px;">Net Δ</div><div style="font-size:18px;font-weight:700;color:${_cueIeDeltaColor(data.delta)};">${_cueIeDeltaStr(data.delta)}</div></div>
+      </div>
+      ${skipNote}
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">
+        <thead style="background:#f8fafc;"><tr><th style="padding:6px 10px;text-align:left;font-size:11px;">Token</th><th style="padding:6px 10px;text-align:right;font-size:11px;">Before</th><th style="padding:6px 10px;text-align:right;font-size:11px;">After</th><th style="padding:6px 10px;text-align:right;font-size:11px;">Δ</th></tr></thead>
+        <tbody>${tokenRows}</tbody>
+      </table>
+      <details style="margin-top:10px;" open><summary style="cursor:pointer;font-weight:600;color:#334155;">Added sample <span style="margin-left:6px;padding:1px 8px;background:#dcfce7;color:#166534;border-radius:9999px;font-size:10px;">${data.addedCount}</span></summary><div style="margin-top:6px;">${addedSample}</div></details>
+      <details style="margin-top:6px;"><summary style="cursor:pointer;font-weight:600;color:#334155;">Removed sample <span style="margin-left:6px;padding:1px 8px;background:#fee2e2;color:#991b1b;border-radius:9999px;font-size:10px;">${data.removedCount}</span></summary><div style="margin-top:6px;">${removedSample}</div></details>
+    `;
+    els.previewBox.style.display = '';
+  }
+
+  async function _cueIePreview() {
+    if (!_cueIe.parsed) return;
+    const els = _cueIeEls();
+    els.preview.disabled = true;
+    const orig = els.preview.textContent;
+    els.preview.textContent = 'Validating…';
+    try {
+      const scope = els.scope.value || 'all';
+      const path = scope === 'all' ? `${CUE_IE_BASE}/preview` : `${CUE_IE_BASE}/preview/${encodeURIComponent(scope)}`;
+      const data = await AgentConsoleAuth.apiFetch(path, {
+        method: 'POST',
+        body: JSON.stringify({ cuePhrases: _cueIe.parsed }),
+      });
+      _cueIe.lastPreview = data;
+      _cueIeRenderPreview(data);
+      els.apply.disabled = false;
+    } catch (err) {
+      console.error('[GlobalShare] cue-ie preview failed:', err);
+      alert('Preview failed: ' + err.message);
+    } finally {
+      els.preview.disabled = false;
+      els.preview.textContent = orig;
+    }
+  }
+
+  async function _cueIeApply() {
+    if (!_cueIe.parsed) return;
+    const els = _cueIeEls();
+    const reason = (els.reason.value || '').trim() || 'manual-import';
+    const scope = els.scope.value || 'all';
+    const scopeLine = scope === 'all'
+      ? '• Replaces the ENTIRE cuePhrases dictionary (all 7 tokens).'
+      : `• Replaces ONLY the "${scope}" slice — all other tokens pass through untouched.`;
+    const confirmMsg =
+      `Apply ${_cueIe.parsed.length} patterns to the live cuePhrases dictionary?\n\n` +
+      scopeLine + `\n` +
+      `• Current state snapshots to backups (ring-buffered at 5).\n` +
+      `• CueExtractor cache flushes immediately — no restart.\n` +
+      `• This affects ALL tenants platform-wide.\n\n` +
+      `Reason: "${reason}"\n\n` +
+      `Proceed?`;
+    if (!confirm(confirmMsg)) return;
+
+    els.apply.disabled = true;
+    const orig = els.apply.textContent;
+    els.apply.textContent = 'Applying…';
+    try {
+      const path = scope === 'all' ? `${CUE_IE_BASE}/apply` : `${CUE_IE_BASE}/apply/${encodeURIComponent(scope)}`;
+      const data = await AgentConsoleAuth.apiFetch(path, {
+        method: 'POST',
+        body: JSON.stringify({ cuePhrases: _cueIe.parsed, reason }),
+      });
+      const msg = scope === 'all'
+        ? `✓ Imported ${data.afterTotal} patterns (was ${data.beforeTotal}). Backup ${(data.backupId || '').slice(0, 8)}. Cache flushed.`
+        : `✓ Replaced ${scope}: ${data.tokenBefore} → ${data.tokenAfter} (Δ${_cueIeDeltaStr(data.tokenDelta)}). Dict total ${data.afterTotal}. Backup ${(data.backupId || '').slice(0, 8)}.`;
+      alert(msg);
+      // Reset form
+      _cueIe.parsed = null;
+      _cueIe.lastPreview = null;
+      els.file.value = '';
+      els.fileStatus.textContent = '';
+      els.reason.value = '';
+      els.apply.disabled = true;
+      els.preview.disabled = true;
+      els.previewBox.style.display = 'none';
+      // Refresh our state + refresh the main PI data so the table updates
+      await _cueIeLoadState();
+      await loadPhraseIntelligence();
+    } catch (err) {
+      console.error('[GlobalShare] cue-ie apply failed:', err);
+      alert('Apply failed: ' + err.message);
+    } finally {
+      els.apply.textContent = orig;
+    }
+  }
+
+  async function _cueIeRestore(backupId, total) {
+    if (!confirm(`Restore backup ${String(backupId).slice(0, 8)}? (${total} patterns)\n\nYour current dictionary will be snapshotted to a new backup first, so this is reversible.`)) return;
+    try {
+      const data = await AgentConsoleAuth.apiFetch(`${CUE_IE_BASE}/restore/${encodeURIComponent(backupId)}`, { method: 'POST' });
+      alert(`✓ Restored ${data.afterTotal} patterns. Previous state snapshot ${(data.snapshotId || '').slice(0, 8)}. Cache flushed.`);
+      await _cueIeLoadState();
+      await loadPhraseIntelligence();
+    } catch (err) {
+      console.error('[GlobalShare] cue-ie restore failed:', err);
+      alert('Restore failed: ' + err.message);
+    }
+  }
+
+  function _cueIeBind() {
+    const els = _cueIeEls();
+    if (!els.details) return;
+    // Lazy-load state the first time the user opens the section
+    els.details.addEventListener('toggle', () => {
+      if (els.details.open && !_cueIe.loaded) {
+        _cueIe.loaded = true;
+        _cueIeLoadState();
+      }
+    });
+    if (els.scope)    els.scope.addEventListener('change', _cueIeUpdateScopeHint);
+    if (els.download) els.download.addEventListener('click', _cueIeDownload);
+    if (els.file)     els.file.addEventListener('change', _cueIeOnFile);
+    if (els.preview)  els.preview.addEventListener('click', _cueIePreview);
+    if (els.apply)    els.apply.addEventListener('click', _cueIeApply);
+    if (els.refresh)  els.refresh.addEventListener('click', _cueIeLoadState);
   }
 
   // ── Trade Vocabularies ─────────────────────────────────────────────

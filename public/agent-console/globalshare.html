@@ -636,6 +636,59 @@
                 <span id="pi-cue-starter-status" style="font-size:11px;color:#15803d;display:none;"></span>
               </div>
 
+              <!-- Bulk Import / Export — per-token scoped -->
+              <details id="pi-cue-ie" style="margin-bottom:14px;border:1px solid #e2e8f0;border-radius:10px;background:#fafbff;">
+                <summary style="cursor:pointer;padding:10px 14px;font-size:12px;font-weight:700;color:#334155;user-select:none;">
+                  📦 Bulk Import / Export
+                  <span style="font-weight:500;color:#64748b;margin-left:6px;">— scope-aware download, preview, apply, restore</span>
+                </summary>
+                <div style="padding:14px;border-top:1px solid #e2e8f0;">
+                  <!-- 1. Download row -->
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+                    <label style="font-size:12px;font-weight:600;color:#475569;">1. Scope:</label>
+                    <select id="pi-cue-ie-scope" class="pi-add-input" style="max-width:220px;">
+                      <option value="all">All tokens (full dictionary)</option>
+                      <option value="actionCore">actionCore only</option>
+                      <option value="modifierCore">modifierCore only</option>
+                      <option value="permissionCue">permissionCue only</option>
+                      <option value="urgencyCore">urgencyCore only</option>
+                      <option value="infoCue">infoCue only</option>
+                      <option value="directiveCue">directiveCue only</option>
+                      <option value="requestCue">requestCue only</option>
+                    </select>
+                    <button id="pi-cue-ie-download" class="pi-add-btn" style="white-space:nowrap;">⬇ Download JSON</button>
+                    <span id="pi-cue-ie-scope-hint" style="font-size:11px;color:#64748b;"></span>
+                  </div>
+
+                  <!-- 2. Import file row -->
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+                    <label style="font-size:12px;font-weight:600;color:#475569;">2. Import file:</label>
+                    <input id="pi-cue-ie-file" type="file" accept="application/json,.json" style="font-size:12px;">
+                    <span id="pi-cue-ie-file-status" style="font-size:11px;color:#64748b;"></span>
+                  </div>
+
+                  <!-- 3. Preview + Apply row -->
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <label style="font-size:12px;font-weight:600;color:#475569;">3. Preview → Apply:</label>
+                    <button id="pi-cue-ie-preview" class="pi-add-btn" style="background:#2563eb;" disabled>Preview Diff</button>
+                    <input id="pi-cue-ie-reason" type="text" placeholder="Reason (e.g. cleanup-actionCore-v1)" class="pi-add-input" maxlength="120" style="flex:1;min-width:200px;">
+                    <button id="pi-cue-ie-apply" class="pi-add-btn" style="background:#dc2626;" disabled>Apply Import</button>
+                  </div>
+
+                  <!-- Preview output (hidden until Preview) -->
+                  <div id="pi-cue-ie-preview-box" style="display:none;margin-top:14px;padding:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;"></div>
+
+                  <!-- Backups -->
+                  <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                      <div style="font-size:12px;font-weight:700;color:#334155;">Backups <span style="font-weight:400;color:#64748b;">(most recent 5 · restoring snapshots current first)</span></div>
+                      <button id="pi-cue-ie-refresh" class="pi-add-btn" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;padding:3px 10px;font-size:11px;">↻ Refresh</button>
+                    </div>
+                    <div id="pi-cue-ie-backups" style="font-size:12px;color:#64748b;">Loading…</div>
+                  </div>
+                </div>
+              </details>
+
               <!-- Cue Tester -->
               <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;margin-bottom:14px;">
                 <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">🧪 Test Cue Detection</div>
