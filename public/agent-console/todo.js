@@ -1508,6 +1508,12 @@ function _renderVerifyDetail(row, idx) {
   }
   html += `</div>`;
 
+  // ── Phrase Anatomy — WORD-LEVEL breakdown ────────────────────────────
+  // Purpose: one glance shows which words are acting as anchors, which
+  // of the 8 cue fields fired, and which sections came closest but lost.
+  // "A word changes the meaning" — make those words visible.
+  html += _renderPhraseAnatomy(row, vr, { ce, uap, wg, sem, kw });
+
   // ── Final match summary ────────────────────────────────────────────────
   // Prefer vr.finalMatch (v2). Legacy fallback: old gates{}.keywordScoring shape.
   const fm = vr.finalMatch || (kw.matched ? {
@@ -1635,6 +1641,188 @@ function _renderVerifyDetail(row, idx) {
 
   html += '</div>'; // verify-detail
   return html;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PHRASE ANATOMY — word-level diagnostic card
+// ──────────────────────────────────────────────────────────────────────────
+// Renders three things, in this order:
+//   1. The caller phrase on one line with anchor-matched tokens bolded red.
+//      "A word changes the meaning" — this surfaces exactly which words
+//      the pipeline is treating as load-bearing.
+//   2. 2×4 grid of the 8 CueExtractor fields (7 cue types + tradeCore).
+//      Filled = the cue fired with a value. Empty = the slot is looking
+//      for content but the utterance didn't contain a matching pattern.
+//   3. Close-but-no-cigar competitors: top semantic candidate + any
+//      section pre-filter candidates captured from the live runtime.
+//
+// Input: `gates` is the already-unpacked { ce, uap, wg, sem, kw } bundle
+// from _renderVerifyDetail so we don't re-parse the trace.
+// ──────────────────────────────────────────────────────────────────────────
+
+// 8 CueExtractor fields in pipeline order (matches CueExtractorService.js).
+// Slot labels kept short — this UI is a diagnostic chip grid, not prose.
+const _CUE_FIELDS = [
+  { key: 'requestCue',    label: 'request',    hint: 'can you, could you, would you' },
+  { key: 'permissionCue', label: 'permission', hint: 'do i have to, am i allowed, can i' },
+  { key: 'infoCue',       label: 'info',       hint: 'what is, how much, when does' },
+  { key: 'directiveCue',  label: 'directive',  hint: 'please, i need, let me' },
+  { key: 'actionCore',    label: 'action',     hint: 'pay, schedule, transfer, book' },
+  { key: 'urgencyCore',   label: 'urgency',    hint: 'today, now, asap, emergency' },
+  { key: 'modifierCore',  label: 'modifier',   hint: 'for a service call, with plan' },
+  { key: 'tradeCore',     label: 'trade',      hint: 'HVAC / plumbing / trade vocab' },
+];
+
+// Lightweight stemmer matching GapReplayService._stem rules so anchor-word
+// matches highlight "calling" when the anchor is "call", etc. Must stay in
+// sync with services/kcVerify/GapReplayService.js::_stem.
+function _stemLite(word) {
+  return String(word || '')
+    .replace(/ings?$/,   '')
+    .replace(/ing$/,     '')
+    .replace(/ations?$/, '')
+    .replace(/ers?$/,    '')
+    .replace(/ed$/,      '')
+    .replace(/ly$/,      '')
+    .replace(/ies$/,     'y')
+    .replace(/ves$/,     'f')
+    .replace(/s$/,       '');
+}
+
+// Render the phrase with anchor tokens wrapped in .anchor-hl.
+// anchorHits[] is lower-case, stem-normalized by the server.
+function _highlightAnchors(phrase, anchorHits) {
+  if (!phrase) return '';
+  const hitSet     = new Set((anchorHits || []).map(w => String(w).toLowerCase()));
+  const hitStems   = new Set([...hitSet].map(_stemLite));
+  if (!hitSet.size) return _esc(phrase);
+
+  // Tokenize preserving whitespace + punctuation so we can render back faithfully.
+  const tokens = phrase.split(/(\s+|[.,?!;:])/);
+  let html = '';
+  for (const t of tokens) {
+    if (!t) continue;
+    // Only evaluate pure word tokens; pass-through whitespace & punctuation.
+    if (/^\s+$/.test(t) || /^[.,?!;:]$/.test(t)) {
+      html += _esc(t);
+      continue;
+    }
+    const raw   = t.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const stem  = _stemLite(raw);
+    const match = raw && (hitSet.has(raw) || hitStems.has(stem));
+    html += match
+      ? `<span class="anchor-hl">${_esc(t)}</span>`
+      : _esc(t);
+  }
+  return html;
+}
+
+function _renderPhraseAnatomy(row, vr, gates) {
+  const { ce = {}, uap = {}, wg = {}, sem = {}, kw = {} } = gates || {};
+  const phrase   = row.question || '';
+  const anchors  = Array.isArray(wg.hits) ? wg.hits : [];
+  const missing  = Array.isArray(wg.missing) ? wg.missing : [];
+  const fields   = ce.fields || {};
+  const trades   = Array.isArray(ce.tradeMatches) ? ce.tradeMatches : [];
+
+  let h = `<div class="phrase-anatomy">`;
+
+  // ── 1. Phrase line with anchors bolded ───────────────────────────────
+  h += `<div class="anatomy-phrase-line">`;
+  h += `<span class="anatomy-tag">Phrase</span>`;
+  h += `<span class="anatomy-phrase-text">${_highlightAnchors(phrase, anchors)}</span>`;
+  h += `</div>`;
+  if (anchors.length || missing.length) {
+    h += `<div class="anatomy-anchor-legend">`;
+    if (anchors.length) {
+      h += `<span><span class="anchor-hl">\u2588\u2588</span> anchors present: `
+        + anchors.map(w => `<code>${_esc(w)}</code>`).join(' ')
+        + `</span>`;
+    }
+    if (missing.length) {
+      h += `<span style="margin-left:14px;color:#92400e;">missing: `
+        + missing.map(w => `<code>${_esc(w)}</code>`).join(' ')
+        + `</span>`;
+    }
+    h += `</div>`;
+  }
+
+  // ── 2. 8-slot cue field grid ─────────────────────────────────────────
+  h += `<div class="anatomy-cue-grid">`;
+  for (const f of _CUE_FIELDS) {
+    let val = '';
+    let filled = false;
+    if (f.key === 'tradeCore') {
+      filled = trades.length > 0;
+      val    = filled
+        ? `${trades.length} match${trades.length > 1 ? 'es' : ''}`
+        : '';
+    } else {
+      const v = fields[f.key];
+      filled  = !!v;
+      val     = filled ? String(v) : '';
+    }
+    h += `<div class="cue-slot ${filled ? 'filled' : 'empty'}" title="${filled ? _esc(val) : _esc('Looking for: ' + f.hint)}">`;
+    h += `<div class="cue-slot-label">${_esc(f.label)}</div>`;
+    h += filled
+      ? `<div class="cue-slot-value">${_esc(val)}</div>`
+      : `<div class="cue-slot-value cue-empty">\u2014 ${_esc(f.hint)}</div>`;
+    h += `</div>`;
+  }
+  h += `</div>`;
+
+  // ── 3. Close but no cigar ────────────────────────────────────────────
+  // Sources (any of these mean "almost"): UAP matched phrase, semantic
+  // best candidate below threshold, and runtime section pre-filter top-K.
+  const competitors = [];
+  if (uap.matchedPhrase) {
+    competitors.push({
+      label:  'UAP phrase match',
+      detail: `\u201c${uap.matchedPhrase}\u201d`,
+      score:  uap.confidence != null ? Number(uap.confidence).toFixed(2) : null,
+      note:   uap.matchType || null,
+    });
+  }
+  if (sem.bestContainerTitle || sem.bestSectionLabel) {
+    competitors.push({
+      label:  'Semantic best',
+      detail: `${sem.bestContainerTitle || '\u2014'} \u203a ${sem.bestSectionLabel || '\u2014'}`,
+      score:  sem.bestSimilarity != null ? Number(sem.bestSimilarity).toFixed(3) : null,
+      note:   sem.pass ? 'passed' : `below ${sem.threshold || 0.70}`,
+    });
+  }
+  // Runtime pre-filter candidates (from the live call's gapTopSections)
+  const rtTop = Array.isArray(row.gapTopSections) ? row.gapTopSections.slice(0, 5) : [];
+  for (const s of rtTop) {
+    competitors.push({
+      label:  'Runtime top-K',
+      detail: s.label || '\u2014',
+      score:  s.score != null ? String(s.score) : null,
+      note:   `#${s.idx}`,
+    });
+  }
+
+  if (competitors.length) {
+    h += `<div class="anatomy-competitors">`;
+    h += `<div class="anatomy-competitors-title">Close but no cigar \u2014 competitors that almost won</div>`;
+    h += `<div class="anatomy-competitors-list">`;
+    for (const c of competitors) {
+      h += `<div class="competitor-row">`;
+      h += `<span class="competitor-label">${_esc(c.label)}</span>`;
+      h += `<span class="competitor-detail">${_esc(c.detail)}</span>`;
+      if (c.score != null) {
+        h += `<span class="competitor-score">${_esc(c.score)}</span>`;
+      }
+      if (c.note) {
+        h += `<span class="competitor-note">${_esc(c.note)}</span>`;
+      }
+      h += `</div>`;
+    }
+    h += `</div></div>`;
+  }
+
+  h += `</div>`; // phrase-anatomy
+  return h;
 }
 
 // Render a single gate card with pass/fail pill + key/value rows.
