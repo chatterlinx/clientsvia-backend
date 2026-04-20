@@ -94,16 +94,24 @@ async function loadGaps() {
 
     if (!gapsRes.success) throw new Error(gapsRes.error || 'API error');
 
-    G.gaps    = gapsRes.gaps || [];
-    G.summary = gapsRes.summary || {};
-    G.merged  = _mergeGapEntries(G.gaps);
+    G.gaps      = gapsRes.gaps || [];
+    G.summary   = gapsRes.summary || {};
+    // Two-level merge:
+    //   1. Turn-merge — collapses GAP + FALLBACK from the same call-turn
+    //   2. Phrase-dedup — collapses same phrase across multiple calls (gapKey)
+    // G.merged is the DISPLAY array (one row per unique phrase). All existing
+    // idx-based callbacks (verify, markDone, copyPhrase, etc.) index into it.
+    // Each row carries `occurrences[]` for expand-into-per-call breakdown.
+    G.rawMerged = _mergeGapEntries(G.gaps);
+    G.merged    = _groupByGapKey(G.rawMerged);
 
     // resolutions loaded into G.resolutions + G.byNormalized by _loadResolutions
     // (void return — mutates state directly)
     void resolutionsRes;
 
-    // Build prescriptive recommendations from gap data
-    const recResult       = _buildRecommendations(G.merged);
+    // Build prescriptive recommendations from the RAW call-turn stream
+    // (not the deduped display rows) so counts reflect real call volume.
+    const recResult       = _buildRecommendations(G.rawMerged);
     G.recommendations     = recResult.recommendations;
     G.containerGapCounts  = recResult.containerGapCounts;
 
@@ -220,6 +228,91 @@ function _mergeGapEntries(gaps) {
   // Sort newest first
   merged.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
   return merged;
+}
+
+// ── Phrase-level dedup ───────────────────────────────────────────────────────
+// Collapses call-turn rows that share the same normalized caller phrase.
+// Same phrase × 7 callers → 1 row with occurrences.length === 7.
+// gapKey is stamped by the server (sha1(companyId + ':' + normalizedPhrase))
+// using the exact same hash the resolution system uses, so grouped rows
+// join 1:1 with /gaps/resolutions docs.
+//
+// Ungrouped fallbacks:
+//   - rows with no question text → key by callSid:turn (can't dedup safely)
+//   - rows without a server-issued gapKey → same fallback
+function _groupByGapKey(rawMerged) {
+  const byKey = {};
+  const order = [];
+
+  for (const row of rawMerged) {
+    // Group key: prefer server gapKey; fall back to call-turn identity so
+    // rows missing a question text still render (one row each, un-deduped).
+    const key = row.gapKey || `__callturn__:${row.callSid || ''}:${row.turn ?? ''}`;
+
+    if (!byKey[key]) {
+      // First occurrence — clone shallow, add group accumulators.
+      byKey[key] = {
+        ...row,
+        occurrences:     [],
+        occurrenceCount: 0,
+        callSids:        new Set(),
+        firstSeen:       row.timestamp || null,
+        latestSeen:      row.timestamp || null,
+      };
+      order.push(key);
+    }
+
+    const group = byKey[key];
+    group.occurrences.push({
+      callSid:    row.callSid || null,
+      turn:       row.turn ?? null,
+      timestamp:  row.timestamp || null,
+      callReason: row.callReason || null,
+      answer:     row.answer || null,
+      types:      row.types || [],
+    });
+    group.occurrenceCount++;
+    if (row.callSid) group.callSids.add(row.callSid);
+
+    // Keep the newest event's container / answer (more relevant than stale).
+    // Representative row already points to the newest event because
+    // _mergeGapEntries sorted desc, so only update if strictly newer.
+    if (row.timestamp && group.latestSeen && row.timestamp > group.latestSeen) {
+      group.latestSeen     = row.timestamp;
+      group.timestamp      = row.timestamp;
+      group.callSid        = row.callSid        || group.callSid;
+      group.turn           = row.turn ?? group.turn;
+      group.callReason     = row.callReason     || group.callReason;
+      group.answer         = row.answer         || group.answer;
+      group.containerTitle = row.containerTitle || group.containerTitle;
+      group.containerId    = row.containerId    || group.containerId;
+      group.kcId           = row.kcId           || group.kcId;
+      group.displayType    = row.displayType    || group.displayType;
+    }
+    if (row.timestamp && (!group.firstSeen || row.timestamp < group.firstSeen)) {
+      group.firstSeen = row.timestamp;
+    }
+  }
+
+  // Convert callSids Set → count for JSON-friendly display
+  const grouped = order.map(k => {
+    const g = byKey[k];
+    g.uniqueCallers = g.callSids.size;
+    delete g.callSids;       // drop the Set (not serializable, not needed)
+    // Sort occurrences newest-first for expand display
+    g.occurrences.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    return g;
+  });
+
+  // Sort: highest occurrence count first, then newest. This puts
+  // "× 7 callers" rows at the top so the admin fixes high-volume gaps first.
+  grouped.sort((a, b) => {
+    if (b.occurrenceCount !== a.occurrenceCount) {
+      return b.occurrenceCount - a.occurrenceCount;
+    }
+    return (b.timestamp || '').localeCompare(a.timestamp || '');
+  });
+  return grouped;
 }
 
 // ── Recommendation Engine ────────────────────────────────────────────────
@@ -583,9 +676,17 @@ function _renderTable() {
     const resolvedCls = resolution ? ' is-resolved' : '';
 
     // Data row
+    const occCount   = row.occurrenceCount || 1;
+    const callerCt   = row.uniqueCallers   || 0;
+    // "× N callers" chip — only shown when the same phrase came in from
+    // multiple distinct calls. Clicking still expands the row; detail
+    // panel lists every call-turn occurrence.
+    const phraseChip = (occCount > 1)
+      ? ` <span class="repeat-chip" title="${occCount} events from ${callerCt} unique calls"> \u00d7 ${occCount}${callerCt && callerCt !== occCount ? ` / ${callerCt} calls` : callerCt ? ' calls' : ''}</span>`
+      : '';
     html += `<tr class="data-row${resolvedCls}" onclick="toggleDetail(${idx})">`;
     html += `<td style="white-space:nowrap;font-size:12px;color:var(--text-muted);">${_esc(time)}</td>`;
-    html += `<td class="phrase-cell">${_esc(phrase)}</td>`;
+    html += `<td class="phrase-cell">${_esc(phrase)}${phraseChip}</td>`;
     html += `<td class="response-cell">${answer ? _esc(answer) : '<span style="color:#cbd5e1;">\u2014</span>'}</td>`;
     html += `<td style="font-size:12px;">${_esc(container)}</td>`;
     // Occurrence badge for containers with multiple section gaps
@@ -609,8 +710,9 @@ function _renderTable() {
     // Detail row (hidden by default) — colspan matches 7-column header
     html += `<tr class="detail-row" id="detail-${idx}"><td colspan="7" class="detail-cell">`;
     html += `<div class="detail-grid">`;
-    html += _detailField('Call SID', row.callSid || '—');
-    html += _detailField('Turn', row.turn != null ? String(row.turn) : '—');
+    // Representative-call metadata (newest occurrence)
+    html += _detailField('Latest Call SID', row.callSid || '—');
+    html += _detailField('Latest Turn', row.turn != null ? String(row.turn) : '—');
     html += _detailField('Call Reason', row.callReason || '—');
     html += _detailField('Event Types', row.types.join(', '));
 
@@ -621,13 +723,43 @@ function _renderTable() {
       const kcLink = `/agent-console/services.html?companyId=${G.companyId}#kc-${row.kcId}`;
       html += `<div><div class="detail-label">KC Card</div><div class="detail-value"><a href="${kcLink}" target="_blank">${_esc(row.kcId)}</a></div></div>`;
     }
-    html += _detailField('Timestamp', row.timestamp || '—');
+    html += _detailField('Latest Seen', row.latestSeen || row.timestamp || '—');
+    if (row.firstSeen && row.firstSeen !== (row.latestSeen || row.timestamp)) {
+      html += _detailField('First Seen', row.firstSeen);
+    }
+    if ((row.occurrenceCount || 1) > 1) {
+      html += _detailField('Total Occurrences',
+        `${row.occurrenceCount} events across ${row.uniqueCallers || 0} unique call${(row.uniqueCallers || 0) !== 1 ? 's' : ''}`);
+    }
 
-    // Merged types indicator
+    // Merged types indicator (representative call-turn)
     if (row.types.length > 1) {
       html += _detailField('Merged', `${row.types.length} events from same call turn`);
     }
     html += '</div>';
+
+    // Per-call occurrence breakdown — only meaningful when grouped
+    if ((row.occurrenceCount || 1) > 1 && Array.isArray(row.occurrences)) {
+      html += `<div class="detail-answer" style="margin-top:10px;">`;
+      html += `<div class="detail-answer-label">Occurrences \u2014 ${row.occurrenceCount} events</div>`;
+      html += `<div style="display:flex;flex-direction:column;gap:4px;font-size:12px;">`;
+      const maxRows = 20;    // cap UI; show summary if over
+      const occs    = row.occurrences.slice(0, maxRows);
+      for (const occ of occs) {
+        const t = _fmtTime(occ.timestamp);
+        const sid = occ.callSid ? occ.callSid.slice(-8) : '—';
+        const reason = occ.callReason ? ` \u00b7 ${_esc(occ.callReason)}` : '';
+        html += `<div style="display:flex;gap:10px;align-items:center;color:var(--text-muted);">`;
+        html += `<span style="min-width:120px;">${_esc(t)}</span>`;
+        html += `<span style="font-family:monospace;min-width:80px;">${_esc(sid)}</span>`;
+        html += `<span>turn ${occ.turn ?? '—'}${reason}</span>`;
+        html += `</div>`;
+      }
+      if (row.occurrences.length > maxRows) {
+        html += `<div style="color:var(--text-muted);font-style:italic;">\u2026 and ${row.occurrences.length - maxRows} more</div>`;
+      }
+      html += `</div></div>`;
+    }
 
     // Section pre-filter info (when gap had filter applied)
     if (row.gapFiltered && row.gapTopSections && row.gapTopSections.length > 0) {

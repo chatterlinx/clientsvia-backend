@@ -224,6 +224,16 @@
     font-size: 10px; font-weight: 700; background: #fecaca; color: #b91c1c; vertical-align: middle;
   }
 
+  /* ── Phrase repeat chip (×N calls) ───────────────────────────────────────
+     Shown next to a caller phrase when the same gapKey was heard across
+     multiple calls. Click parent row to expand and see each call's details. */
+  .repeat-chip {
+    display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; background: #fef3c7; color: #92400e;
+    vertical-align: middle; white-space: nowrap; cursor: help;
+    border: 1px solid #fde68a;
+  }
+
   /* Toast */
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

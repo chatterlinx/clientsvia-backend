@@ -31,6 +31,7 @@ const mongoose            = require('mongoose');
 const logger              = require('../../utils/logger');
 const { authenticateJWT } = require('../../middleware/auth');
 const Customer            = require('../../models/Customer');
+const KCGapResolution     = require('../../models/KCGapResolution');
 
 // ── All routes require a valid JWT ───────────────────────────────────────────
 router.use(authenticateJWT);
@@ -146,9 +147,20 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
     }
     const total = result.totalCount?.[0]?.total || 0;
 
+    // Post-aggregation enrichment: stamp gapKey + normalizedPhrase on each
+    // entry so the client can group duplicates without re-normalizing.
+    // Same hash as KCGapResolution → O(1) join with /gaps/resolutions response.
+    const entries = (result.entries || []).map(g => {
+      const normalizedPhrase = KCGapResolution.normalizePhrase(g.question || '');
+      const gapKey           = normalizedPhrase
+        ? KCGapResolution.buildGapKey(companyId, g.question || '')
+        : null;
+      return { ...g, normalizedPhrase, gapKey };
+    });
+
     return res.json({
       success: true,
-      gaps:    result.entries || [],
+      gaps:    entries,
       summary: { total, byType, range },
     });
   } catch (err) {
