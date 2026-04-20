@@ -1680,6 +1680,49 @@ class KCDiscoveryRunner {
       match.targetSectionIdx = match.bestSectionIdx ?? null;
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // UAP_MISS_KEYWORD_RESCUED — Gap signal (April 2026)
+    // ──────────────────────────────────────────────────────────────────────────
+    // If GATE 3 (KEYWORD) produced the winning match, then GATE 2.4 (CueExtract),
+    // GATE 2.5 (UAP Layer 1) and GATE 2.8 (Semantic) all missed. This is the
+    // single most actionable signal for the admin Gap page: a phrase we should
+    // add to UAP so next time the same caller utterance resolves sub-millisecond
+    // instead of requiring full keyword scoring.
+    //
+    // Fire-and-forget enrichment — same pattern as other qaLog writes.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (match && match.matchSource === 'KEYWORD') {
+      _writeDiscoveryNotes(companyId, callSid, {
+        qaLog: [{
+          type:                   'UAP_MISS_KEYWORD_RESCUED',
+          turn:                   turn ?? 0,
+          question:               userInput,
+          rescuedContainerId:     String(match.container?._id || ''),
+          rescuedContainerTitle:  match.container?.title || 'Unknown',
+          rescuedKcId:            match.container?.kcId || null,
+          rescuedSection:         match.targetSection?.label || match.bestSection?.label || null,
+          rescuedSectionIdx:      match.targetSectionIdx ?? match.bestSectionIdx ?? null,
+          rescuedScore:           match.score ?? null,
+          anchorContainerId:      callContext?.anchorContainerId || null,
+          cueFrame: cueFrame ? {
+            fieldCount:           cueFrame.fieldCount ?? 0,
+            topicWords:           cueFrame.topicWords || [],
+            actionCore:           cueFrame.actionCore || null,
+            modifierCore:         cueFrame.modifierCore || null,
+            urgencyCore:          cueFrame.urgencyCore || null,
+            permissionCue:        cueFrame.permissionCue || null,
+            requestCue:           cueFrame.requestCue || null,
+            infoCue:              cueFrame.infoCue || null,
+            directiveCue:         cueFrame.directiveCue || null,
+            tradeMatches:         Array.isArray(cueFrame.tradeMatches)
+                                    ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                                    : [],
+          } : null,
+          timestamp:              new Date().toISOString(),
+        }],
+      }).catch(() => {});
+    }
+
     if (match?.contextAssisted) {
       emit('KC_CONTEXT_MATCH', {
         containerTitle: match.container.title,
