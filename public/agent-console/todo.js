@@ -781,27 +781,69 @@ function _renderTable() {
     }
 
     // ── Per-row action suggestion ──
+    // Context-aware: directs the admin to the Verify → Fix Advisor pipeline
+    // rather than the old "manually paste the raw ASR transcript" instruction.
+    // Raw caller utterances are never safe KC phrases — Fix Advisor cleans
+    // them, extracts anchorWords, and picks the right target section.
     html += '<div class="detail-suggestion">';
     html += '<div class="suggestion-icon">\ud83d\udca1</div>';  // 💡
     html += '<div class="suggestion-text">';
-    if (row.displayType === 'KC_SECTION_GAP') {
+
+    const _verify  = G.verifyByIdx[idx];
+    const _advisor = G.advisorByIdx[idx] || (_getResolution(row)?.fixAdvisor);
+    const _isShortAck = row.displayType === 'KC_GRACEFUL_ACK'
+      && (!row.question || row.question.trim().length <= 5);
+
+    if (_isShortAck) {
+      html += `<strong>Likely OK:</strong> Empty or very short utterance \u2014 probably a natural `;
+      html += `pause or acknowledgment from the caller. No action needed.`;
+    } else if (_advisor) {
+      // Fix Advisor already ran — show its target + action summary inline.
+      const _t  = _advisor.target || {};
+      const _np = Array.isArray(_advisor.proposal?.newPhrases)
+        ? _advisor.proposal.newPhrases.length
+        : 0;
+      const _typeLabel = {
+        ADD_PHRASES:     'Add phrases',
+        AUGMENT_SECTION: 'Augment section',
+        NEW_SECTION:     'Build new section',
+        ROUTING_PROBLEM: 'Fix routing (not a content gap)',
+      }[_advisor.type] || _advisor.type || 'Review';
+      html += `<strong>Fix Advisor:</strong> ${_esc(_typeLabel)}`;
+      if (_t.containerTitle) {
+        html += ` \u2014 target: <strong>${_esc(_t.containerTitle)}</strong>`;
+        if (_t.sectionLabel) html += ` \u203a <strong>${_esc(_t.sectionLabel)}</strong>`;
+      }
+      if (_np > 0) {
+        html += `. ${_np} cleaned phrase${_np > 1 ? 's' : ''} with anchorWords proposed below.`;
+      } else {
+        html += `.`;
+      }
+      if (_advisor.vetoed) {
+        html += ` <span class="suggestion-repeat">Server vetoed NEW_SECTION (${_esc(_advisor.vetoReason || 'similarity')}) \u2014 see proposal for the safer alternative.</span>`;
+      }
+    } else if (_verify) {
+      // Verify ran, advisor didn't — point at Ask Fix Advisor.
+      html += `Gate trace is ready above. Click <strong>\u2728 Ask Fix Advisor</strong> `;
+      html += `to get a cleaned phrase (with anchorWords) and the right target section. `;
+      html += `<em>Never paste the raw caller transcript into a KC as-is.</em>`;
+    } else if (row.displayType === 'KC_SECTION_GAP') {
+      // No verify yet — direct to the enterprise repair path.
       const _gapOcc = row.containerId ? (G.containerGapCounts[row.containerId] || 1) : 1;
-      html += `<strong>Add a callerPhrase</strong> to a section in \u201c${_esc(row.containerTitle)}\u201d `;
-      html += `that covers this caller\u2019s intent.`;
+      html += `Click <strong>\ud83e\uddea Verify</strong> to replay the 6-gate pipeline against `;
+      html += `\u201c${_esc(row.containerTitle || 'this container')}\u201d, then <strong>\u2728 Ask Fix Advisor</strong> `;
+      html += `for a structured proposal (phrase text + anchorWords + target section + similarity veto check). `;
+      html += `<em>Do not paste the raw transcript verbatim \u2014 it needs cleaning and anchor extraction first.</em>`;
       if (_gapOcc > 1) {
-        html += ` <span class="suggestion-repeat">This container had ${_gapOcc} section gaps this period.</span>`;
+        html += ` <span class="suggestion-repeat">This container had ${_gapOcc} section gaps this period \u2014 high-impact fix.</span>`;
       }
     } else if (row.displayType === 'KC_LLM_FALLBACK') {
-      html += `<strong>Use Phrase Finder</strong> to match this phrase to an existing container, `;
-      html += `or create a new KC card if this is a new topic.`;
+      html += `No container matched. Click <strong>\ud83e\uddea Verify</strong> to see which gate failed, `;
+      html += `then <strong>\u2728 Ask Fix Advisor</strong> \u2014 it may propose routing to an existing KC `;
+      html += `(ADD_PHRASES) or, if truly new, a NEW_SECTION with a similarity-sweep veto guard.`;
     } else {
-      if (row.question && row.question.trim().length > 5) {
-        html += `<strong>Review:</strong> Agent had no trained answer. Check if this is a real gap `;
-        html += `or natural conversation flow.`;
-      } else {
-        html += `<strong>Likely OK:</strong> Empty or very short utterance \u2014 probably a natural `;
-        html += `pause or acknowledgment from the caller.`;
-      }
+      html += `<strong>Review:</strong> Agent had no trained answer. Click <strong>\ud83e\uddea Verify</strong> `;
+      html += `to see the pipeline trace, then <strong>\u2728 Ask Fix Advisor</strong> for a structured repair plan.`;
     }
     html += '</div></div>';
 
