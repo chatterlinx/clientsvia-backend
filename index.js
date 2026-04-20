@@ -268,6 +268,7 @@ async function loadAllRoutes() {
         routes.greetingsRoutes = await loadRouteWithTimeout('./routes/admin/greetings', 'greetingsRoutes'); // 🎙️ Greetings (Call Start + Greeting Interceptor)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
         routes.globalShareRoutes = await loadRouteWithTimeout('./routes/admin/globalshare', 'globalShareRoutes'); // 🌐 GlobalShare (secure name dictionaries gateway)
+        routes.cuePhrasesImportRoutes = await loadRouteWithTimeout('./routes/admin/cuePhrasesImport', 'cuePhrasesImportRoutes'); // 🧠 Cue Phrases bulk import (backup-rotated, per-token scoped)
         routes.lapGroupsRoutes   = await loadRouteWithTimeout('./routes/admin/lapGroups',   'lapGroupsRoutes');   // 🎧 LAP entries (phrase-response table)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
@@ -732,6 +733,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/agent2', routes.greetingsRoutes); // 🎙️ Greetings (Call Start + Greeting Interceptor)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
     app.use('/api/admin/globalshare', routes.globalShareRoutes);  // 🌐 GlobalShare (secure name dictionaries gateway)
+    app.use('/api/admin/cue-phrases-import', routes.cuePhrasesImportRoutes); // 🧠 Cue Phrases bulk import (backup-rotated, per-token scoped)
     app.use('/api/admin/globalshare/lap-groups', routes.lapGroupsRoutes); // 🎧 LAP entries (phrase-response table)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
