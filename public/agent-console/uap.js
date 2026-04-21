@@ -283,175 +283,159 @@
   window.timingsSave = timingsSave;
 
   // ══════════════════════════════════════════════════════════════════════════
-  // CALIBRATION TAB — Layer 1/2/Unknown hit rate dashboard
+  // CALIBRATION TAB — UAP Pipeline Health dashboard
+  // ──────────────────────────────────────────────────────────────────────────
+  // Reads from /api/admin/agent2/company/:companyId/knowledge/gaps (the same
+  // API the Gaps & Todo page uses). Surfaces UAP-specific metrics:
+  //   - UAP Hit Rate           (GATE 2.5 wins / all KC pipeline outcomes)
+  //   - UAP Hits                (phrase-index fast path)
+  //   - UAP Miss → Key Save     (rescued by GATE 3 keyword — "add a phrase" signal)
+  //   - Section Gaps            (container matched, no section covered)
+  //   - UAP Miss → Groq         (full miss, most expensive outcome)
+  //   - Graceful Ack            (all paths exhausted)
+  //   - Winning Gate breakdown bar
+  //   - Top 10 UAP Hits (working) + Top 10 UAP Misses (add phrases)
   // ══════════════════════════════════════════════════════════════════════════
 
   async function _loadCalibration() {
     if (!companyId) return;
-    const l1El      = document.getElementById('calLayer1Pct');
-    const l2El      = document.getElementById('calLayer2Pct');
-    const unkEl     = document.getElementById('calUnknownPct');
-    const fuzzyEl   = document.getElementById('calFuzzyPct');
-    const bodyEl    = document.getElementById('calBody');
-    if (!bodyEl) return;
+    const statsEl = document.getElementById('calStats');
+    const bodyEl  = document.getElementById('calBody');
+    const rangeEl = document.getElementById('calRange');
+    const chipEl  = document.getElementById('calRangeChip');
+    if (!statsEl || !bodyEl) return;
 
-    // Show loading state
-    if (l1El)    l1El.textContent    = '…';
-    if (l2El)    l2El.textContent    = '…';
-    if (unkEl)   unkEl.textContent   = '…';
-    if (fuzzyEl) fuzzyEl.textContent = '…';
-    bodyEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.813rem;">Loading calibration data…</div>';
+    const range = rangeEl ? rangeEl.value : '7d';
+    if (chipEl) chipEl.textContent = `Last ${range === '24h' ? '24 hours' : range === '30d' ? '30 days' : '7 days'}`;
+
+    // Loading state
+    bodyEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:.813rem;">Loading UAP health data…</div>';
 
     try {
-      const res = await fetch(`/api/admin/calibration/company/${companyId}/stats`, {
+      const res = await fetch(`/api/admin/agent2/company/${companyId}/knowledge/gaps?range=${encodeURIComponent(range)}`, {
         headers: { 'Authorization': `Bearer ${_getToken()}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Unknown error');
 
-      const s = data.stats;
+      const s   = data.summary || {};
+      const bt  = s.byType     || {};
+      const uapHits     = s.uapHitsN   || 0;
+      const uapKeyResc  = s.uapKeyResc || 0;
+      const llmFb       = s.llmFbN     || 0;
+      const sectionGap  = bt.KC_SECTION_GAP  || 0;
+      const gracefulAck = bt.KC_GRACEFUL_ACK || 0;
+      const totalKC     = uapHits + uapKeyResc + llmFb + sectionGap + gracefulAck;
+      const hitRate     = s.uapHitRate; // null if no data
 
-      // ── Populate stat cards ────────────────────────────────────────────
-      if (l1El)    l1El.textContent    = s.totalEntries > 0 ? `${s.layer1.pct}%`  : '—';
-      if (l2El)    l2El.textContent    = s.totalEntries > 0 ? `${s.layer2.pct}%`  : '—';
-      if (unkEl)   unkEl.textContent   = s.totalEntries > 0 ? `${s.unknown.pct}%` : '—';
-      if (fuzzyEl) fuzzyEl.textContent = s.totalEntries > 0 ? `${s.fuzzyRecovery?.pct || 0}%` : '—';
+      // ── Render 6-card stat row ─────────────────────────────────────────
+      let hrClass = 'hr-neutral', hrText = '—';
+      if (hitRate != null) {
+        const pct = Math.round(hitRate * 100);
+        hrText = `${pct}%`;
+        if      (pct >= 70) hrClass = 'hr-green';
+        else if (pct >= 40) hrClass = 'hr-amber';
+        else                hrClass = 'hr-red';
+      }
+
+      statsEl.innerHTML = `
+        <div class="cal-stat ${hrClass}" title="UAP phrase-index hits / (hits + keyword rescues + full misses)">
+          <div class="cal-stat-value">${hrText}</div>
+          <div class="cal-stat-label">UAP Hit Rate</div>
+          <div class="cal-stat-sub">${s.uapConsidered || 0} turns considered</div>
+        </div>
+        <div class="cal-stat uap-hit" title="GATE 2.5 phrase-index hits (fast path winners)">
+          <div class="cal-stat-value">${uapHits}</div>
+          <div class="cal-stat-label">UAP Hits</div>
+        </div>
+        <div class="cal-stat uap-miss-key" title="UAP missed, GATE 3 keyword rescued — each row is a phrase to add to UAP">
+          <div class="cal-stat-value">${uapKeyResc}</div>
+          <div class="cal-stat-label">UAP Miss → Key Save</div>
+        </div>
+        <div class="cal-stat gap" title="Container matched but no section covered the utterance">
+          <div class="cal-stat-value">${sectionGap}</div>
+          <div class="cal-stat-label">Section Gaps</div>
+        </div>
+        <div class="cal-stat fb" title="Full UAP miss — Groq had to answer from KB context">
+          <div class="cal-stat-value">${llmFb}</div>
+          <div class="cal-stat-label">UAP Miss → Groq</div>
+        </div>
+        <div class="cal-stat ack" title="All paths exhausted — canned safety response">
+          <div class="cal-stat-value">${gracefulAck}</div>
+          <div class="cal-stat-label">Graceful Ack</div>
+        </div>`;
 
       // ── No data yet ────────────────────────────────────────────────────
-      if (s.totalEntries === 0) {
+      if (totalKC === 0) {
         bodyEl.innerHTML = `
           <div class="empty-state">
             <div class="empty-icon">📊</div>
-            <div class="empty-title">Collecting first call data...</div>
+            <div class="empty-title">No KC pipeline data in the selected range.</div>
             <div class="empty-sub">
-              Calibration data populates automatically as calls come in via qaLog[] entries.
-              Target: 500 calls for meaningful baseline accuracy.
-              No action required — this updates automatically.
+              UAP events populate automatically as calls come in via qaLog[] entries.
+              Try widening the range or running a live call.
             </div>
           </div>`;
         return;
       }
 
-      // ── Progress bar + recent calls ────────────────────────────────────
-      const progress    = Math.min(100, Math.round((s.totalEntries / s.targetCalls) * 100));
-      const isBaseline  = s.totalEntries >= s.targetCalls;
-      const statusBadge = isBaseline
-        ? `<div style="display:inline-block;padding:4px 12px;background:#dcfce7;color:#166534;border-radius:6px;font-size:.75rem;font-weight:600;margin-bottom:12px;">✅ Calibration baseline established (${s.totalEntries} turns)</div>`
-        : `<div style="margin-bottom:12px;font-size:.8rem;color:#64748b;">${s.totalEntries} / ${s.targetCalls} turns collected</div>`;
-
-      const progressBar = isBaseline ? '' : `
-        <div style="width:100%;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:16px;">
-          <div style="width:${progress}%;height:100%;background:linear-gradient(90deg,#10b981,#059669);border-radius:4px;transition:width .3s;"></div>
+      // ── Winning Gate breakdown bars ────────────────────────────────────
+      const pct = n => totalKC > 0 ? Math.round((n / totalKC) * 100) : 0;
+      const breakdownRow = (label, n, barClass) => `
+        <div class="gate-breakdown-row">
+          <div class="gate-label">${_esc(label)}</div>
+          <div class="gate-bar-wrap"><div class="gate-bar ${barClass}" style="width:${pct(n)}%"></div></div>
+          <div class="gate-num">${n} · ${pct(n)}%</div>
         </div>`;
 
-      // ── Recent calls table ─────────────────────────────────────────────
-      let callRows = '';
-      if (s.recentCalls && s.recentCalls.length > 0) {
-        callRows = s.recentCalls.map(c => {
-          const total = c.layer1 + c.layer2 + c.unknown + (c.fuzzy || 0);
-          const d     = c.capturedAt ? new Date(c.capturedAt) : null;
-          const when  = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-          return `<tr>
-            <td style="padding:6px 10px;font-size:.75rem;color:#334155;">${_esc(c.callSid?.slice(-8) || '—')}</td>
-            <td style="padding:6px 10px;font-size:.75rem;color:#64748b;">${_esc(when)}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${c.turnCount || '—'}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#059669;font-weight:600;">${c.layer1}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#d97706;font-weight:600;">${c.layer2}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#dc2626;font-weight:600;">${c.unknown}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#8b5cf6;font-weight:600;">${c.fuzzy || 0}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;">${total}</td>
-          </tr>`;
-        }).join('');
-      }
-
-      const table = callRows ? `
-        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
-          <thead>
-            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">Call</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">When</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Turns</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#059669;text-align:center;font-weight:500;">L1</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#d97706;text-align:center;font-weight:500;">L2</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#dc2626;text-align:center;font-weight:500;">Unk</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#8b5cf6;text-align:center;font-weight:500;">Fuzzy</th>
-              <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Total</th>
-            </tr>
-          </thead>
-          <tbody>${callRows}</tbody>
-        </table>` : '';
-
-      // ── Assemble summary block ─────────────────────────────────────────
-      const summaryLine = `
-        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:.8rem;flex-wrap:wrap;">
-          <span style="color:#059669;font-weight:600;">Layer 1: ${s.layer1.count}</span>
-          <span style="color:#d97706;font-weight:600;">LLM Agent: ${s.layer2.count}</span>
-          <span style="color:#dc2626;font-weight:600;">Unknown: ${s.unknown.count}</span>
-          <span style="color:#8b5cf6;font-weight:600;">Fuzzy: ${s.fuzzyRecovery?.count || 0}</span>
+      // ── Top 10 tables ─────────────────────────────────────────────────
+      const topHits   = Array.isArray(s.topUapHits)   ? s.topUapHits   : [];
+      const topMisses = Array.isArray(s.topUapMisses) ? s.topUapMisses : [];
+      const topListHtml = (title, rows) => {
+        const body = rows.length
+          ? rows.map(r => `<tr>
+              <td>${_esc(r.title || 'Unknown')}</td>
+              <td>${r.count || 0}</td>
+            </tr>`).join('')
+          : '<tr><td class="empty" colspan="2">No data yet</td></tr>';
+        return `<div class="top-list">
+          <h4>${_esc(title)}</h4>
+          <table><tbody>${body}</tbody></table>
         </div>`;
-
-      // ── Match type distribution ───────────────────────────────────────
-      const _mtColors = { EXACT: '#059669', PARTIAL: '#0d9488', WORD_OVERLAP: '#d97706', SYNONYM: '#8b5cf6', FUZZY_PHONETIC: '#a855f7' };
-      let matchTypeHTML = '';
-      if (s.matchTypeBreakdown && s.matchTypeBreakdown.length > 0) {
-        const sorted = [...s.matchTypeBreakdown].sort((a, b) => b.count - a.count);
-        const mtTotal = sorted.reduce((sum, r) => sum + r.count, 0);
-        const mtRows = sorted.map(mt => {
-          const pctVal = mtTotal > 0 ? Math.round((mt.count / mtTotal) * 100) : 0;
-          const color  = _mtColors[mt.matchType] || '#64748b';
-          return `<tr>
-            <td style="padding:6px 10px;font-size:.75rem;font-weight:600;color:${color};">${_esc(mt.matchType)}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;font-weight:600;">${mt.count}</td>
-            <td style="padding:6px 10px;font-size:.75rem;text-align:center;color:#64748b;">${pctVal}%</td>
-            <td style="padding:6px 10px;">
-              <div style="width:100%;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;">
-                <div style="width:${pctVal}%;height:100%;background:${color};border-radius:3px;"></div>
-              </div>
-            </td>
-          </tr>`;
-        }).join('');
-
-        matchTypeHTML = `
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0;">
-            <div style="font-size:.75rem;color:#64748b;margin-bottom:8px;font-weight:500;">Match Type Distribution</div>
-            <table style="width:100%;border-collapse:collapse;">
-              <thead>
-                <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;">Type</th>
-                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">Count</th>
-                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:center;font-weight:500;">%</th>
-                  <th style="padding:6px 10px;font-size:.7rem;color:#94a3b8;text-align:left;font-weight:500;"></th>
-                </tr>
-              </thead>
-              <tbody>${mtRows}</tbody>
-            </table>
-          </div>`;
-      }
+      };
 
       bodyEl.innerHTML = `
-        ${statusBadge}
-        ${progressBar}
-        ${summaryLine}
-        <div style="font-size:.75rem;color:#64748b;margin-bottom:8px;font-weight:500;">Recent Calls (${s.recentCalls.length})</div>
-        ${table}
-        ${matchTypeHTML}
-      `;
+        <div class="uap-breakdown">
+          ${breakdownRow('UAP Hit (GATE 2.5)',      uapHits,      'green')}
+          ${breakdownRow('Keyword Save (GATE 3)',   uapKeyResc,   'amber')}
+          ${breakdownRow('Section Gap',             sectionGap,   'orange')}
+          ${breakdownRow('UAP Miss → Groq',         llmFb,        'red')}
+          ${breakdownRow('Graceful Ack',            gracefulAck,  'gray')}
+        </div>
+        <div class="top-list-grid">
+          ${topListHtml('Top UAP Hits (working)',        topHits)}
+          ${topListHtml('Top UAP Misses (add phrases)',  topMisses)}
+        </div>`;
 
     } catch (err) {
-      console.warn('[Calibration] load failed', err);
-      if (bodyEl) {
-        bodyEl.innerHTML = `<div style="padding:16px;color:#dc2626;font-size:.8rem;">Failed to load calibration data: ${_esc(err.message)}</div>`;
-      }
+      console.warn('[UAP Calibration] load failed', err);
+      statsEl.innerHTML = '';
+      bodyEl.innerHTML = `<div style="padding:16px;color:#dc2626;font-size:.8rem;">Failed to load UAP health data: ${_esc(err.message)}</div>`;
     }
   }
 
-  // Load calibration when tab becomes active (lazy load)
+  // Load calibration when tab becomes active (lazy load) + wire range/refresh
   if (!window._calibrationTabHooked) {
     window._calibrationTabHooked = true;
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.tab-btn[data-tab="calibration"]');
       if (btn) _loadCalibration();
+      const refresh = e.target.closest('#calRefresh');
+      if (refresh) _loadCalibration();
+    });
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'calRange') _loadCalibration();
     });
   }
 

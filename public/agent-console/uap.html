@@ -243,18 +243,56 @@
     .toggle input:checked + .toggle-slider::after { transform: translateX(16px); }
 
     /* ── Calibration tab ─────────────────────────────────────── */
-    .cal-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .cal-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
+    @media (max-width: 1100px) { .cal-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 640px)  { .cal-grid { grid-template-columns: repeat(2, 1fr); } }
     .cal-stat {
       background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 20px;
+      border-radius: var(--radius-sm); padding: 16px 14px;
       text-align: center;
     }
-    .cal-stat-value { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
-    .cal-stat-label { font-size: .75rem; color: var(--text-muted); font-weight: 500; }
-    .cal-stat.layer1 .cal-stat-value  { color: var(--color-success); }
-    .cal-stat.layer2 .cal-stat-value  { color: var(--color-warning); }
-    .cal-stat.unknown .cal-stat-value { color: var(--color-danger); }
-    .cal-stat.fuzzy .cal-stat-value   { color: #8b5cf6; }
+    .cal-stat-value { font-size: 1.75rem; font-weight: 700; margin-bottom: 4px; }
+    .cal-stat-label { font-size: .7rem; color: var(--text-muted); font-weight: 500; line-height: 1.3; }
+    .cal-stat-sub   { font-size: .65rem; color: var(--text-xs); margin-top: 2px; }
+    .cal-stat.hr-green   .cal-stat-value { color: var(--color-success); }
+    .cal-stat.hr-amber   .cal-stat-value { color: var(--color-warning); }
+    .cal-stat.hr-red     .cal-stat-value { color: var(--color-danger); }
+    .cal-stat.hr-neutral .cal-stat-value { color: var(--text-muted); }
+    .cal-stat.uap-hit      .cal-stat-value { color: var(--color-success); }
+    .cal-stat.uap-miss-key .cal-stat-value { color: var(--color-warning); }
+    .cal-stat.gap          .cal-stat-value { color: var(--color-orange); }
+    .cal-stat.fb           .cal-stat-value { color: var(--color-danger); }
+    .cal-stat.ack          .cal-stat-value { color: var(--text-muted); }
+
+    /* ── UAP Health breakdown + Top 10 tables ─────────────────── */
+    .uap-breakdown { margin-top: 20px; }
+    .gate-breakdown-row {
+      display: grid; grid-template-columns: 180px 1fr 100px;
+      gap: 12px; align-items: center; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .gate-breakdown-row:last-child { border-bottom: none; }
+    .gate-label { font-size: .8rem; color: var(--text-secondary); font-weight: 500; }
+    .gate-bar-wrap { background: #f1f5f9; border-radius: 3px; height: 10px; overflow: hidden; }
+    .gate-bar { height: 100%; border-radius: 3px; transition: width .3s; }
+    .gate-bar.green  { background: var(--color-success); }
+    .gate-bar.amber  { background: var(--color-warning); }
+    .gate-bar.orange { background: var(--color-orange); }
+    .gate-bar.red    { background: var(--color-danger); }
+    .gate-bar.gray   { background: #94a3b8; }
+    .gate-num { font-size: .8rem; color: var(--text-muted); font-weight: 600; text-align: right; }
+
+    .top-list-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+    @media (max-width: 900px) { .top-list-grid { grid-template-columns: 1fr; } }
+    .top-list { background: var(--bg-page); border-radius: var(--radius-xs); padding: 14px; }
+    .top-list h4 { font-size: .8rem; color: var(--text-secondary); margin-bottom: 10px; font-weight: 600; }
+    .top-list table { width: 100%; border-collapse: collapse; }
+    .top-list td {
+      padding: 6px 8px; font-size: .78rem; color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .top-list td:last-child { text-align: right; font-weight: 600; color: var(--text-muted); }
+    .top-list td.empty { text-align: center; color: var(--text-muted); font-style: italic; }
 
     /* ── Buttons ─────────────────────────────────────────────── */
     .btn {
@@ -519,49 +557,41 @@
 <section class="tab-content" id="tab-calibration">
 
   <div class="uap-hero" style="background:linear-gradient(135deg,#1c1917 0%,#292524 60%,#78716c 100%);">
-    <div class="uap-hero-title">Layer 1 accuracy builds with real calls.</div>
+    <div class="uap-hero-title">UAP Pipeline Health — real-time.</div>
     <div class="uap-hero-sub">
-      The rule-based classifier has no accuracy data until real calls run.
-      First 500 calls establish the calibration baseline.
-      Every qaLog entry feeds this dashboard automatically.
+      Every caller turn that reaches the KC pipeline is logged.
+      GATE 2.5 phrase-index hits = fast path wins (zero LLM cost).
+      GATE 3 keyword rescues = phrases missing from UAP (your backlog).
+      Full misses = Groq had to answer. Aim: raise the hit rate over time.
     </div>
     <div class="uap-hero-meta">
       <span class="uap-hero-chip">qaLog[] driven</span>
       <span class="uap-hero-chip">Automatic</span>
-      <span class="uap-hero-chip">No manual input needed</span>
+      <span class="uap-hero-chip" id="calRangeChip">Last 7 days</span>
     </div>
   </div>
 
   <div class="cal-grid" id="calStats">
-    <div class="cal-stat layer1">
-      <div class="cal-stat-value" id="calLayer1Pct">—</div>
-      <div class="cal-stat-label">Layer 1 Hits<br><small style="opacity:.7;">Rule-based</small></div>
-    </div>
-    <div class="cal-stat layer2">
-      <div class="cal-stat-value" id="calLayer2Pct">—</div>
-      <div class="cal-stat-label">Layer 2 Fallback<br><small style="opacity:.7;">LLM Agent</small></div>
-    </div>
-    <div class="cal-stat unknown">
-      <div class="cal-stat-value" id="calUnknownPct">—</div>
-      <div class="cal-stat-label">UNKNOWN<br><small style="opacity:.7;">No match</small></div>
-    </div>
-    <div class="cal-stat fuzzy">
-      <div class="cal-stat-value" id="calFuzzyPct">—</div>
-      <div class="cal-stat-label">Fuzzy Recovery<br><small style="opacity:.7;">Synonym + Phonetic</small></div>
-    </div>
+    <!-- populated by uap.js _loadCalibration() -->
   </div>
 
   <div class="card">
-    <div class="card-header"><span class="card-title">Collection Progress</span></div>
+    <div class="card-header">
+      <span class="card-title">Winning Gate Breakdown</span>
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+        <select id="calRange" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);font-size:.78rem;background:var(--bg-card);">
+          <option value="24h">24h</option>
+          <option value="7d" selected>7 days</option>
+          <option value="30d">30 days</option>
+        </select>
+        <button id="calRefresh" class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem;">↻</button>
+      </div>
+    </div>
     <div class="card-body" id="calBody">
       <div class="empty-state">
         <div class="empty-icon">📊</div>
-        <div class="empty-title">Collecting first call data...</div>
-        <div class="empty-sub">
-          Calibration data populates automatically as calls come in via qaLog[] entries.
-          Target: 500 calls for meaningful baseline accuracy.
-          No action required — this updates automatically.
-        </div>
+        <div class="empty-title">Loading UAP health data...</div>
+        <div class="empty-sub">Fetching qaLog[] events from the last 7 days.</div>
       </div>
     </div>
   </div>
