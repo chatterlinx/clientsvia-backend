@@ -1277,10 +1277,39 @@ class KCDiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
 
     let uapResult = null;
+    // ──────────────────────────────────────────────────────────────────────
+    // uapDiagnostic — outer-scope snapshot so downstream events
+    // (UAP_MISS_KEYWORD_RESCUED, KC_SECTION_GAP_RESCUED, KC_LLM_FALLBACK)
+    // can carry a zero-heuristic answer to "why did UAP miss this turn?".
+    // Stays null when GATE 2.4 already resolved the match (UAP never ran).
+    // ──────────────────────────────────────────────────────────────────────
+    let uapDiagnostic = null;
 
     // Only fire UAP if CueExtractor (GATE 2.4) didn't already resolve a match
     if (!match) try {
       uapResult = await UtteranceActParser.parse(companyId, userInput);
+
+      // ── UAP diagnostic snapshot (zero-heuristic, populated as sub-gates run) ──
+      // Captured here in outer scope so downstream events (UAP_MISS_KEYWORD_RESCUED,
+      // SECTION_GAP_RESCUED, LLM_FALLBACK) can carry the exact "why UAP missed" reason.
+      uapDiagnostic = {
+        ran:            true,
+        matchFound:     !!(uapResult?.containerId),
+        bestCandidate:  uapResult?.containerId ? {
+          containerId:  uapResult.containerId,
+          kcId:         uapResult.kcId || null,
+          sectionIdx:   uapResult.sectionIdx,
+          sectionLabel: uapResult.sectionLabel,
+          confidence:   uapResult.confidence,
+          matchType:    uapResult.matchType,
+          phrase:       uapResult.matchedPhrase,
+          anchorWords:  uapResult.anchorWords || [],
+          topicWords:   uapResult.topicWords || [],
+        } : null,
+        belowThreshold: uapResult?.containerId && uapResult.confidence < UAP_CONFIDENCE_THRESHOLD,
+        anchorGate:     null,  // populated by Logic 1 below
+        coreGate:       null,  // populated by Logic 2 below
+      };
 
       if (uapResult.containerId && uapResult.confidence >= UAP_CONFIDENCE_THRESHOLD) {
         logger.info('[KC_ENGINE] UAP Layer 1 HIT', {
@@ -1338,15 +1367,29 @@ class KCDiscoveryRunner {
             const anchorHits   = anchorWords.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
             const anchorRatio  = anchorHits / anchorWords.length;
 
+            const missedAnchorWords = anchorWords.filter(aw =>
+              !inputExact.has(aw) && !inputStems.has(_stem(aw))
+            );
+
             if (anchorRatio < ANCHOR_MATCH_THRESHOLD) {
               // ── LOGIC 1 FAIL — discriminating words missing → Groq ──
               anchorGatePassed = false;
+              if (uapDiagnostic) uapDiagnostic.anchorGate = {
+                required:  anchorWords.length,
+                hits:      anchorHits,
+                ratio:     Math.round(anchorRatio * 100) / 100,
+                threshold: ANCHOR_MATCH_THRESHOLD,
+                missed:    missedAnchorWords,
+                passed:    false,
+                reason:    'ANCHOR_WORDS_MISSING',
+              };
               logger.info('[KC_ENGINE] LOGIC 1 FAIL — anchor words missing, falling through to Groq', {
                 companyId, callSid, turn,
                 anchorWords,
                 anchorHits,
                 anchorRatio: Math.round(anchorRatio * 100) + '%',
                 threshold:   Math.round(ANCHOR_MATCH_THRESHOLD * 100) + '%',
+                missed:      missedAnchorWords,
                 sectionLabel: targetSection?.label,
               });
             } else if (uapResult.matchType === 'EXACT') {
@@ -1354,6 +1397,15 @@ class KCDiscoveryRunner {
               // Logic 1 confirmed anchor words AND the entire callerPhrase was
               // a substring of the input → highest possible UAP signal. Skip
               // Logic 2 embedding round-trip (~50ms saved on every EXACT match).
+              if (uapDiagnostic) uapDiagnostic.anchorGate = {
+                required:  anchorWords.length,
+                hits:      anchorHits,
+                ratio:     Math.round(anchorRatio * 100) / 100,
+                threshold: ANCHOR_MATCH_THRESHOLD,
+                missed:    [],
+                passed:    true,
+                reason:    'EXACT_BYPASS',
+              };
               logger.info('[KC_ENGINE] LOGIC 1 PASS — EXACT match, bypassing Logic 2', {
                 companyId, callSid, turn,
                 anchorWords,
@@ -1364,6 +1416,15 @@ class KCDiscoveryRunner {
               });
             } else {
               // ── LOGIC 1 PASS — proceed to Logic 2 ──
+              if (uapDiagnostic) uapDiagnostic.anchorGate = {
+                required:  anchorWords.length,
+                hits:      anchorHits,
+                ratio:     Math.round(anchorRatio * 100) / 100,
+                threshold: ANCHOR_MATCH_THRESHOLD,
+                missed:    missedAnchorWords,
+                passed:    true,
+                reason:    'ANCHOR_WORDS_CONFIRMED',
+              };
               logger.info('[KC_ENGINE] LOGIC 1 PASS — anchor words confirmed', {
                 companyId, callSid, turn,
                 anchorWords,
@@ -1422,6 +1483,14 @@ class KCDiscoveryRunner {
                     }
                     const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
 
+                    if (uapDiagnostic) uapDiagnostic.coreGate = {
+                      ran:        true,
+                      score:      Math.round(coreScore * 1000) / 1000,
+                      threshold:  CORE_MATCH_THRESHOLD,
+                      passed:     coreScore >= CORE_MATCH_THRESHOLD,
+                      callerCore: callerCore.slice(0, 120),
+                    };
+
                     logger.info('[KC_ENGINE] LOGIC 2 scored', {
                       companyId, callSid, turn,
                       callerCore:  callerCore.slice(0, 60),
@@ -1439,6 +1508,13 @@ class KCDiscoveryRunner {
                         threshold: CORE_MATCH_THRESHOLD,
                       });
                     }
+                  } else if (uapDiagnostic) {
+                    // Logic 2 couldn't run (no embeddings available) — record "skipped"
+                    uapDiagnostic.coreGate = {
+                      ran:       false,
+                      reason:    !callerCoreEmb?.length ? 'CALLER_EMBED_UNAVAILABLE' : 'PHRASE_CORE_ABSENT',
+                      threshold: CORE_MATCH_THRESHOLD,
+                    };
                   }
                   // phraseCoreEmbedding absent → skip Logic 2, route on Logic 1 alone
                 }
@@ -1471,6 +1547,8 @@ class KCDiscoveryRunner {
         }
 
         // Log to discoveryNotes qaLog (diagnostic, fire-and-forget)
+        // Enriched with uapDiagnostic so the Gap page can render anchor/core
+        // gate details when hit=false (the "why UAP missed" answer).
         _writeDiscoveryNotes(companyId, callSid, {
           qaLog: [{
             type:       'UAP_LAYER1',
@@ -1483,6 +1561,11 @@ class KCDiscoveryRunner {
             phrase:      uapResult.matchedPhrase,
             hit:         !!match,
             turn:        turn ?? 0,
+            question:    userInput,
+            anchorGate:  uapDiagnostic?.anchorGate || null,
+            coreGate:    uapDiagnostic?.coreGate   || null,
+            topicWords:  uapResult.topicWords || [],
+            timestamp:   new Date().toISOString(),
           }],
         }).catch(() => {});
 
@@ -1510,9 +1593,31 @@ class KCDiscoveryRunner {
               hit:           false,
               fuzzyRecovery: true,
               turn:          turn ?? 0,
+              question:      userInput,
+              belowThreshold: true,
+              threshold:     UAP_CONFIDENCE_THRESHOLD,
+              topicWords:    uapResult.topicWords || [],
+              timestamp:     new Date().toISOString(),
             }],
           }).catch(() => {});
         }
+      } else {
+        // ── NEW (Phase A.1) — UAP found NO candidate at all ──
+        // Previously silent. Without this write, the Gap page couldn't tell
+        // the difference between "UAP ran but found no phrase" and "UAP
+        // didn't run at all". Critical for diagnosing corpus coverage gaps.
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:       'UAP_LAYER1',
+            hit:        false,
+            turn:       turn ?? 0,
+            question:   userInput,
+            noCandidate: true,
+            reason:     'NO_PHRASE_CANDIDATE',
+            topicWords: uapResult?.topicWords || [],
+            timestamp:  new Date().toISOString(),
+          }],
+        }).catch(() => {});
       }
     } catch (_uapErr) {
       logger.warn('[KC_ENGINE] UAP Layer 1 error — falling through', {
