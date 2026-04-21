@@ -51,6 +51,7 @@ const logger   = require('../../utils/logger');
 const Customer = require('../../models/Customer');
 const LostLead = require('../../models/LostLead');
 const { getSharedRedisClient } = require('../redisClientFactory');
+const { isPlausibleName, splitFullName } = require('../../utils/nameValidation');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -132,11 +133,15 @@ async function preWarm(companyId, callSid, callerPhone) {
     }
 
     // ── 2. Find most recent confirmed discoveryNotes entry ────────────────
-    const allNotes = (customer.discoveryNotes || [])
-      .filter(n => n.confirmed && Object.keys(n.confirmed).length > 0)
+    // Pre-sort once — used by both the confirmed filter and the temp fallback
+    const allNotesByDateDesc = (customer.discoveryNotes || [])
+      .slice()
       .sort((a, b) => new Date(b.capturedAt || 0) - new Date(a.capturedAt || 0));
 
-    const lastConfirmedNotes = allNotes[0] || null;
+    const confirmedNotes = allNotesByDateDesc
+      .filter(n => n.confirmed && Object.keys(n.confirmed).length > 0);
+
+    const lastConfirmedNotes = confirmedNotes[0] || null;
     const lastConfirmed      = lastConfirmedNotes?.confirmed || {};
 
     // ── 3. Find most recent open LostLead (NEW or CONTACTED) ─────────────
@@ -150,16 +155,76 @@ async function preWarm(companyId, callSid, callerPhone) {
       .lean()
       .catch(() => null);
 
-    // ── 4. Build pre-warmed temp{} from last confirmed data ───────────────
-    // Pre-fill temp with what we know — agent won't re-ask for confirmed fields
-    const priorTemp = lastConfirmed || {};
+    // ── 4. Resolve caller name via fallback chain ─────────────────────────
+    // Historical bug (pre v5 audit April 21 2026): pre-warm only read
+    // lastConfirmed.firstName, which is empty for any customer who never
+    // completed a BOOKING_CONFIRM (177 dN entries / 69 callHistory entries
+    // for +12398889905 had ZERO confirmed non-empty). Result: every call
+    // greeted a well-known customer as a stranger.
+    //
+    // Fallback chain — strongest evidence first:
+    //   1. confirmed            — discoveryNotes[i].confirmed.firstName/lastName
+    //   2. knownNames_confirmed — callerProfile.knownNames[] where source='confirmed'
+    //                             AND passes isPlausibleName() (filters historical
+    //                             false-promoted entries like "getting ridiculous")
+    //   3. temp_most_recent     — most recent discoveryNotes[i].temp.firstName
+    //                             (weakest signal; intake LLM captured but never
+    //                             confirmed)
+    //
+    // Each step logs [CALLER_RECOGNITION_SOFT] so we SEE which source fed the
+    // pre-warm on every call. Final [CallerRecognition] ✅ Pre-warmed log line
+    // carries nameSource so provenance is visible end-to-end.
+    let resolvedFirst = null;
+    let resolvedLast  = null;
+    let nameSource    = 'none';
+
+    if (lastConfirmed.firstName || lastConfirmed.lastName) {
+      resolvedFirst = lastConfirmed.firstName || null;
+      resolvedLast  = lastConfirmed.lastName  || null;
+      nameSource    = 'confirmed';
+    } else {
+      // Fallback A — knownNames with real confirmed provenance + plausibility
+      const goodKnown = (customer.callerProfile?.knownNames || [])
+        .filter(n => n && n.source === 'confirmed')
+        .filter(n => isPlausibleName(n.name).ok)
+        .sort((a, b) => (b.seenCount || 0) - (a.seenCount || 0));
+
+      if (goodKnown.length > 0) {
+        const top = goodKnown[0];
+        const split = splitFullName(top.name);
+        resolvedFirst = split.firstName;
+        resolvedLast  = split.lastName;
+        nameSource    = 'knownNames_confirmed';
+        logger.info('[CALLER_RECOGNITION_SOFT] Name resolved from knownNames (no confirmed dN available)', {
+          companyId, callSid, name: top.name, seenCount: top.seenCount
+        });
+      } else {
+        // Fallback B — most recent temp.firstName (with plausibility filter)
+        const tempNote = allNotesByDateDesc.find(n => n.temp && n.temp.firstName);
+        const tempFirst = tempNote?.temp?.firstName || null;
+        if (tempFirst && isPlausibleName(tempFirst).ok) {
+          resolvedFirst = tempFirst;
+          resolvedLast  = tempNote?.temp?.lastName || null;
+          nameSource    = 'temp_most_recent';
+          logger.info('[CALLER_RECOGNITION_SOFT] Name resolved from most-recent temp (weakest signal)', {
+            companyId, callSid, firstName: resolvedFirst, capturedAt: tempNote.capturedAt
+          });
+        }
+      }
+    }
+
+    // ── 5. Build pre-warmed temp{} ─────────────────────────────────────────
+    // Non-name fields still come from lastConfirmed
+    // Name fields use the resolved fallback chain above. Everything else
+    // (address, phone, email, fullName) stays on the confirmed-only path —
+    // those are lower-risk fields and we shouldn't pull them from temp/knownNames.
     const temp = {
-      firstName:      priorTemp.firstName      || null,
-      lastName:       priorTemp.lastName       || null,
-      fullName:       priorTemp.fullName       || null,
-      address:        priorTemp.address        || null,
-      phone:          priorTemp.phone          || callerPhone,
-      email:          priorTemp.email          || null,
+      firstName:      resolvedFirst                     || null,
+      lastName:       resolvedLast                      || null,
+      fullName:       lastConfirmed.fullName            || null,
+      address:        lastConfirmed.address             || null,
+      phone:          lastConfirmed.phone               || callerPhone,
+      email:          lastConfirmed.email               || null,
       issue:          null,         // fresh per-call — not carried over
       serviceType:    null,         // fresh per-call
       staffMentioned: null,         // fresh per-call
@@ -168,14 +233,14 @@ async function preWarm(companyId, callSid, callerPhone) {
       confidence:     {}            // fresh — will be populated during call
     };
 
-    // ── 5. Build doNotReask[] from pre-filled fields ───────────────────────
+    // ── 6. Build doNotReask[] from pre-filled fields ───────────────────────
     // Any pre-filled field from prior confirmed data → don't re-ask
     const doNotReask = Object.entries(temp)
       .filter(([k, v]) => k !== 'confidence' && v != null)
       .map(([k]) => k)
       .slice(0, CONFIG.MAX_DOREASK);
 
-    // ── 6. Build callerProfile block ──────────────────────────────────────
+    // ── 7. Build callerProfile block ──────────────────────────────────────
     const visitCount = (customer.discoveryNotes || []).length;
 
     // Repeat-issue detection — scan last 5 callHistory entries (already in memory)
@@ -202,7 +267,7 @@ async function preWarm(companyId, callSid, callerPhone) {
       staffRelationships: customer.callerProfile?.staffRelationships || [],
     };
 
-    // ── 7. Build lostLeadContext ──────────────────────────────────────────
+    // ── 8. Build lostLeadContext ──────────────────────────────────────────
     const lostLeadContext = lostLead
       ? {
           hasOpenLead:      true,
@@ -213,7 +278,7 @@ async function preWarm(companyId, callSid, callerPhone) {
         }
       : { hasOpenLead: false };
 
-    // ── 8. Build pre-warmed DN object ─────────────────────────────────────
+    // ── 9. Build pre-warmed DN object ─────────────────────────────────────
     const now = new Date().toISOString();
     const preWarmedNotes = {
       version:      2,
@@ -248,7 +313,7 @@ async function preWarm(companyId, callSid, callerPhone) {
       updatedAt:    now,
     };
 
-    // ── 9. Write to Redis — NX (only if not already set) ─────────────────
+    // ── 10. Write to Redis — NX (only if not already set) ─────────────────
     // NX prevents overwriting if init() somehow ran first (race condition safety)
     const key = _dnKey(companyId, callSid);
     await redis.set(key, JSON.stringify(preWarmedNotes), { EX: CONFIG.REDIS_TTL, NX: true });
@@ -259,6 +324,8 @@ async function preWarm(companyId, callSid, callerPhone) {
       customerId:      String(customer._id),
       isKnown:         true,
       visitCount,
+      nameSource,                        // confirmed | knownNames_confirmed | temp_most_recent | none
+      resolvedFirstName: resolvedFirst,  // what pre-warm decided — null is a valid value
       hasLastConfirmed: Object.keys(lastConfirmed).length > 0,
       hasOpenLead:      lostLeadContext.hasOpenLead,
       doNotReaskCount:  doNotReask.length,
