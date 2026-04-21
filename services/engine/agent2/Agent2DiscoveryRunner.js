@@ -111,6 +111,7 @@ const KnowledgeContainerService   = require('./KnowledgeContainerService');    /
 // (Lazy requires in CHECKPOINT D block — see below)
 const DiscoveryNotesService  = require('../../discoveryNotes/DiscoveryNotesService');
 const CompanyTriggerSettings = require('../../../models/CompanyTriggerSettings');
+const costRates             = require('../../costRates');   // Commit 2 — per-company rate resolver
 const { DEFAULT_LLM_AGENT_SETTINGS, DEFAULT_INTAKE_SETTINGS, composeSystemPrompt, composeIntakeSystemPrompt, composeIntakeExtractionPrompt, composeIntakeResponsePrompt } = require('../../../config/llmAgentDefaults');
 const GroqStreamAdapter = require('../../streaming/adapters/GroqStreamAdapter');
 const { LLM_FAILURE_REASON } = require('../../../config/LLMDiagnostics');
@@ -2272,14 +2273,10 @@ class Agent2DiscoveryRunner {
             const _tIn  = intakeResult.tokensUsed?.input  || 0;
             const _tOut = intakeResult.tokensUsed?.output || 0;
             const _prov = intakeResult.provider || 'anthropic';  // set by streamWithSentences
-            // Env-overridable pricing — same constants as KCDiscoveryRunner.COST_CONSTANTS
-            const _rateIn  = _prov === 'groq'
-              ? (parseFloat(process.env.KC_COST_GROQ_IN_PER_M)  || 0.59)
-              : (parseFloat(process.env.KC_COST_CLAUDE_IN_PER_M) || 3.00);
-            const _rateOut = _prov === 'groq'
-              ? (parseFloat(process.env.KC_COST_GROQ_OUT_PER_M) || 0.79)
-              : (parseFloat(process.env.KC_COST_CLAUDE_OUT_PER_M) || 15.00);
-            const _usd = (_tIn / 1_000_000) * _rateIn + (_tOut / 1_000_000) * _rateOut;
+            // Commit 2 — rates resolved via shared costRates helper (per-company → env → default)
+            const _usd = _prov === 'groq'
+              ? costRates.computeGroqCost({ input: _tIn, output: _tOut }, company)
+              : costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
             DiscoveryNotesService.update(companyId, callSid, {
               qaLog: [{
                 type:       'A2_LLM_INTAKE_TURN_1',
@@ -2290,7 +2287,7 @@ class Agent2DiscoveryRunner {
                 latencyMs:  intakeResult.latencyMs || null,
                 tokensUsed: { input: _tIn, output: _tOut },
                 cost:       (_tIn > 0 || _tOut > 0) ? {
-                  usd:    Math.round(_usd * 1_000_000) / 1_000_000,
+                  usd:    _usd,
                   input:  _tIn,
                   output: _tOut,
                   model:  _prov === 'groq' ? 'llama-3.3-70b-versatile' : 'claude-sonnet-4-5',

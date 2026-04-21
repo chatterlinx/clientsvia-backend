@@ -347,8 +347,9 @@ async function synthesizeSpeech({
       const _companyId = company && company._id ? String(company._id) : null;
       if (callSid && _companyId) {
         const _chars = formattedText ? formattedText.length : (text ? text.length : 0);
-        const _rate  = parseFloat(process.env.KC_COST_ELEVENLABS_PER_K_CHARS) || 0.30;
-        const _usd   = (_chars / 1000) * _rate;
+        // Commit 2 — rates resolved via shared costRates helper (per-company → env → default)
+        const costRates = require('./costRates');
+        const _usd = costRates.computeElevenLabsCost(_chars, company);
         // Lazy-require to avoid circular import at module load
         const DiscoveryNotesService = require('./discoveryNotes/DiscoveryNotesService');
         DiscoveryNotesService.update(_companyId, callSid, {
@@ -358,7 +359,7 @@ async function synthesizeSpeech({
             voiceId,
             modelId:   model_id,
             chars:     _chars,
-            cost:      { usd: Math.round(_usd * 1_000_000) / 1_000_000, chars: _chars, model: model_id },
+            cost:      { usd: _usd, chars: _chars, model: model_id },
             timestamp: new Date().toISOString(),
           }],
         }).catch(() => {});

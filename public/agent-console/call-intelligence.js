@@ -930,9 +930,9 @@ function renderSectionTurnCoverage(turns, companyId) {
 
       <!-- Rates note -->
       <div style="margin-top:10px;padding:8px;background:#fef3c7;border-radius:4px;font-size:11px;color:#78350f;">
-        <strong>Rates used:</strong> Claude Sonnet 4.5 $3/$15 per M · Groq Llama 3.3 70B $0.59/$0.79 per M · ElevenLabs Turbo v2.5 $0.30 per 1k chars.
-        Configure per-company rates in <em>services.html → Cost &amp; Billing tab</em> (coming next).
-        Today rates are env vars: <code>KC_COST_CLAUDE_IN_PER_M</code>, <code>KC_COST_GROQ_IN_PER_M</code>, <code>KC_COST_ELEVENLABS_PER_K_CHARS</code>.
+        <strong>Default rates:</strong> Claude Sonnet 4.5 $3/$15 per M · Groq Llama 3.3 70B $0.59/$0.79 per M · ElevenLabs Turbo v2.5 $0.30 per 1k chars.
+        Override per-company in <strong>Agent Studio → 💰 Cost &amp; Billing</strong> tab.
+        Resolution order: company override → env var → list-price default.
       </div>
     </div>`;
 

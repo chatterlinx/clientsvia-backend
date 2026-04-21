@@ -1629,6 +1629,9 @@
   <button type="button" class="tab-btn" data-tab="prompt" role="tab">
     <span class="tab-icon">📋</span>System Prompt
   </button>
+  <button type="button" class="tab-btn" data-tab="cost" role="tab">
+    <span class="tab-icon">💰</span>Cost &amp; Billing
+  </button>
 </nav>
 
 <!-- ─── KNOWLEDGE TAB (current content — zero regression) ────────────────── -->
@@ -2892,6 +2895,180 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     COST & BILLING TAB (Commit 2, April 2026)
+     Per-company plan pricing overrides for Claude / Groq / ElevenLabs /
+     Deepgram / Twilio. Any field left blank uses env → list-price default.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="tab-panel-cost" class="tab-panel" role="tabpanel" aria-labelledby="tab-cost">
+  <div style="padding: 24px 28px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:#0f172a;">
+          💰 Cost &amp; Billing
+        </h2>
+        <p style="margin:6px 0 0; color:#64748b; font-size:0.875rem;">
+          Plan pricing used to compute <strong>Est. Cost</strong> on Call Intelligence.
+          Leave any field blank to fall back to the platform default (list price).
+          Effective source: <span id="cc-source-chip" class="cc-chip cc-chip-muted">loading…</span>
+        </p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn-ghost" id="cc-reload-btn" title="Reload from server">↻ Reload</button>
+        <button type="button" class="btn-primary" id="cc-save-btn">💾 Save</button>
+      </div>
+    </div>
+
+    <div id="cc-status" class="cc-status" style="display:none;"></div>
+
+    <!-- Claude -->
+    <div class="cc-card">
+      <div class="cc-card-head">
+        <span class="cc-icon">🧠</span>
+        <div>
+          <div class="cc-card-title">Claude (Anthropic) — LLM Fallback</div>
+          <div class="cc-card-sub">Applies to every <code>KC_LLM_FALLBACK</code> turn. Default: Sonnet 4.5 list price.</div>
+        </div>
+      </div>
+      <div class="cc-grid">
+        <label class="cc-field">
+          <span>Plan / Tier label</span>
+          <input type="text" id="cc-claude-tier" placeholder="e.g. Sonnet 4.5 (enterprise contract)">
+        </label>
+        <label class="cc-field">
+          <span>Input $ per 1M tokens</span>
+          <input type="number" min="0" step="0.01" id="cc-claude-in" placeholder="3.00">
+        </label>
+        <label class="cc-field">
+          <span>Output $ per 1M tokens</span>
+          <input type="number" min="0" step="0.01" id="cc-claude-out" placeholder="15.00">
+        </label>
+      </div>
+      <div class="cc-effective" id="cc-claude-effective"></div>
+    </div>
+
+    <!-- Groq -->
+    <div class="cc-card">
+      <div class="cc-card-head">
+        <span class="cc-icon">⚡</span>
+        <div>
+          <div class="cc-card-title">Groq — KC Direct Answers</div>
+          <div class="cc-card-sub">Applies to every <code>KC_GROQ_ANSWERED</code> turn. Default: Llama 3.3 70B list price.</div>
+        </div>
+      </div>
+      <div class="cc-grid">
+        <label class="cc-field">
+          <span>Plan / Tier label</span>
+          <input type="text" id="cc-groq-tier" placeholder="e.g. Llama 3.3 70B (on-demand)">
+        </label>
+        <label class="cc-field">
+          <span>Input $ per 1M tokens</span>
+          <input type="number" min="0" step="0.01" id="cc-groq-in" placeholder="0.59">
+        </label>
+        <label class="cc-field">
+          <span>Output $ per 1M tokens</span>
+          <input type="number" min="0" step="0.01" id="cc-groq-out" placeholder="0.79">
+        </label>
+      </div>
+      <div class="cc-effective" id="cc-groq-effective"></div>
+    </div>
+
+    <!-- ElevenLabs -->
+    <div class="cc-card">
+      <div class="cc-card-head">
+        <span class="cc-icon">🔊</span>
+        <div>
+          <div class="cc-card-title">ElevenLabs — Text-to-Speech</div>
+          <div class="cc-card-sub">Applies to every <code>ELEVENLABS_TTS_CHARS</code> write. Default: Turbo v2.5 list price.</div>
+        </div>
+      </div>
+      <div class="cc-grid">
+        <label class="cc-field">
+          <span>Plan / Tier label</span>
+          <input type="text" id="cc-el-tier" placeholder="e.g. Turbo v2.5 (Creator plan)">
+        </label>
+        <label class="cc-field">
+          <span>$ per 1,000 chars</span>
+          <input type="number" min="0" step="0.01" id="cc-el-perk" placeholder="0.30">
+        </label>
+        <div></div>
+      </div>
+      <div class="cc-effective" id="cc-el-effective"></div>
+    </div>
+
+    <!-- Deepgram + Twilio (not yet in cost rollup, stored for phase 2) -->
+    <div class="cc-card cc-card-muted">
+      <div class="cc-card-head">
+        <span class="cc-icon">🎙️</span>
+        <div>
+          <div class="cc-card-title">Deepgram (STT) &amp; Twilio (Voice)</div>
+          <div class="cc-card-sub">Stored now, included in rollup in phase 2 (per-minute metering).</div>
+        </div>
+      </div>
+      <div class="cc-grid">
+        <label class="cc-field">
+          <span>Deepgram tier</span>
+          <input type="text" id="cc-dg-tier" placeholder="Nova-2 streaming">
+        </label>
+        <label class="cc-field">
+          <span>Deepgram $ / minute</span>
+          <input type="number" min="0" step="0.0001" id="cc-dg-perm" placeholder="0.0043">
+        </label>
+        <div></div>
+        <label class="cc-field">
+          <span>Twilio tier</span>
+          <input type="text" id="cc-tw-tier" placeholder="Voice">
+        </label>
+        <label class="cc-field">
+          <span>Twilio $ / minute</span>
+          <input type="number" min="0" step="0.0001" id="cc-tw-perm" placeholder="0.0085">
+        </label>
+        <div></div>
+      </div>
+    </div>
+
+    <div class="cc-card">
+      <div class="cc-card-head">
+        <span class="cc-icon">📝</span>
+        <div>
+          <div class="cc-card-title">Notes</div>
+          <div class="cc-card-sub">Contract reference, negotiated plan, rate review date, etc.</div>
+        </div>
+      </div>
+      <textarea id="cc-notes" rows="3" class="cc-textarea" placeholder="e.g. Q2 2026 enterprise contract #A-1138 — renegotiate July"></textarea>
+    </div>
+
+    <p style="margin-top:14px; color:#94a3b8; font-size:0.75rem;">
+      Hierarchy: <code>company.costConfig</code> → env var → hardcoded list price.
+      Any field left blank or zero falls through to the next tier. Rates take effect
+      immediately on new call turns — no restart needed.
+    </p>
+  </div>
+</div>
+
+<style>
+  .cc-card        { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px 20px; margin-bottom:14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .cc-card-muted  { background:#f8fafc; }
+  .cc-card-head   { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .cc-icon        { font-size:1.5rem; }
+  .cc-card-title  { font-weight:700; font-size:1rem; color:#0f172a; }
+  .cc-card-sub    { color:#64748b; font-size:0.8125rem; margin-top:2px; }
+  .cc-grid        { display:grid; grid-template-columns: 2fr 1fr 1fr; gap:12px; }
+  .cc-field       { display:flex; flex-direction:column; gap:4px; font-size:0.8125rem; color:#334155; }
+  .cc-field input { padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.875rem; }
+  .cc-field input:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+  .cc-textarea    { width:100%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.875rem; font-family:inherit; resize:vertical; }
+  .cc-effective   { margin-top:10px; font-size:0.75rem; color:#64748b; }
+  .cc-chip        { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+  .cc-chip-muted  { background:#e2e8f0; color:#475569; }
+  .cc-chip-co     { background:#dcfce7; color:#166534; }   /* company override */
+  .cc-chip-env    { background:#dbeafe; color:#1e40af; }
+  .cc-chip-def    { background:#fef3c7; color:#92400e; }
+  .cc-status      { padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.875rem; }
+  .cc-status.ok   { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .cc-status.err  { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+</style>
+
 <!-- ── Toast container ────────────────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -2910,7 +3087,7 @@
 // sub-commits C.3-C.5.
 // ═════════════════════════════════════════════════════════════════════════════
 (function initAgentStudioTabs() {
-  const VALID_TABS = ['knowledge', 'behavior', 'intake', 'model', 'prompt'];
+  const VALID_TABS = ['knowledge', 'behavior', 'intake', 'model', 'prompt', 'cost'];
 
   function activateTab(tabId) {
     if (!VALID_TABS.includes(tabId)) tabId = 'knowledge';
@@ -7150,6 +7327,156 @@ window.addEventListener('message', e => {
     if (!S.companyId) return;
     wire();
     renderPreview();
+  });
+})();
+
+// ═════════════════════════════════════════════════════════════════════════════
+// COST & BILLING TAB CONTROLLER (Commit 2, April 2026)
+// Loads & saves per-company cost overrides. Shows effective rate + source tag
+// (company / env / default) so admins can see which tier is active.
+// ═════════════════════════════════════════════════════════════════════════════
+(function initCostBillingTab() {
+  let loaded   = false;
+  let inflight = false;
+
+  const $ = id => document.getElementById(id);
+
+  function baseUrl() {
+    return `/api/admin/agent2/company/${S.companyId}/cost-config`;
+  }
+
+  async function authFetch(url, opts = {}) {
+    const token = localStorage.getItem('authToken') || '';
+    const headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const res = await fetch(url, { ...opts, headers });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  }
+
+  function fmt(n, decimals = 4) {
+    if (n === null || n === undefined) return '—';
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '—';
+    return v.toFixed(decimals).replace(/\.?0+$/, '') || '0';
+  }
+
+  function setStatus(msg, ok) {
+    const el = $('cc-status');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.textContent = msg;
+    el.className   = 'cc-status ' + (ok ? 'ok' : 'err');
+    el.style.display = 'block';
+    if (ok) setTimeout(() => { el.style.display = 'none'; }, 3500);
+  }
+
+  function sourceChip(src) {
+    if (src === 'company') return '<span class="cc-chip cc-chip-co">company override</span>';
+    if (src === 'env')     return '<span class="cc-chip cc-chip-env">env var</span>';
+    return '<span class="cc-chip cc-chip-def">list-price default</span>';
+  }
+
+  function applyEffectiveRow(id, html) {
+    const el = $(id);
+    if (el) el.innerHTML = html;
+  }
+
+  async function load() {
+    if (!S.companyId) return;
+    try {
+      setStatus('Loading cost config…', true);
+      const data = await authFetch(baseUrl(), { method: 'GET' });
+      setStatus('', true);
+
+      const o = data.overrides || {};
+      const e = data.effective || {};
+
+      // fill input fields with RAW overrides (not effective — so user sees what's stored)
+      $('cc-claude-tier').value = o.claude?.tier    ?? '';
+      $('cc-claude-in'  ).value = o.claude?.inPerM  ?? '';
+      $('cc-claude-out' ).value = o.claude?.outPerM ?? '';
+      $('cc-groq-tier'  ).value = o.groq?.tier      ?? '';
+      $('cc-groq-in'    ).value = o.groq?.inPerM    ?? '';
+      $('cc-groq-out'   ).value = o.groq?.outPerM   ?? '';
+      $('cc-el-tier'    ).value = o.elevenlabs?.tier      ?? '';
+      $('cc-el-perk'    ).value = o.elevenlabs?.perKChars ?? '';
+      $('cc-dg-tier'    ).value = o.deepgram?.tier   ?? '';
+      $('cc-dg-perm'    ).value = o.deepgram?.perMin ?? '';
+      $('cc-tw-tier'    ).value = o.twilio?.tier     ?? '';
+      $('cc-tw-perm'    ).value = o.twilio?.perMin   ?? '';
+      $('cc-notes'      ).value = o.notes ?? '';
+
+      // Effective-row footers
+      applyEffectiveRow('cc-claude-effective',
+        `Effective: <strong>${e.claude?.tier || '—'}</strong> · in $${fmt(e.claude?.inPerM, 2)}/M · out $${fmt(e.claude?.outPerM, 2)}/M`);
+      applyEffectiveRow('cc-groq-effective',
+        `Effective: <strong>${e.groq?.tier || '—'}</strong> · in $${fmt(e.groq?.inPerM, 2)}/M · out $${fmt(e.groq?.outPerM, 2)}/M`);
+      applyEffectiveRow('cc-el-effective',
+        `Effective: <strong>${e.elevenlabs?.tier || '—'}</strong> · $${fmt(e.elevenlabs?.perKChars, 2)}/1k chars`);
+
+      $('cc-source-chip').outerHTML = `<span id="cc-source-chip">${sourceChip(e._source)}</span>`;
+
+      loaded = true;
+    } catch (err) {
+      console.error('[COST_CONFIG] load failed', err);
+      setStatus(`Failed to load: ${err.message}`, false);
+    }
+  }
+
+  async function save() {
+    if (!S.companyId || inflight) return;
+    inflight = true;
+    try {
+      setStatus('Saving…', true);
+      const payload = {
+        claude: {
+          tier:    $('cc-claude-tier').value || null,
+          inPerM:  $('cc-claude-in').value === '' ? null : Number($('cc-claude-in').value),
+          outPerM: $('cc-claude-out').value === '' ? null : Number($('cc-claude-out').value),
+        },
+        groq: {
+          tier:    $('cc-groq-tier').value || null,
+          inPerM:  $('cc-groq-in').value === '' ? null : Number($('cc-groq-in').value),
+          outPerM: $('cc-groq-out').value === '' ? null : Number($('cc-groq-out').value),
+        },
+        elevenlabs: {
+          tier:      $('cc-el-tier').value || null,
+          perKChars: $('cc-el-perk').value === '' ? null : Number($('cc-el-perk').value),
+        },
+        deepgram: {
+          tier:   $('cc-dg-tier').value || null,
+          perMin: $('cc-dg-perm').value === '' ? null : Number($('cc-dg-perm').value),
+        },
+        twilio: {
+          tier:   $('cc-tw-tier').value || null,
+          perMin: $('cc-tw-perm').value === '' ? null : Number($('cc-tw-perm').value),
+        },
+        notes: $('cc-notes').value || null,
+      };
+
+      await authFetch(baseUrl(), { method: 'PUT', body: JSON.stringify(payload) });
+      setStatus('Saved. Rates take effect on next call turn.', true);
+      await load();
+    } catch (err) {
+      console.error('[COST_CONFIG] save failed', err);
+      setStatus(`Save failed: ${err.message}`, false);
+    } finally {
+      inflight = false;
+    }
+  }
+
+  function wire() {
+    const saveBtn   = $('cc-save-btn');
+    const reloadBtn = $('cc-reload-btn');
+    if (saveBtn   && !saveBtn.dataset.wired)   { saveBtn.addEventListener('click', save);   saveBtn.dataset.wired = '1'; }
+    if (reloadBtn && !reloadBtn.dataset.wired) { reloadBtn.addEventListener('click', load); reloadBtn.dataset.wired = '1'; }
+  }
+
+  window.addEventListener('tab-activated', (e) => {
+    if (e.detail?.tab !== 'cost') return;
+    if (!S.companyId) return;
+    wire();
+    if (!loaded) load();
   });
 })();
 </script>

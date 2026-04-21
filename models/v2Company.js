@@ -6118,6 +6118,38 @@ const companySchema = new mongoose.Schema({
                 comment: 'Flag a call in Call Intelligence when KC no-match fallback fires more than N times in one call.'
             }
         }
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COST CONFIG — per-company LLM / TTS / STT / voice pricing overrides
+    // Commit 2 (2026-04-21): admin-configurable plan rates so the Call Intel
+    // Est. Cost card + drawer reflect each company's real contract pricing.
+    // Any field left null falls back to the corresponding env var default.
+    // ═══════════════════════════════════════════════════════════════════════
+    costConfig: {
+        claude: {
+            tier:    { type: String, default: null, comment: 'Display name, e.g. "Sonnet 4.5 Standard"' },
+            inPerM:  { type: Number, default: null, comment: 'USD per 1M input tokens  (env: KC_COST_CLAUDE_IN_PER_M, default 3.00)' },
+            outPerM: { type: Number, default: null, comment: 'USD per 1M output tokens (env: KC_COST_CLAUDE_OUT_PER_M, default 15.00)' }
+        },
+        groq: {
+            tier:    { type: String, default: null, comment: 'Display name, e.g. "Llama 3.3 70B Free" or "Dev tier"' },
+            inPerM:  { type: Number, default: null, comment: 'USD per 1M input tokens  (env: KC_COST_GROQ_IN_PER_M, default 0.59)' },
+            outPerM: { type: Number, default: null, comment: 'USD per 1M output tokens (env: KC_COST_GROQ_OUT_PER_M, default 0.79)' }
+        },
+        elevenlabs: {
+            tier:       { type: String, default: null, comment: 'Display name, e.g. "Creator" / "Pro" / "Starter"' },
+            perKChars:  { type: Number, default: null, comment: 'USD per 1k characters (env: KC_COST_ELEVENLABS_PER_K_CHARS, default 0.30)' }
+        },
+        deepgram: {
+            tier:    { type: String, default: null },
+            perMin:  { type: Number, default: null, comment: 'USD per minute of STT audio (not yet wired)' }
+        },
+        twilio: {
+            tier:    { type: String, default: null },
+            perMin:  { type: Number, default: null, comment: 'USD per minute of voice call (not yet wired)' }
+        },
+        notes: { type: String, default: null, comment: 'Admin-facing note (e.g. contract reference, renewal date)' }
     }
 
 }, { timestamps: true });

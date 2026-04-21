@@ -107,25 +107,27 @@ const CUE_MIN_FIELD_COUNT   = 3;  // At least 3 of 8 cue fields must be populate
 //   ElevenLabs Turbo v2.5: ~$0.30 / 1k chars  (approx; per-tier varies)
 // ============================================================================
 
-const COST_CONSTANTS = {
-  CLAUDE_SONNET_IN_PER_M:   parseFloat(process.env.KC_COST_CLAUDE_IN_PER_M)  || 3.00,
-  CLAUDE_SONNET_OUT_PER_M:  parseFloat(process.env.KC_COST_CLAUDE_OUT_PER_M) || 15.00,
-  GROQ_LLAMA_IN_PER_M:      parseFloat(process.env.KC_COST_GROQ_IN_PER_M)    || 0.59,
-  GROQ_LLAMA_OUT_PER_M:     parseFloat(process.env.KC_COST_GROQ_OUT_PER_M)   || 0.79,
-  ELEVENLABS_PER_1K_CHARS:  parseFloat(process.env.KC_COST_ELEVENLABS_PER_1K) || 0.30,
-};
+// ── Per-company rates (Commit 2, 2026-04-21) ────────────────────────────────
+// Rates now resolved via services/costRates.js which honors
+// company.costConfig overrides → env var → hardcoded list price default.
+// The helper caches nothing; resolution is a cheap pure function.
+const costRates = require('../../costRates');
 
 /**
  * _computeClaudeCost — derive $ from tokensUsed shape { input, output }.
  * Returns { inputUsd, outputUsd, totalUsd } rounded to 6 decimals, or null
  * if tokensUsed is malformed. Cheap: two multiplications per call.
+ *
+ * @param {object}      tokensUsed  — { input, output }
+ * @param {object|null} company     — company doc (for per-company rate override)
  */
-function _computeClaudeCost(tokensUsed) {
+function _computeClaudeCost(tokensUsed, company) {
   if (!tokensUsed || typeof tokensUsed.input !== 'number' || typeof tokensUsed.output !== 'number') {
     return null;
   }
-  const inUsd  = (tokensUsed.input  / 1_000_000) * COST_CONSTANTS.CLAUDE_SONNET_IN_PER_M;
-  const outUsd = (tokensUsed.output / 1_000_000) * COST_CONSTANTS.CLAUDE_SONNET_OUT_PER_M;
+  const r = costRates.getRates(company).claude;
+  const inUsd  = (tokensUsed.input  / 1_000_000) * r.inPerM;
+  const outUsd = (tokensUsed.output / 1_000_000) * r.outPerM;
   return {
     inputTokens:  tokensUsed.input,
     outputTokens: tokensUsed.output,
@@ -133,6 +135,7 @@ function _computeClaudeCost(tokensUsed) {
     outputUsd:    Math.round(outUsd * 1_000_000) / 1_000_000,
     totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
     model:        'claude-sonnet-4-5',
+    tier:         r.tier,
   };
 }
 
@@ -140,14 +143,18 @@ function _computeClaudeCost(tokensUsed) {
  * _computeGroqCost — derive $ from tokensUsed shape { input, output } using
  * Groq llama-3.3-70b pricing. Pass 2a — used for KC Groq formatter calls.
  * Returns null when tokensUsed is unavailable (e.g., Groq dropped include_usage).
+ *
+ * @param {object}      tokensUsed  — { input, output }
+ * @param {object|null} company     — company doc (for per-company rate override)
  */
-function _computeGroqCost(tokensUsed) {
+function _computeGroqCost(tokensUsed, company) {
   if (!tokensUsed || typeof tokensUsed.input !== 'number' || typeof tokensUsed.output !== 'number') {
     return null;
   }
   if (tokensUsed.input === 0 && tokensUsed.output === 0) return null; // no usage data
-  const inUsd  = (tokensUsed.input  / 1_000_000) * COST_CONSTANTS.GROQ_LLAMA_IN_PER_M;
-  const outUsd = (tokensUsed.output / 1_000_000) * COST_CONSTANTS.GROQ_LLAMA_OUT_PER_M;
+  const r = costRates.getRates(company).groq;
+  const inUsd  = (tokensUsed.input  / 1_000_000) * r.inPerM;
+  const outUsd = (tokensUsed.output / 1_000_000) * r.outPerM;
   return {
     inputTokens:  tokensUsed.input,
     outputTokens: tokensUsed.output,
@@ -155,6 +162,7 @@ function _computeGroqCost(tokensUsed) {
     outputUsd:    Math.round(outUsd * 1_000_000) / 1_000_000,
     totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
     model:        'llama-3.3-70b-versatile',
+    tier:         r.tier,
   };
 }
 
@@ -2511,7 +2519,7 @@ async function _handlePrequalResponse({
   // Previously only Claude fallback cost was tracked (Phase A.4); now every
   // Groq formatter call contributes to the per-call cost rollup too.
   {
-    const _groqCost = _computeGroqCost(kcResult.tokensUsed);
+    const _groqCost = _computeGroqCost(kcResult.tokensUsed, company);
     _writeDiscoveryNotes(companyId, callSid, {
       qaLog: [{
         type:            'KC_GROQ_ANSWERED',
@@ -2888,7 +2896,7 @@ async function _handleKCMatch({
   // This is the primary Groq answer path. Every KC direct answer contributes
   // to the per-call cost rollup.
   {
-    const _groqCost = _computeGroqCost(kcResult.tokensUsed);
+    const _groqCost = _computeGroqCost(kcResult.tokensUsed, company);
     _writeDiscoveryNotes(companyId, callSid, {
       qaLog: [{
         type:            'KC_GROQ_ANSWERED',
@@ -3323,7 +3331,7 @@ async function _handleLLMFallback({
     // Phase A.4 — cost tracking. Every LLM fallback = real $. Admin
     // needs per-turn $ to compute weekly/monthly spend from qaLog alone
     // and prioritize which UAP misses to fix (highest $ = highest ROI).
-    const _cost = _computeClaudeCost(llmResult.tokensUsed);
+    const _cost = _computeClaudeCost(llmResult.tokensUsed, company);
 
     _writeDiscoveryNotes(companyId, callSid, {
       qaLog: [{
