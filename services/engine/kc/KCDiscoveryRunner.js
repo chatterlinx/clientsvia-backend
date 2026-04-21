@@ -1632,6 +1632,13 @@ class KCDiscoveryRunner {
     // against section.callerPhrases[].embedding + section.contentEmbedding.
     // Only fires if OPENAI_API_KEY is set. Falls through to Gate 3 on miss.
     // ══════════════════════════════════════════════════════════════════════════
+    // ──────────────────────────────────────────────────────────────────────
+    // semanticDiagnostic — outer-scope snapshot of GATE 2.8 for downstream
+    // qaLog enrichment (UAP_MISS_KEYWORD_RESCUED, KC_LLM_FALLBACK).
+    // Null when GATE 2.8 never ran (earlier gate resolved match).
+    // ──────────────────────────────────────────────────────────────────────
+    let semanticDiagnostic = null;
+
     if (!match) {
       try {
         const SemanticMatchService = require('./SemanticMatchService');
@@ -1647,9 +1654,38 @@ class KCDiscoveryRunner {
           ? embContainers.filter(c => !rejectedContainerIds.has(String(c._id)))
           : embContainers;
 
-        const semanticResult = await SemanticMatchService.findBestSection(
+        // ⚠️ CHANGED (Phase A.2): use diagnostic variant so we can emit
+        // UAP_SEMANTIC_MISS with the best-below-threshold score. Accepted
+        // match is at .match, closest-miss candidate at .bestBelowThreshold.
+        const semanticDiag = await SemanticMatchService.findBestSectionDiagnostic(
           companyId, userInput, scorableEmbContainers
         );
+
+        const semanticResult = semanticDiag?.match || null;
+
+        // Capture diagnostic for downstream events
+        semanticDiagnostic = semanticDiag ? {
+          ran:       true,
+          threshold: semanticDiag.threshold,
+          accepted:  semanticResult ? {
+            containerId:  String(semanticResult.container._id),
+            kcId:         semanticResult.container.kcId || null,
+            sectionIdx:   semanticResult.sectionIdx,
+            sectionLabel: semanticResult.section?.label || null,
+            similarity:   Math.round(semanticResult.similarity * 1000) / 1000,
+            matchSource:  semanticResult.matchSource,
+          } : null,
+          bestBelow: semanticDiag.bestBelowThreshold ? {
+            containerId:   String(semanticDiag.bestBelowThreshold.container._id),
+            containerTitle: semanticDiag.bestBelowThreshold.container.title,
+            kcId:          semanticDiag.bestBelowThreshold.container.kcId || null,
+            sectionIdx:    semanticDiag.bestBelowThreshold.sectionIdx,
+            sectionLabel:  semanticDiag.bestBelowThreshold.section?.label || null,
+            similarity:    Math.round(semanticDiag.bestBelowThreshold.similarity * 1000) / 1000,
+            matchSource:   semanticDiag.bestBelowThreshold.matchSource,
+            matchedPhrase: semanticDiag.bestBelowThreshold.matchedPhrase || null,
+          } : null,
+        } : { ran: false, reason: 'OPENAI_UNAVAILABLE' };
 
         if (semanticResult) {
           // Hydrate the full container from our original loaded list
@@ -1681,11 +1717,34 @@ class KCDiscoveryRunner {
               similarity:     semanticResult.similarity.toFixed(3),
             });
           }
+        } else if (semanticDiagnostic?.bestBelow) {
+          // ── NEW (Phase A.2) — emit UAP_SEMANTIC_MISS qaLog ──
+          // Below threshold but *something* was close. Admin signal:
+          // "tune this content / add this phrase as a callerPhrase".
+          _writeDiscoveryNotes(companyId, callSid, {
+            qaLog: [{
+              type:           'UAP_SEMANTIC_MISS',
+              turn:           turn ?? 0,
+              question:       userInput,
+              similarity:     semanticDiagnostic.bestBelow.similarity,
+              threshold:      semanticDiagnostic.threshold,
+              containerId:    semanticDiagnostic.bestBelow.containerId,
+              containerTitle: semanticDiagnostic.bestBelow.containerTitle,
+              kcId:           semanticDiagnostic.bestBelow.kcId,
+              sectionIdx:     semanticDiagnostic.bestBelow.sectionIdx,
+              sectionId:      buildSectionId(semanticDiagnostic.bestBelow.kcId, semanticDiagnostic.bestBelow.sectionIdx),
+              sectionLabel:   semanticDiagnostic.bestBelow.sectionLabel,
+              matchSource:    semanticDiagnostic.bestBelow.matchSource,
+              matchedPhrase:  semanticDiagnostic.bestBelow.matchedPhrase,
+              timestamp:      new Date().toISOString(),
+            }],
+          }).catch(() => {});
         }
       } catch (_semErr) {
         logger.warn('[KC_ENGINE] Semantic match error — falling through to keywords', {
           companyId, callSid, err: _semErr.message,
         });
+        semanticDiagnostic = { ran: false, reason: 'SEMANTIC_ERROR', err: _semErr.message };
       }
     }
 

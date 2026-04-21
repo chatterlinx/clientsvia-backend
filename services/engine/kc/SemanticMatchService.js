@@ -243,6 +243,104 @@ async function findBestSection(companyId, utterance, containers, precomputedVec 
   return best;
 }
 
+/**
+ * findBestSectionDiagnostic — Same as findBestSection, but also returns the
+ * best-scoring candidate even when it falls below MIN_SIMILARITY. Used by
+ * KCDiscoveryRunner to emit UAP_SEMANTIC_MISS qaLog events so admins can
+ * see "closest section and score" on misses (actionable signal: either
+ * tune the content, add a callerPhrase, or accept the gap).
+ *
+ * Return shape (always non-null when OPENAI available):
+ *   {
+ *     match:               best candidate above threshold (same shape as
+ *                          findBestSection return value), or null if none.
+ *     bestBelowThreshold:  best candidate seen regardless of threshold,
+ *                          or null if no embeddings existed to compare.
+ *     threshold:           MIN_SIMILARITY value in effect.
+ *   }
+ *
+ * Returns null entirely when OPENAI_API_KEY not set or input invalid.
+ */
+async function findBestSectionDiagnostic(companyId, utterance, containers, precomputedVec = null) {
+  if (!_getOpenAI()) return null;
+  if (!utterance?.trim() || !containers?.length) return null;
+
+  const utteranceVec = precomputedVec || await embedText(utterance);
+  if (!utteranceVec) return null;
+
+  let best           = null;  // above threshold
+  let bestAny        = null;  // best seen regardless of threshold
+
+  for (const container of containers) {
+    const sections = container.sections || [];
+    for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+      const section = sections[sIdx];
+      if (section.isActive === false) continue;
+
+      // A. Compare against each callerPhrase embedding
+      for (const phrase of (section.callerPhrases || [])) {
+        if (!phrase.embedding?.length) continue;
+        const sim = cosineSimilarity(utteranceVec, phrase.embedding);
+        const candidate = {
+          section,
+          sectionIdx:    sIdx,
+          container,
+          similarity:    sim,
+          matchSource:   'CALLER_PHRASE',
+          matchedPhrase: phrase.text,
+        };
+        if (!bestAny || sim > bestAny.similarity) bestAny = candidate;
+        if (sim >= CONFIG.MIN_SIMILARITY && (!best || sim > best.similarity)) {
+          best = candidate;
+        }
+      }
+
+      // B. Compare against section contentEmbedding
+      if (section.contentEmbedding?.length) {
+        const sim = cosineSimilarity(utteranceVec, section.contentEmbedding);
+        const candidate = {
+          section,
+          sectionIdx:    sIdx,
+          container,
+          similarity:    sim,
+          matchSource:   'CONTENT_EMBEDDING',
+          matchedPhrase: null,
+        };
+        if (!bestAny || sim > bestAny.similarity) bestAny = candidate;
+        if (sim >= CONFIG.MIN_SIMILARITY && (!best || sim > best.similarity)) {
+          best = candidate;
+        }
+      }
+    }
+  }
+
+  if (best) {
+    logger.info('[SemanticMatch] Match found', {
+      companyId,
+      containerId:  String(best.container._id),
+      sectionIdx:   best.sectionIdx,
+      sectionLabel: best.section.label,
+      similarity:   best.similarity.toFixed(3),
+      matchSource:  best.matchSource,
+    });
+  } else if (bestAny) {
+    logger.debug('[SemanticMatch] Below threshold', {
+      companyId,
+      containerId:  String(bestAny.container._id),
+      sectionIdx:   bestAny.sectionIdx,
+      sectionLabel: bestAny.section.label,
+      similarity:   bestAny.similarity.toFixed(3),
+      threshold:    CONFIG.MIN_SIMILARITY,
+    });
+  }
+
+  return {
+    match:              best,
+    bestBelowThreshold: (!best && bestAny) ? bestAny : null,
+    threshold:          CONFIG.MIN_SIMILARITY,
+  };
+}
+
 // ============================================================================
 // EMBEDDING HELPERS (called on container save)
 // ============================================================================
@@ -324,6 +422,7 @@ async function embedSectionContent(sections) {
 
 module.exports = {
   findBestSection,
+  findBestSectionDiagnostic,
   embedText,
   embedBatch,
   embedCallerPhrases,
