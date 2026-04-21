@@ -275,18 +275,26 @@ class Agent2GreetingInterceptor {
     };
 
     // ─────────────────────────────────────────────────────────────────────────
-    // GATE 0 (V124): ONE-SHOT GUARD — Never re-greet after first response
+    // GATE 0 (V125 — April 2026): ONE-SHOT GUARD — Never greet after turn 1
     // ─────────────────────────────────────────────────────────────────────────
-    // If we've already greeted the caller, block ALL greeting cards on
-    // subsequent turns. This prevents "hi/yeah/ok" filler from triggering
-    // the same greeting response repeatedly.
+    // Greetings are Turn-1-only by definition. A short filler utterance on any
+    // later turn ("like, I", "ok", "yeah") must NEVER re-fire the greeting
+    // engine — regardless of whether `greeted=true` was persisted.
+    //
+    // Why unconditional: Turn 1 has multiple exit paths (Turn1Engine, LAP
+    // intercept, intake gate, KC fast-path). Not all of them write
+    // `state.agent2.greeted = true` before returning TwiML. The original V124
+    // guard gated on `alreadyGreeted && turn > 1`, which left a hole whenever
+    // Turn 1 exited via LAP or a pre-state-machine path (observed on call
+    // CA04f553d9fabebc32b7edf487d04d720a where "like, I" matched GREETING on
+    // turn 4). Turn number is the authoritative signal — not a state flag.
     // ─────────────────────────────────────────────────────────────────────────
     const alreadyGreeted = agent2State.greeted === true;
     result.proof.alreadyGreeted = alreadyGreeted;
-    
-    if (alreadyGreeted && typeof turn === 'number' && turn > 1) {
+
+    if (typeof turn === 'number' && turn > 1) {
       result.proof.blockedReason = BLOCK_REASONS.ALREADY_GREETED;
-      logger.debug('[Agent2GreetingInterceptor] Blocked: ALREADY_GREETED (one-shot guard)', { turn });
+      logger.debug('[Agent2GreetingInterceptor] Blocked: turn > 1 (one-shot guard, unconditional)', { turn, alreadyGreeted });
       return result;
     }
 

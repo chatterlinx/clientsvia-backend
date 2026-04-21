@@ -2214,8 +2214,22 @@ function buildVitals(summary, convTurns, discoveryNotes) {
   };
 }
 
-function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
+function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, company) {
   const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
+
+  // Read the ACTUAL stored speechTimeout from company config (no more hardcoded strings)
+  // Priority: agent2.speechDetection.speechTimeout → voiceSettings.speechDetection.speechTimeout → 'auto' default
+  const speechDet =
+    company?.agent2?.speechDetection ||
+    company?.voiceSettings?.speechDetection ||
+    {};
+  const speechTimeoutVal = (speechDet.speechTimeout !== undefined && speechDet.speechTimeout !== null)
+    ? speechDet.speechTimeout
+    : 'auto';
+  // Numeric value used for EOS total estimate; fall back to Twilio's ~1.5s auto default
+  const speechTimeoutNum = typeof speechTimeoutVal === 'number'
+    ? speechTimeoutVal
+    : (parseFloat(speechTimeoutVal) || 1.5);
 
   function stg(id, name, group, status, detail) {
     return { id, name, group, status, detail: detail || null };
@@ -2258,19 +2272,29 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes) {
     // GROUP B — Call Receipt
     stg('stt_gather', 'STT Gather (Deepgram)', 'B',
       convTurns.some(t => t.callerText) ? 'pass' : 'unknown',
-      'speechTimeout=1.5s per turn'),
+      `speechTimeout=${speechTimeoutVal}s per turn (from UI)`),
     stg('eos_detection', 'End-of-Speech Detection', 'B',
       'info',
-      `~1.5s VAD overhead × ${convTurns.length} turns = ~${(convTurns.length * 1.5).toFixed(1)}s total`),
+      `~${speechTimeoutNum.toFixed(1)}s VAD overhead × ${convTurns.length} turns = ~${(convTurns.length * speechTimeoutNum).toFixed(1)}s total`),
     stg('scrabengine', 'ScrabEngine', 'B',
       'bypassed', 'Intentionally bypassed — Groq handles natively'),
 
     // GROUP C — Turn 1
     stg('llm_intake', 'Turn 1 Entity Extraction', 'C',
       discoveryNotes ? 'pass' : 'unknown',
-      discoveryNotes
-        ? `Extracted: ${[discoveryNotes.entities?.firstName && 'name', discoveryNotes.callReason && 'callReason', discoveryNotes.urgency && 'urgency'].filter(Boolean).join(', ') || 'minimal'}`
-        : 'No discovery data'),
+      (() => {
+        if (!discoveryNotes) return 'No discovery data';
+        const ent = discoveryNotes.entities || {};
+        const found = [];
+        if (ent.firstName)              found.push(`name=${ent.firstName}`);
+        if (discoveryNotes.callReason)  found.push(`callReason=${discoveryNotes.callReason}`);
+        if (discoveryNotes.urgency)     found.push(`urgency=${discoveryNotes.urgency}`);
+        if (ent.employeeMentioned)      found.push(`employee=${ent.employeeMentioned}`);
+        if (ent.callerType && ent.callerType !== 'CUSTOMER') found.push(`callerType=${ent.callerType}`);
+        if (ent.priorVisit === true)    found.push('priorVisit=true');
+        if (ent.sameDayRequested)       found.push('sameDayRequested=true');
+        return found.length ? `Extracted: ${found.join(', ')}` : 'Extracted: nothing captured';
+      })()),
     stg('response_gen', 'Turn 1 Response Generation', 'C',
       convTurns.length > 0 ? 'pass' : 'unknown',
       convTurns[0]?.agentText ? `Turn 1 delivered` : null),
@@ -3083,7 +3107,7 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
     engineHub: ehSummary,      // Engine Hub mode for this company — shown in sticky header
     story: buildStory(summary, discoveryNotes, convTurns, intelligence),
     vitals: buildVitals(summary, convTurns, discoveryNotes),
-    protocolAudit: buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes),
+    protocolAudit: buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, company),
     costBreakdown: buildCostBreakdown(summary, convTurns),
     turns: convTurns,
     kcAudit: buildKCAudit(convTurns, kcMap),
