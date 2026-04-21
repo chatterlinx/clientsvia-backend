@@ -53,6 +53,13 @@ const G = {
   advisorByIdx:  {},
   advisingIdx:   new Set(),
   hideResolved:  true,
+
+  // ── Phase C — deep-link filters (URL-driven, Call Intelligence entry-point)
+  // When set via ?filterContainer / ?filterSection / ?filterPhrase, only rows
+  // matching these stay visible. Banner shows active filter + "Clear" button.
+  deepLinkContainer: null,   // containerId string
+  deepLinkSection:   null,   // section label or index string
+  deepLinkPhrase:    null,   // raw phrase string (normalized compare)
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -66,12 +73,78 @@ const G = {
     return;
   }
 
+  // Phase C — hydrate deep-link filters from URL (Call Intelligence entry-point)
+  G.deepLinkContainer = params.get('filterContainer') || null;
+  G.deepLinkSection   = params.get('filterSection')   || null;
+  G.deepLinkPhrase    = params.get('filterPhrase')    || null;
+
   // Back button → services.html
   document.getElementById('btnBack').href =
     `/agent-console/services.html?companyId=${G.companyId}`;
 
   loadGaps();
 })();
+
+// Phase C — "Clear deep-link" button handler. Strips filter* params from
+// URL without reloading, then re-renders the table with full gap list.
+// Exposed globally so the banner's onclick= can call it.
+window.clearDeepLink = function() {
+  G.deepLinkContainer = null;
+  G.deepLinkSection   = null;
+  G.deepLinkPhrase    = null;
+  const url = new URL(location.href);
+  url.searchParams.delete('filterContainer');
+  url.searchParams.delete('filterSection');
+  url.searchParams.delete('filterPhrase');
+  history.replaceState({}, '', url.toString());
+  _renderTable();
+};
+
+// Phase C — case-insensitive phrase normalizer matching KCGapResolution
+// normalization (trim + lowercase + collapse whitespace). Used to compare
+// deepLinkPhrase against row.question without a network round-trip.
+function _normalizeForMatch(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Phase C — apply deep-link filters to a merged row. Returns true if the row
+// should remain visible. ANY of the three filters matching is sufficient —
+// Call Intelligence typically sets two (container + phrase) to pinpoint the
+// exact event, but we OR-match so partial data still produces useful results.
+function _matchesDeepLink(row) {
+  if (!G.deepLinkContainer && !G.deepLinkSection && !G.deepLinkPhrase) return true;
+
+  if (G.deepLinkContainer) {
+    const candidates = [
+      row.containerId,
+      row.rescuedContainerId,
+      row.suppressedContainerId,
+      ...(row.occurrences || []).map(o => o.containerId),
+    ].filter(Boolean).map(String);
+    if (candidates.includes(String(G.deepLinkContainer))) return true;
+  }
+
+  if (G.deepLinkSection) {
+    const target    = String(G.deepLinkSection);
+    const candidates = [
+      row.sectionId,
+      row.rescuedSectionId,
+      row.sectionLabel,
+      row.rescuedSection,
+    ].filter(Boolean).map(String);
+    if (candidates.includes(target)) return true;
+    // Allow partial match on numeric section index (e.g. "3" matches "abc-3-07")
+    if (candidates.some(c => c.endsWith(`-${target}`))) return true;
+  }
+
+  if (G.deepLinkPhrase) {
+    const norm = _normalizeForMatch(G.deepLinkPhrase);
+    if (_normalizeForMatch(row.question).includes(norm)) return true;
+    if ((row.occurrences || []).some(o => _normalizeForMatch(o.question).includes(norm))) return true;
+  }
+
+  return false;
+}
 
 // ── Fetch gaps from API ──────────────────────────────────────────────────────
 async function loadGaps() {
@@ -821,23 +894,41 @@ function _renderTable() {
     return;
   }
 
-  // Filter: optionally hide rows with an active resolution
+  // Filter pipeline:
+  //   1. Phase C deep-link — container/section/phrase from URL
+  //   2. Resolved filter — optional hide rows with active resolution
   const visibleRows = G.merged
     .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => _matchesDeepLink(row))
     .filter(({ row }) => {
       if (!G.hideResolved) return true;
       const res = _getResolution(row);
-      return !res;   // hide resolved / weak / regressed when toggle is ON
+      return !res;
     });
+
+  // Phase C — deep-link active banner (shown above table when URL filters on)
+  const deepLinkActive = !!(G.deepLinkContainer || G.deepLinkSection || G.deepLinkPhrase);
+  const bannerHtml = deepLinkActive ? (() => {
+    const parts = [];
+    if (G.deepLinkPhrase)    parts.push(`phrase <code>${_esc(G.deepLinkPhrase.slice(0, 60))}</code>`);
+    if (G.deepLinkContainer) parts.push(`container <code>${_esc(G.deepLinkContainer)}</code>`);
+    if (G.deepLinkSection)   parts.push(`section <code>${_esc(G.deepLinkSection)}</code>`);
+    return `
+      <div style="padding:10px 14px; margin-bottom:12px; background:#fef3c7; border-left:4px solid #d97706; border-radius:6px; display:flex; align-items:center; justify-content:space-between; font-size:13px;">
+        <span style="color:#78350f;"><strong>Deep-link filter active:</strong> ${parts.join(' &bull; ')} \u2014 showing ${visibleRows.length} of ${G.merged.length} rows</span>
+        <button onclick="clearDeepLink()" style="padding:6px 12px; background:#fff; border:1px solid #d97706; color:#78350f; border-radius:4px; cursor:pointer; font-size:12px;">Clear filter</button>
+      </div>`;
+  })() : '';
 
   if (!visibleRows.length) {
     const hiddenCount = G.merged.length;
-    document.getElementById('gapTable').innerHTML = `
+    const emptyMsg = deepLinkActive
+      ? `<h2>No matches</h2><p>No rows match the active deep-link filter.<br><button class="btn-act" onclick="clearDeepLink()">Clear filter</button></p>`
+      : `<h2>All clear!</h2><p>${hiddenCount} gap event${hiddenCount > 1 ? 's are' : ' is'} marked resolved.<br><button class="btn-act" onclick="toggleHideResolved()">Show resolved rows</button></p>`;
+    document.getElementById('gapTable').innerHTML = bannerHtml + `
       <div class="state-empty">
         <span class="icon">\u2728</span>
-        <h2>All clear!</h2>
-        <p>${hiddenCount} gap event${hiddenCount > 1 ? 's are' : ' is'} marked resolved.<br>
-        <button class="btn-act" onclick="toggleHideResolved()">Show resolved rows</button></p>
+        ${emptyMsg}
       </div>`;
     return;
   }
@@ -1082,7 +1173,7 @@ function _renderTable() {
   });
 
   html += '</tbody></table></div>';
-  document.getElementById('gapTable').innerHTML = html;
+  document.getElementById('gapTable').innerHTML = bannerHtml + html;
 }
 
 // ── Filter handlers ──────────────────────────────────────────────────────────
