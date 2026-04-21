@@ -708,6 +708,13 @@ function renderSectionTurnCoverage(turns, companyId) {
   let   elevenCharCount = 0;
   let   costClaudeReal  = 0, costElevenReal = 0, costGroqReal = 0;  // track how much is measured vs estimated
   let   costElevenEst   = 0, costGroqEst    = 0;
+  // Commit 1 — richer cost telemetry for the click-drawer
+  let   claudeTokIn = 0, claudeTokOut = 0, claudeCalls = 0;
+  let   groqTokIn   = 0, groqTokOut   = 0, groqCalls   = 0;
+  let   elevenCalls = 0;
+  let   preCachedCount = 0;       // number of turns that used pre-cached audio (free)
+  let   preCachedChars = 0;       // chars that WOULD have cost money but were pre-cached
+  const costRows     = [];        // per-turn breakdown: { turn, category, label, detail, usd, quality }
   const costUnknown = { stt: true, twilio: true }; // honestly flagged
   for (const { turn: t, cls } of agentItems) {
     // ── REAL data (Pass 2a/b/c) ─────────────────────────────────────────────
@@ -716,27 +723,52 @@ function renderSectionTurnCoverage(turns, companyId) {
       if (qc.claudeUsd > 0) { costClaudeUsd += qc.claudeUsd; costClaudeReal += qc.claudeUsd; }
       if (qc.groqUsd   > 0) { costGroqEstUsd += qc.groqUsd;  costGroqReal   += qc.groqUsd; }
       if (qc.elevenUsd > 0) { costElevenUsd += qc.elevenUsd; costElevenReal += qc.elevenUsd; elevenCharCount += (qc.elevenChars || 0); }
+      // Walk the breakdown[] for per-turn rows + token rollups
+      if (Array.isArray(qc.breakdown)) {
+        for (const b of qc.breakdown) {
+          if (b.type === 'claude') {
+            claudeCalls++;
+            costRows.push({ turn: t.turnNumber, category: 'claude', label: 'Claude', detail: `${b.source || 'fallback'} · ${b.model || 'claude-sonnet-4-5'}`, usd: b.usd, quality: 'real' });
+          } else if (b.type === 'groq') {
+            groqCalls++;
+            costRows.push({ turn: t.turnNumber, category: 'groq',   label: 'Groq',   detail: `${b.source || 'kc'} · ${b.model || 'llama-3.3-70b'}`, usd: b.usd, quality: 'real' });
+          } else if (b.type === 'elevenlabs') {
+            elevenCalls++;
+            costRows.push({ turn: t.turnNumber, category: 'elevenlabs', label: 'ElevenLabs TTS', detail: `${b.source || 'tts'} · ${b.chars || '?'} chars`, usd: b.usd, quality: 'real' });
+          }
+        }
+      }
     }
     // Backward compat: legacy qaEntry.cost (Phase A.4) when qaCosts not present
     if (!qc) {
       const usd = t.qaEntry?.cost?.usd;
-      if (typeof usd === 'number' && usd > 0) { costClaudeUsd += usd; costClaudeReal += usd; }
+      if (typeof usd === 'number' && usd > 0) {
+        costClaudeUsd += usd; costClaudeReal += usd; claudeCalls++;
+        costRows.push({ turn: t.turnNumber, category: 'claude', label: 'Claude', detail: 'legacy qaEntry.cost', usd, quality: 'real' });
+      }
     }
     // ── ESTIMATE fallbacks (only when no real data for that category) ──────
+    // Track pre-cached turns so the drawer can show "savings"
+    const isPreCached = cls.mode === 'uap-audio' || t.audioServed === true;
+    if (isPreCached && t.text) {
+      preCachedCount++;
+      preCachedChars += t.text.length;
+    }
     // ElevenLabs estimate — only when no real char count was logged for this turn
     const turnHasRealEleven = qc && qc.elevenUsd > 0;
-    const isPreCached = cls.mode === 'uap-audio' || t.audioServed === true;
     if (!turnHasRealEleven && !isPreCached && t.text) {
       const est = t.text.length * RATE_ELEVENLABS_PER_CHAR;
       elevenCharCount += t.text.length;
       costElevenUsd   += est;
       costElevenEst   += est;
+      costRows.push({ turn: t.turnNumber, category: 'elevenlabs', label: 'ElevenLabs TTS', detail: `~${t.text.length} chars (estimated from agent text)`, usd: est, quality: 'est' });
     }
     // Groq estimate — only when no real Groq cost was logged for this turn
     const turnHasRealGroq = qc && qc.groqUsd > 0;
     if (!turnHasRealGroq && (cls.mode === 'groq' || (cls.status === 'kc_hit' && !cls.mode))) {
       costGroqEstUsd += RATE_GROQ_PER_TURN_EST;
       costGroqEst    += RATE_GROQ_PER_TURN_EST;
+      costRows.push({ turn: t.turnNumber, category: 'groq', label: 'Groq', detail: '~500 tokens (estimated)', usd: RATE_GROQ_PER_TURN_EST, quality: 'est' });
     }
   }
   const costEstTotal = costClaudeUsd + costElevenUsd + costGroqEstUsd;
@@ -746,6 +778,8 @@ function renderSectionTurnCoverage(turns, companyId) {
   const qClaude = _mark(costClaudeReal, 0);
   const qEleven = _mark(costElevenReal, costElevenEst);
   const qGroq   = _mark(costGroqReal,   costGroqEst);
+  // Pre-cached savings — calculated at the current ElevenLabs rate
+  const preCachedSavings = preCachedChars * RATE_ELEVENLABS_PER_CHAR;
 
   // 3. Collapse consecutive script rows
   const collapsed = _collapseScriptRuns(agentItems);
@@ -827,13 +861,80 @@ function renderSectionTurnCoverage(turns, companyId) {
   // Pass 2d — mark each line with real ($) / est (~) / mixed (±) based on qaCosts data.
   const _tag = (q) => q === 'real' ? '$' : q === 'est' ? '~' : q === 'mixed' ? '±' : '—';
   const costTooltip = [
+    `Click for breakdown`,
     `Claude ${_tag(qClaude)}: ${fmtUsd(costClaudeUsd)}`,
-    `ElevenLabs TTS ${_tag(qEleven)} (${elevenCharCount} chars): ${fmtUsd(costElevenUsd)}`,
-    `Groq ${_tag(qGroq)}: ${fmtUsd(costGroqEstUsd)}`,
-    `STT (Deepgram/Twilio): not yet logged`,
-    `Twilio voice minutes: not yet logged`,
-    `Legend: $ measured · ~ estimated · ± partial`
+    `ElevenLabs ${_tag(qEleven)}: ${fmtUsd(costElevenUsd)}`,
+    `Groq ${_tag(qGroq)}: ${fmtUsd(costGroqEstUsd)}`
   ].join(' • ');
+
+  // Commit 1 — clickable cost drawer (full itemized breakdown, hidden by default)
+  const _costRowsHtml = costRows.length === 0
+    ? `<tr><td colspan="4" style="padding:10px;color:#64748b;font-style:italic;">No cost events logged for this call.</td></tr>`
+    : costRows
+        .sort((a, b) => a.turn - b.turn)
+        .map(r => `
+          <tr>
+            <td style="padding:6px 8px;color:#475569;">T${r.turn}</td>
+            <td style="padding:6px 8px;"><span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${r.category === 'claude' ? '#fee2e2' : r.category === 'groq' ? '#ede9fe' : r.category === 'elevenlabs' ? '#fef3c7' : '#f1f5f9'};color:${r.category === 'claude' ? '#991b1b' : r.category === 'groq' ? '#5b21b6' : r.category === 'elevenlabs' ? '#854d0e' : '#334155'};">${esc(r.label)}</span> ${r.quality === 'est' ? '<span style="font-size:10px;color:#94a3b8;">~est</span>' : ''}</td>
+            <td style="padding:6px 8px;color:#475569;font-size:12px;">${esc(r.detail)}</td>
+            <td style="padding:6px 8px;text-align:right;font-family:ui-monospace,monospace;">${fmtUsd(r.usd)}</td>
+          </tr>`)
+        .join('');
+
+  const costDrawerHtml = `
+    <div id="tc-cost-drawer" style="display:none;margin:12px 0;padding:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <strong style="color:#78350f;font-size:14px;">💰 Cost Breakdown</strong>
+        <button onclick="toggleCostDrawer()" style="background:transparent;border:1px solid #d6a35a;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;color:#78350f;">Close</button>
+      </div>
+
+      <!-- Per-category summary -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px;">
+        <div style="background:#fff;padding:10px;border-left:3px solid #dc2626;border-radius:4px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Claude (LLM Agent)</div>
+          <div style="font-size:18px;font-weight:600;color:#991b1b;">${fmtUsd(costClaudeUsd)} <span style="font-size:10px;color:#94a3b8;">${_tag(qClaude)}</span></div>
+          <div style="font-size:11px;color:#475569;margin-top:4px;">${claudeCalls} call${claudeCalls === 1 ? '' : 's'} · ${claudeCalls > 0 ? 'rate: $3.00/M in, $15/M out' : 'no calls'}</div>
+        </div>
+        <div style="background:#fff;padding:10px;border-left:3px solid #7c3aed;border-radius:4px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Groq (KC answers)</div>
+          <div style="font-size:18px;font-weight:600;color:#5b21b6;">${fmtUsd(costGroqEstUsd)} <span style="font-size:10px;color:#94a3b8;">${_tag(qGroq)}</span></div>
+          <div style="font-size:11px;color:#475569;margin-top:4px;">${groqCalls} call${groqCalls === 1 ? '' : 's'} · ${groqCalls > 0 ? 'rate: $0.59/M in, $0.79/M out' : 'no calls'}</div>
+        </div>
+        <div style="background:#fff;padding:10px;border-left:3px solid #ca8a04;border-radius:4px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;">ElevenLabs TTS</div>
+          <div style="font-size:18px;font-weight:600;color:#854d0e;">${fmtUsd(costElevenUsd)} <span style="font-size:10px;color:#94a3b8;">${_tag(qEleven)}</span></div>
+          <div style="font-size:11px;color:#475569;margin-top:4px;">${elevenCharCount} chars × $0.30/1k · ${elevenCalls || (costElevenEst > 0 ? 'est' : '0')} synth${preCachedCount > 0 ? ` <span style="color:#16a34a;">· saved ${fmtUsd(preCachedSavings)} (${preCachedCount} pre-cached)</span>` : ''}</div>
+        </div>
+        <div style="background:#fff;padding:10px;border-left:3px solid #94a3b8;border-radius:4px;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;">STT · Twilio</div>
+          <div style="font-size:18px;font-weight:600;color:#64748b;">—</div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:4px;">not yet logged — coming next</div>
+        </div>
+      </div>
+
+      <!-- Per-turn itemization -->
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-size:12px;color:#78350f;padding:6px 0;">Per-turn itemization (${costRows.length} event${costRows.length === 1 ? '' : 's'})</summary>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px;background:#fff;border-radius:4px;overflow:hidden;">
+          <thead>
+            <tr style="background:#fef3c7;color:#78350f;">
+              <th style="padding:6px 8px;text-align:left;width:50px;">Turn</th>
+              <th style="padding:6px 8px;text-align:left;width:160px;">Category</th>
+              <th style="padding:6px 8px;text-align:left;">Detail</th>
+              <th style="padding:6px 8px;text-align:right;width:100px;">Cost</th>
+            </tr>
+          </thead>
+          <tbody>${_costRowsHtml}</tbody>
+        </table>
+      </details>
+
+      <!-- Rates note -->
+      <div style="margin-top:10px;padding:8px;background:#fef3c7;border-radius:4px;font-size:11px;color:#78350f;">
+        <strong>Rates used:</strong> Claude Sonnet 4.5 $3/$15 per M · Groq Llama 3.3 70B $0.59/$0.79 per M · ElevenLabs Turbo v2.5 $0.30 per 1k chars.
+        Configure per-company rates in <em>services.html → Cost &amp; Billing tab</em> (coming next).
+        Today rates are env vars: <code>KC_COST_CLAUDE_IN_PER_M</code>, <code>KC_COST_GROQ_IN_PER_M</code>, <code>KC_COST_ELEVENLABS_PER_K_CHARS</code>.
+      </div>
+    </div>`;
 
   const bodyHtml = `
     <div class="tc-summary">
@@ -846,10 +947,11 @@ function renderSectionTurnCoverage(turns, companyId) {
       </div>
       <div class="tc-stat tc-stat-script"><span class="tc-stat-val">${scripts}</span><span class="tc-stat-lbl">Scripts</span></div>
       <div class="tc-stat ${coverageClass}"><span class="tc-stat-val">${coveragePct}%</span><span class="tc-stat-lbl">Coverage</span></div>
-      <div class="tc-stat tc-stat-cost" title="${esc(costTooltip)}" style="background:linear-gradient(180deg,#fefce8 0%,#fef3c7 100%);border-left:3px solid #ca8a04;">
-        <span class="tc-stat-val" style="color:#854d0e;">${fmtUsd(costEstTotal)}</span><span class="tc-stat-lbl">Est. Cost</span>
+      <div class="tc-stat tc-stat-cost" onclick="toggleCostDrawer()" title="${esc(costTooltip)}" style="background:linear-gradient(180deg,#fefce8 0%,#fef3c7 100%);border-left:3px solid #ca8a04;cursor:pointer;" role="button" tabindex="0">
+        <span class="tc-stat-val" style="color:#854d0e;">${fmtUsd(costEstTotal)}</span><span class="tc-stat-lbl">Est. Cost ▾</span>
       </div>
     </div>
+    ${costDrawerHtml}
     <table class="tc-table">
       <thead>
         <tr><th style="width:60px;">#</th><th style="width:260px;">Source</th><th>Content</th><th style="width:240px;">Fix</th></tr>
@@ -872,6 +974,13 @@ function renderSectionTurnCoverage(turns, companyId) {
   return sectionWrap('sec-coverage', '2', 'Turn Coverage',
     `${coveragePct}% covered`, bodyHtml);
 }
+
+// Commit 1 — click handler for the Est. Cost drawer
+window.toggleCostDrawer = function() {
+  const drawer = document.getElementById('tc-cost-drawer');
+  if (!drawer) return;
+  drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
+};
 
 // Click handler for collapsed script ranges
 window.toggleTcRange = function(rangeId, rowEl) {
