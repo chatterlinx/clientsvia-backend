@@ -250,15 +250,28 @@ function trunc(s, n = 140) {
       const phrases = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
       const anchors = Array.isArray(s.anchorWords) ? s.anchorWords : [];
       for (const p of phrases) {
-        const phraseText = typeof p === 'string' ? p : (p && p.phrase) || '';
+        // callerPhraseSchema field is `text`, NOT `phrase` — evidence from
+        // live debug probe: callerPhrases[0] keys = text,addedAt,anchorWords,
+        // score,embedding. Keep `phrase` as secondary fallback in case legacy
+        // data drifted, and `text` as primary.
+        const phraseText =
+          typeof p === 'string'
+            ? p
+            : (p && (p.text || p.phrase)) || '';
         if (!phraseText) continue;
+        // Anchor words live on the PHRASE, not the section (per-phrase anchor
+        // words system, April 2026). Prefer phrase-level, fall back to
+        // section-level for any legacy rows.
+        const phraseAnchors = Array.isArray(p && p.anchorWords)
+          ? p.anchorWords
+          : anchors;
         flat.push({
           containerTitle: c.title,
           kcId:           c.kcId,
           sectionIdx:     idx,
           sectionLabel:   s.label || '',
           phrase:         phraseText,
-          anchorWords:    anchors,
+          anchorWords:    phraseAnchors,
           isActive:       c.isActive !== false,
           noAnchor:       !!c.noAnchor,
           overlap:        0, // computed next
