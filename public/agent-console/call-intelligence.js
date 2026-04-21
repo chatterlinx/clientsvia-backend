@@ -702,28 +702,50 @@ function renderSectionTurnCoverage(turns, companyId) {
   // Rate assumptions match COST_CONSTANTS in KCDiscoveryRunner.js (env-overridable server-side).
   const RATE_ELEVENLABS_PER_CHAR = 0.30 / 1000;   // $0.30 per 1k chars
   const RATE_GROQ_PER_TURN_EST   = 0.00025;        // rough: ~500 tok × $0.79/M = $0.0004 — until real logging
-  let   costClaudeUsd   = 0;                       // known from qaEntry.cost
-  let   costElevenUsd   = 0;                       // estimated from agent turn text chars (non-pre-cached)
-  let   costGroqEstUsd  = 0;                       // estimated until Pass 2 backend logging
+  let   costClaudeUsd   = 0;                       // Phase A.4 + Pass 2b — real $ from qaEntry.cost + qaCosts.claudeUsd
+  let   costElevenUsd   = 0;                       // Pass 2c — real $ from qaCosts.elevenUsd (fallback: estimate)
+  let   costGroqEstUsd  = 0;                       // Pass 2a — real $ from qaCosts.groqUsd (fallback: estimate)
   let   elevenCharCount = 0;
+  let   costClaudeReal  = 0, costElevenReal = 0, costGroqReal = 0;  // track how much is measured vs estimated
+  let   costElevenEst   = 0, costGroqEst    = 0;
   const costUnknown = { stt: true, twilio: true }; // honestly flagged
   for (const { turn: t, cls } of agentItems) {
-    // Known: Claude $ per turn from Phase A.4 qaLog write
-    const usd = t.qaEntry?.cost?.usd;
-    if (typeof usd === 'number' && usd > 0) costClaudeUsd += usd;
-    // Estimated: ElevenLabs TTS by spoken char count — skip pre-cached UAP Audio turns
-    const isPreCached = cls.mode === 'uap-audio' || t.audioServed === true;
-    if (!isPreCached && t.text) {
-      elevenCharCount += t.text.length;
-      costElevenUsd   += t.text.length * RATE_ELEVENLABS_PER_CHAR;
+    // ── REAL data (Pass 2a/b/c) ─────────────────────────────────────────────
+    const qc = t.qaCosts;
+    if (qc) {
+      if (qc.claudeUsd > 0) { costClaudeUsd += qc.claudeUsd; costClaudeReal += qc.claudeUsd; }
+      if (qc.groqUsd   > 0) { costGroqEstUsd += qc.groqUsd;  costGroqReal   += qc.groqUsd; }
+      if (qc.elevenUsd > 0) { costElevenUsd += qc.elevenUsd; costElevenReal += qc.elevenUsd; elevenCharCount += (qc.elevenChars || 0); }
     }
-    // Estimated: Groq formatter calls — every 'groq' mode turn + legacy KC Digression (likely Groq)
-    if (cls.mode === 'groq' || (cls.status === 'kc_hit' && !cls.mode)) {
+    // Backward compat: legacy qaEntry.cost (Phase A.4) when qaCosts not present
+    if (!qc) {
+      const usd = t.qaEntry?.cost?.usd;
+      if (typeof usd === 'number' && usd > 0) { costClaudeUsd += usd; costClaudeReal += usd; }
+    }
+    // ── ESTIMATE fallbacks (only when no real data for that category) ──────
+    // ElevenLabs estimate — only when no real char count was logged for this turn
+    const turnHasRealEleven = qc && qc.elevenUsd > 0;
+    const isPreCached = cls.mode === 'uap-audio' || t.audioServed === true;
+    if (!turnHasRealEleven && !isPreCached && t.text) {
+      const est = t.text.length * RATE_ELEVENLABS_PER_CHAR;
+      elevenCharCount += t.text.length;
+      costElevenUsd   += est;
+      costElevenEst   += est;
+    }
+    // Groq estimate — only when no real Groq cost was logged for this turn
+    const turnHasRealGroq = qc && qc.groqUsd > 0;
+    if (!turnHasRealGroq && (cls.mode === 'groq' || (cls.status === 'kc_hit' && !cls.mode))) {
       costGroqEstUsd += RATE_GROQ_PER_TURN_EST;
+      costGroqEst    += RATE_GROQ_PER_TURN_EST;
     }
   }
   const costEstTotal = costClaudeUsd + costElevenUsd + costGroqEstUsd;
   const fmtUsd = (n) => n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(3)}`;
+  // Track measurement quality for the tooltip so admins can tell real vs estimate.
+  const _mark = (real, est) => (est > 0 && real === 0) ? 'est' : (real > 0 && est === 0) ? 'real' : (real > 0 && est > 0) ? 'mixed' : 'none';
+  const qClaude = _mark(costClaudeReal, 0);
+  const qEleven = _mark(costElevenReal, costElevenEst);
+  const qGroq   = _mark(costGroqReal,   costGroqEst);
 
   // 3. Collapse consecutive script rows
   const collapsed = _collapseScriptRuns(agentItems);
@@ -801,13 +823,16 @@ function renderSectionTurnCoverage(turns, companyId) {
   // 5. Summary bar + table
   //    KC-hit stat splits into UAP-text / UAP-audio / Groq so admins can see at
   //    a glance how much of each turn went through the expensive Groq formatter.
-  // Build cost tooltip (shown on hover of Est. Cost card)
+  // Build cost tooltip (shown on hover of Est. Cost card).
+  // Pass 2d — mark each line with real ($) / est (~) / mixed (±) based on qaCosts data.
+  const _tag = (q) => q === 'real' ? '$' : q === 'est' ? '~' : q === 'mixed' ? '±' : '—';
   const costTooltip = [
-    `Claude (known): ${fmtUsd(costClaudeUsd)}`,
-    `ElevenLabs TTS (est, ${elevenCharCount} chars): ${fmtUsd(costElevenUsd)}`,
-    `Groq (est, ${groqHits + agentItems.filter(x => x.cls.status === 'kc_hit' && !x.cls.mode).length} turns): ${fmtUsd(costGroqEstUsd)}`,
+    `Claude ${_tag(qClaude)}: ${fmtUsd(costClaudeUsd)}`,
+    `ElevenLabs TTS ${_tag(qEleven)} (${elevenCharCount} chars): ${fmtUsd(costElevenUsd)}`,
+    `Groq ${_tag(qGroq)}: ${fmtUsd(costGroqEstUsd)}`,
     `STT (Deepgram/Twilio): not yet logged`,
-    `Twilio voice minutes: not yet logged`
+    `Twilio voice minutes: not yet logged`,
+    `Legend: $ measured · ~ estimated · ± partial`
   ].join(' • ');
 
   const bodyHtml = `
@@ -837,9 +862,11 @@ function renderSectionTurnCoverage(turns, companyId) {
       <strong>🟣 Groq</strong> — KC content reshaped by Groq formatter (latency cost + variability).
       <strong>❌ LLM Agent</strong> — Claude <code>answer-from-kb</code> fallback (Turn 1 intake + mid-call KC misses).
       Turn 1 counts in the LLM AGENT stat (it's a real Claude call) but is excluded from Coverage %.
-      <strong>💰 Est. Cost</strong> — Claude $ known per turn (Phase A.4); ElevenLabs estimated from
-      spoken chars × $0.30/1k; Groq estimated until backend token logging lands; STT/Twilio not yet logged.
-      Hover the cost card for the full breakdown. KC misroute detection is a future addition.
+      <strong>💰 Est. Cost</strong> — Measured per-turn from qaLog:
+      Claude <code>$</code> (Phase A.4 + Pass 2b Turn 1 intake), Groq <code>$</code> (Pass 2a real token counts),
+      ElevenLabs <code>$</code> (Pass 2c real char counts per TTS call). STT/Twilio not yet logged.
+      Hover the cost card for per-category breakdown (<code>$</code> measured · <code>~</code> estimated · <code>±</code> partial).
+      Estimates fall back automatically for turns that pre-date the new logging events.
     </div>`;
 
   return sectionWrap('sec-coverage', '2', 'Turn Coverage',

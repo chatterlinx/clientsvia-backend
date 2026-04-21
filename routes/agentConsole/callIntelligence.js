@@ -2519,7 +2519,44 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       ? detectTurnFlags({ callerText: null, agentText: t.text }, kcCard, provPath, srcKey)
       : [];
 
-    const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === t.turnNumber) || null;
+    // Pass 2d — aggregate ALL qaLog entries for this turn, not just the first.
+    // Frontend uses `qaEntry` for the Why? panel (backward compat) and `qaCosts`
+    // for the per-turn cost rollup (Claude/Groq/ElevenLabs → Est. Cost card).
+    const qaEntriesForTurn = Array.isArray(discoveryNotes?.qaLog)
+      ? discoveryNotes.qaLog.filter(q => q.turn === t.turnNumber)
+      : [];
+    // Preserve original semantics: the first diagnostic entry is the "primary" qaEntry.
+    // Skip pure-cost events (ELEVENLABS_TTS_CHARS) so Why? panel still shows the real diag.
+    const qaEntry = qaEntriesForTurn.find(q => q.type !== 'ELEVENLABS_TTS_CHARS')
+      || qaEntriesForTurn[0]
+      || null;
+    // Aggregate cost data from every qaLog entry for the turn.
+    // Shape: { claudeUsd, groqUsd, elevenUsd, elevenChars, totalUsd, breakdown: [...] }
+    const qaCosts = (() => {
+      if (!qaEntriesForTurn.length) return null;
+      let claudeUsd = 0, groqUsd = 0, elevenUsd = 0, elevenChars = 0;
+      const breakdown = [];
+      for (const q of qaEntriesForTurn) {
+        const usd = q.cost?.usd;
+        if (typeof usd !== 'number' || usd <= 0) continue;
+        // Route by event type + model
+        if (q.type === 'ELEVENLABS_TTS_CHARS') {
+          elevenUsd  += usd;
+          elevenChars += (q.chars || q.cost?.chars || 0);
+          breakdown.push({ type: 'elevenlabs', source: q.source, chars: q.chars, usd });
+        } else if (q.provider === 'groq' || q.cost?.model?.includes('llama')) {
+          groqUsd += usd;
+          breakdown.push({ type: 'groq', source: q.source || q.type, model: q.cost?.model, usd });
+        } else {
+          // KC_LLM_FALLBACK, A2_LLM_INTAKE_TURN_1 (Claude), etc.
+          claudeUsd += usd;
+          breakdown.push({ type: 'claude', source: q.source || q.type, model: q.cost?.model, usd });
+        }
+      }
+      const totalUsd = claudeUsd + groqUsd + elevenUsd;
+      if (totalUsd <= 0) return null;
+      return { claudeUsd, groqUsd, elevenUsd, elevenChars, totalUsd, breakdown };
+    })();
 
     // Classify which engine actually produced this agent turn (UAP/Groq/LLMAgent split)
     const audioServed = audioServedByTurn.has(t.turnNumber)
@@ -2567,6 +2604,7 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       score:  typeof kcTrace.score === 'number' ? kcTrace.score : null,
       intent: kcTrace.intent || null,
       qaEntry,
+      qaCosts,  // Pass 2d — aggregated real cost breakdown for Est. Cost card
       flags
     });
   }
