@@ -2335,7 +2335,9 @@ router.post('/voice', async (req, res) => {
                 model_id: _vs.aiModel,
                 output_format: _vs.outputFormat,
                 optimize_streaming_latency: _vs.streamingLatency,
-                company
+                company,
+                callSid,
+                ttsSource: 'greeting_initial'
               });
 
               const ttsTime = Date.now() - ttsStartTime;
@@ -2425,7 +2427,9 @@ router.post('/voice', async (req, res) => {
             model_id: _vs2.aiModel,
             output_format: _vs2.outputFormat,
             optimize_streaming_latency: _vs2.streamingLatency,
-            company
+            company,
+            callSid,
+            ttsSource: 'greeting'
           });
 
           const ttsTime = Date.now() - ttsStartTime;
@@ -3222,7 +3226,9 @@ router.post('/handle-speech', async (req, res) => {
             model_id: _vs3.aiModel,
             output_format: _vs3.outputFormat,
             optimize_streaming_latency: _vs3.streamingLatency,
-            company
+            company,
+            callSid,
+            ttsSource: 'retry'
           });
 
           // Cache for next retry — same text, pays ElevenLabs once
@@ -3345,7 +3351,9 @@ router.post('/handle-speech', async (req, res) => {
             model_id: _vs4.aiModel,
             output_format: _vs4.outputFormat,
             optimize_streaming_latency: _vs4.streamingLatency,
-            company
+            company,
+            callSid,
+            ttsSource: 'cached_answer'
           });
           
           const audioKey = `audio:qa:${callSid}`;
@@ -3464,7 +3472,9 @@ router.post('/handle-speech', async (req, res) => {
           model_id: _vsLegacy.aiModel || _vsLegacy.modelId,
           output_format: _vsLegacy.outputFormat,
           optimize_streaming_latency: _vsLegacy.streamingLatency,
-          company
+          company,
+          callSid,
+          ttsSource: 'answer_legacy'
         });
         
         const ttsTime = Date.now() - ttsStartTime;
@@ -3888,7 +3898,9 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             model_id: voiceSettings.aiModel,
             output_format: voiceSettings.outputFormat,
             optimize_streaming_latency: voiceSettings.streamingLatency,
-            company
+            company,
+            callSid,
+            ttsSource: 'bridge_primary'
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('BRIDGE_TTS_TIMEOUT')), timeoutMs))
         ]);
@@ -4784,6 +4796,8 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
             output_format:              voiceSettings.outputFormat,
             optimize_streaming_latency: voiceSettings.streamingLatency,
             company,
+            callSid,
+            ttsSource:                  'sentence_stream_seed',
           });
           const sFile     = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
           const sFilePath = path.join(__dirname, '../public/audio', sFile);
@@ -5255,6 +5269,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   output_format:              _vs.outputFormat,
                   optimize_streaming_latency: _vs.streamingLatency,
                   company,
+                  callSid,
+                  ttsSource:                  'lap_patience',
                 });
                 try { fs.writeFileSync(_lapStatus.filePath, lapBuf); } catch (_) {}
                 lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
@@ -5868,7 +5884,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               stability: voiceSettings.stability, similarity_boost: voiceSettings.similarityBoost,
               style: voiceSettings.styleExaggeration, use_speaker_boost: voiceSettings.speakerBoost,
               model_id: voiceSettings.aiModel, output_format: voiceSettings.outputFormat,
-              optimize_streaming_latency: voiceSettings.streamingLatency, company
+              optimize_streaming_latency: voiceSettings.streamingLatency, company,
+              callSid, ttsSource: 'checkin'
             });
             // Cache for next patience cycle
             try { fs.writeFileSync(_pStatus.filePath, buffer); } catch (__) {}
@@ -6231,6 +6248,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   output_format:              _sentenceVoiceSettings.outputFormat,
                   optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
                   company,
+                  callSid,
+                  ttsSource:                  'sentence_batch',
                 });
                 const sFile     = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
                 const sFilePath = path.join(__dirname, '../public/audio', sFile);
@@ -6257,6 +6276,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               output_format:              _sentenceVoiceSettings.outputFormat,
               optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
               company,
+              callSid,
+              ttsSource:                  'sentence_first',
             });
             const s0FileName = `s0_${callSid}_${turnNumber}_${Date.now()}.mp3`;
             const s0Path     = path.join(__dirname, '../public/audio', s0FileName);
@@ -6877,7 +6898,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             model_id: voiceSettings.aiModel,
             output_format: voiceSettings.outputFormat,
             optimize_streaming_latency: voiceSettings.streamingLatency,
-            company
+            company,
+            callSid,
+            ttsSource: 'answer_fallback'
           });
 
           ttsLatencyMs = Date.now() - ttsStartTime;

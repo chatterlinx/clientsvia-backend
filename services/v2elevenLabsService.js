@@ -283,9 +283,9 @@ async function getAvailableModels({ apiKey, company } = {}) {
  * - "239-565-2202" → "2 3 9, 5 6 5, 2 2 zero 2"
  * - "12155 Metro Parkway" → "1 2 1 5 5 Metro Parkway"
  */
-async function synthesizeSpeech({ 
-  text, 
-  voiceId, 
+async function synthesizeSpeech({
+  text,
+  voiceId,
   stability = 0.5,
   similarity_boost = 0.7,
   style = 0.0,
@@ -294,7 +294,9 @@ async function synthesizeSpeech({
   optimize_streaming_latency = 0,
   output_format = 'mp3_44100_128',
   apiKey,
-  company 
+  company,
+  callSid,   // Pass 2c — optional; when present + company, we write an ELEVENLABS_TTS_CHARS qaLog
+  ttsSource, // Pass 2c — optional tag: 'answer' | 'retry' | 'bridge' | 'greeting' | etc.
 } = {}) {
   if (!text || !voiceId) {
     throw new Error('text and voiceId are required');
@@ -335,7 +337,34 @@ async function synthesizeSpeech({
     for await (const chunk of audioStream) {
       chunks.push(chunk);
     }
-    
+
+    // Pass 2c — fire-and-forget qaLog with char count + cost.
+    // Only writes when we have a live call context (callSid + company._id).
+    // Pre-cached audio (InstantAudio/BridgeAudio seed runs) intentionally skip
+    // this path because those calls have no callSid in scope — they're not
+    // billable to a live call turn, they're one-time setup costs.
+    try {
+      const _companyId = company && company._id ? String(company._id) : null;
+      if (callSid && _companyId) {
+        const _chars = formattedText ? formattedText.length : (text ? text.length : 0);
+        const _rate  = parseFloat(process.env.KC_COST_ELEVENLABS_PER_K_CHARS) || 0.30;
+        const _usd   = (_chars / 1000) * _rate;
+        // Lazy-require to avoid circular import at module load
+        const DiscoveryNotesService = require('./discoveryNotes/DiscoveryNotesService');
+        DiscoveryNotesService.update(_companyId, callSid, {
+          qaLog: [{
+            type:      'ELEVENLABS_TTS_CHARS',
+            source:    ttsSource || 'unknown',
+            voiceId,
+            modelId:   model_id,
+            chars:     _chars,
+            cost:      { usd: Math.round(_usd * 1_000_000) / 1_000_000, chars: _chars, model: model_id },
+            timestamp: new Date().toISOString(),
+          }],
+        }).catch(() => {});
+      }
+    } catch (_) { /* never block TTS for a logging error */ }
+
     return Buffer.concat(chunks);
   } catch (error) {
     // Enhanced error reporting with company context
