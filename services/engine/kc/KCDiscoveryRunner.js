@@ -1914,6 +1914,10 @@ class KCDiscoveryRunner {
           rescuedKcId:            match.container?.kcId || null,
           rescuedSection:         match.targetSection?.label || match.bestSection?.label || null,
           rescuedSectionIdx:      match.targetSectionIdx ?? match.bestSectionIdx ?? null,
+          rescuedSectionId:       buildSectionId(
+                                    match.container?.kcId,
+                                    match.targetSectionIdx ?? match.bestSectionIdx
+                                  ),
           rescuedScore:           match.score ?? null,
           anchorContainerId:      callContext?.anchorContainerId || null,
           cueFrame: cueFrame ? {
@@ -1929,6 +1933,24 @@ class KCDiscoveryRunner {
             tradeMatches:         Array.isArray(cueFrame.tradeMatches)
                                     ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
                                     : [],
+          } : null,
+          // ── NEW (Phase A.3) — pre-gate snapshots so the Gap page can
+          // render a complete "here's why 2.4/2.5/2.8 all missed" timeline
+          // on every rescue, not just the rescue decision itself. Without
+          // these, the admin has to guess what got close.
+          uap25: uapDiagnostic ? {
+            ran:            uapDiagnostic.ran,
+            matchFound:     uapDiagnostic.matchFound,
+            bestCandidate:  uapDiagnostic.bestCandidate,
+            belowThreshold: uapDiagnostic.belowThreshold,
+            anchorGate:     uapDiagnostic.anchorGate,
+            coreGate:       uapDiagnostic.coreGate,
+          } : null,
+          semantic28: semanticDiagnostic ? {
+            ran:       semanticDiagnostic.ran,
+            threshold: semanticDiagnostic.threshold,
+            bestBelow: semanticDiagnostic.bestBelow,
+            reason:    semanticDiagnostic.reason || null,
           } : null,
           timestamp:              new Date().toISOString(),
         }],
@@ -2152,6 +2174,8 @@ class KCDiscoveryRunner {
         notes,                               // enriched callContext source
         cueFrame,                            // for section ranking
         fallbackReason: 'kc_section_gap',    // distinguishes from no_kc_match in logs
+        uapDiagnostic,                       // Phase A.3 — GATE 2.5 timeline
+        semanticDiagnostic,                  // Phase A.3 — GATE 2.8 timeline
       });
     }
 
@@ -2184,6 +2208,8 @@ class KCDiscoveryRunner {
       ehConfig,     // Engine Hub config — drives BC injection + trace logging
       notes,        // discoveryNotes for building Claude callContext
       cueFrame,     // CueExtractor output for KC section ranking
+      uapDiagnostic,         // Phase A.3 — GATE 2.5 "why UAP missed" snapshot
+      semanticDiagnostic,    // Phase A.3 — GATE 2.8 "closest miss" snapshot
     });
   }
 }
@@ -3054,11 +3080,13 @@ function _buildCallContext(notes, behaviorBlock) {
 async function _handleLLMFallback({
   userInput, companyId, callSid, company, channel, nextState, emit,
   startMs, turn, bridgeToken, redis, callerName, onSentence,
-  containers     = [],
-  notes          = null,
-  ehConfig       = null,   // Engine Hub runtime config (null = disabled/passive)
-  cueFrame       = null,   // CueExtractor output — used for KC section ranking
-  fallbackReason = null,   // Caller-supplied reason override (e.g. 'kc_section_gap')
+  containers         = [],
+  notes              = null,
+  ehConfig           = null,   // Engine Hub runtime config (null = disabled/passive)
+  cueFrame           = null,   // CueExtractor output — used for KC section ranking
+  fallbackReason     = null,   // Caller-supplied reason override (e.g. 'kc_section_gap')
+  uapDiagnostic      = null,   // Phase A.3 — GATE 2.5 "why UAP missed" snapshot
+  semanticDiagnostic = null,   // Phase A.3 — GATE 2.8 "closest miss" snapshot
 }) {
   // Reason resolution: explicit override wins, else default based on container count.
   // 'kc_section_gap'          → container matched but no section (answer-from-kb save)
@@ -3191,6 +3219,23 @@ async function _handleLLMFallback({
         question:  userInput,
         answer:    llmResult.response?.slice(0, 200) || null,
         reason:    _reason,
+        // Phase A.3 — carry the full "why every gate missed" timeline so
+        // the Gap page can render a complete forensic view on LLM fallbacks,
+        // not just the "Groq answered" footprint.
+        uap25: uapDiagnostic ? {
+          ran:            uapDiagnostic.ran,
+          matchFound:     uapDiagnostic.matchFound,
+          bestCandidate:  uapDiagnostic.bestCandidate,
+          belowThreshold: uapDiagnostic.belowThreshold,
+          anchorGate:     uapDiagnostic.anchorGate,
+          coreGate:       uapDiagnostic.coreGate,
+        } : null,
+        semantic28: semanticDiagnostic ? {
+          ran:       semanticDiagnostic.ran,
+          threshold: semanticDiagnostic.threshold,
+          bestBelow: semanticDiagnostic.bestBelow,
+          reason:    semanticDiagnostic.reason || null,
+        } : null,
         timestamp: new Date().toISOString(),
       }],
     }).catch(() => {});
