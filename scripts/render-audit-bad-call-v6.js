@@ -152,67 +152,138 @@ function trunc(s, n = 140) {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // (B) SIDE-BY-SIDE CONTAINER SHAPE
+  // (B) FLAT PHRASE CORPUS — the vertical view UAP actually searches
   // ────────────────────────────────────────────────────────────────────────
-  sep('(B) CONTAINER COMPARISON — what the scorer compared');
+  // UAP does not care about container walls. It searches one flat index of
+  // every callerPhrase on every section across every container. This block
+  // builds that same flat view offline and ranks it by word-overlap against
+  // the caller's Turn 1 utterance. That answers the correct diagnostic
+  // question: "was a No Cooling phrase even a candidate? Did it rank? Why
+  // didn't it win?" — instead of the wrong question, "No Cooling vs New
+  // System folder-shape comparison".
+  //
+  // LIMITATION: This does NOT run UAP's real 2-gate algorithm (embeddings +
+  // anchor confirm). It uses simple content-word overlap as a relevance
+  // proxy — sufficient to show WHICH phrases sit close to the utterance
+  // in the flat corpus. The qaLog in Section (A) shows UAP's real decision.
+  // ────────────────────────────────────────────────────────────────────────
+  sep('(B) FLAT PHRASE CORPUS — every callerPhrase in the company');
 
-  const coolQ = { companyId: new ObjectId(COMPANY_ID), kcId: NO_COOLING_KC };
-  const sysQ  = { companyId: new ObjectId(COMPANY_ID), kcId: NEW_SYSTEM_KC };
+  // Step 1 — extract Turn 1 utterance from qaLog (UAP's real input)
+  const turn1Q =
+    dn && Array.isArray(dn.qaLog)
+      ? dn.qaLog.find(q => (q.turn === 1 || q.turn === 0) && q.question)
+      : null;
+  const utterance = turn1Q ? String(turn1Q.question) : '';
+  console.log('  Turn 1 utterance (input UAP actually searched on):');
+  console.log('    "' + utterance + '"');
 
-  const [cool, sys] = await Promise.all([
-    containers.findOne(coolQ),
-    containers.findOne(sysQ),
+  // Step 2 — tokenize utterance into content words (drop stopwords + punctuation)
+  const STOP = new Set([
+    'the','a','an','and','or','but','if','is','are','was','were','be','been','being',
+    'have','has','had','do','does','did','i','you','he','she','it','we','they','me',
+    'my','your','his','her','their','our','this','that','these','those','to','of','in',
+    'on','at','for','with','from','by','as','so','just','very','really','now','then',
+    'ok','okay','yeah','yes','no','not','like','can','could','would','should','will','up'
   ]);
+  const contentWords = (utterance.toLowerCase().match(/[a-z']+/g) || [])
+    .filter(w => w.length > 2 && !STOP.has(w));
+  console.log('  contentWords:', contentWords.join(', ') || '(none)');
 
-  function summarizeContainer(c, label) {
-    if (!c) { console.log('  ' + label + ': NOT FOUND'); return; }
-    console.log('  ── ' + label + ' ──');
-    console.log('    _id:                  ', c._id && c._id.toString());
-    console.log('    kcId:                 ', c.kcId);
-    console.log('    title:                ', c.title);
-    console.log('    isActive:             ', c.isActive);
-    console.log('    noAnchor:             ', c.noAnchor);
-    console.log('    priority:             ', c.priority);
-    console.log('    category:             ', c.category);
-    const ck = Array.isArray(c.contentKeywords) ? c.contentKeywords : [];
-    const nk = Array.isArray(c.negativeKeywords) ? c.negativeKeywords : [];
-    console.log('    contentKeywords(' + ck.length + '):', ck.slice(0, 25).join(', ') + (ck.length > 25 ? ' …' : ''));
-    console.log('    negativeKeywords(' + nk.length + '):', nk.slice(0, 25).join(', ') + (nk.length > 25 ? ' …' : ''));
+  // Step 3 — pull ALL containers, flatten every callerPhrase
+  const allContainers = await containers
+    .find({ companyId: new ObjectId(COMPANY_ID) })
+    .project({ kcId: 1, title: 1, isActive: 1, noAnchor: 1, sections: 1 })
+    .toArray();
+
+  const flat = []; // { containerTitle, kcId, sectionIdx, sectionLabel, phrase, anchorWords, isActive, noAnchor, overlap }
+  for (const c of allContainers) {
     const secs = Array.isArray(c.sections) ? c.sections : [];
-    console.log('    sections count:       ', secs.length);
-    console.log('    sections w/ callerPhrases:', secs.filter(s => Array.isArray(s.callerPhrases) && s.callerPhrases.length > 0).length);
-    console.log('    sections w/ anchorWords:  ', secs.filter(s => Array.isArray(s.anchorWords) && s.anchorWords.length > 0).length);
+    for (let idx = 0; idx < secs.length; idx++) {
+      const s = secs[idx];
+      const phrases = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
+      const anchors = Array.isArray(s.anchorWords) ? s.anchorWords : [];
+      for (const p of phrases) {
+        const phraseText = typeof p === 'string' ? p : (p && p.phrase) || '';
+        if (!phraseText) continue;
+        flat.push({
+          containerTitle: c.title,
+          kcId:           c.kcId,
+          sectionIdx:     idx,
+          sectionLabel:   s.label || '',
+          phrase:         phraseText,
+          anchorWords:    anchors,
+          isActive:       c.isActive !== false,
+          noAnchor:       !!c.noAnchor,
+          overlap:        0, // computed next
+        });
+      }
+    }
   }
 
-  summarizeContainer(cool, 'NO COOLING (' + NO_COOLING_KC + ')');
-  summarizeContainer(sys,  'NEW SYSTEM / REPLACEMENT (' + NEW_SYSTEM_KC + ')');
-
-  // ── No Cooling — deep-dive on the "repeat-caller" sections 200-215 ──
-  sep('(B.1) No Cooling — repeat-caller section callerPhrases (idx 200-215)');
-  const coolSecs = Array.isArray(cool?.sections) ? cool.sections : [];
-  for (let i = 200; i <= 215 && i < coolSecs.length; i++) {
-    const s = coolSecs[i];
-    if (!s) continue;
-    const phrases = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
-    const anchors = Array.isArray(s.anchorWords) ? s.anchorWords : [];
-    console.log('  [' + i + '] label="' + trunc(s.label, 60) + '"');
-    console.log('        callerPhrases(' + phrases.length + '): ' + phrases.slice(0, 3).map(p => typeof p === 'string' ? p : (p.phrase || '')).join(' | '));
-    console.log('        anchorWords(' + anchors.length + '): ' + anchors.slice(0, 8).join(', '));
+  // Step 4 — score each phrase by content-word overlap with utterance
+  for (const f of flat) {
+    const phraseWords = new Set((f.phrase.toLowerCase().match(/[a-z']+/g) || []).filter(w => w.length > 2));
+    let overlap = 0;
+    for (const w of contentWords) if (phraseWords.has(w)) overlap += 1;
+    f.overlap = overlap;
   }
 
-  // ── Top 5 sections from each container (for visual comparison) ──
-  sep('(B.2) First 5 sections — label + callerPhrases count — both containers');
-  console.log('  NO COOLING:');
-  coolSecs.slice(0, 5).forEach((s, i) => {
-    const n = Array.isArray(s.callerPhrases) ? s.callerPhrases.length : 0;
-    console.log('    [' + i + '] "' + trunc(s.label, 70) + '" callerPhrases=' + n);
-  });
-  console.log('  NEW SYSTEM:');
-  const sysSecs = Array.isArray(sys?.sections) ? sys.sections : [];
-  sysSecs.slice(0, 5).forEach((s, i) => {
-    const n = Array.isArray(s.callerPhrases) ? s.callerPhrases.length : 0;
-    console.log('    [' + i + '] "' + trunc(s.label, 70) + '" callerPhrases=' + n);
-  });
+  // Step 5 — per-container corpus stats
+  sep('(B.1) Corpus inventory — phrases per container (all containers)');
+  const perContainer = {};
+  for (const f of flat) {
+    const key = (f.kcId || '?') + ' :: ' + f.containerTitle;
+    if (!perContainer[key]) perContainer[key] = { total: 0, withOverlap: 0, isActive: f.isActive, noAnchor: f.noAnchor };
+    perContainer[key].total += 1;
+    if (f.overlap > 0) perContainer[key].withOverlap += 1;
+  }
+  const perContainerSorted = Object.entries(perContainer)
+    .sort((a, b) => (b[1].withOverlap - a[1].withOverlap) || (b[1].total - a[1].total));
+  console.log('  Total phrases in corpus:', flat.length);
+  console.log('  Containers w/ any overlap:', perContainerSorted.filter(([, v]) => v.withOverlap > 0).length);
+  console.log('  ── container  (active | noAnchor | totalPhrases | matchingPhrases) ──');
+  for (const [name, v] of perContainerSorted) {
+    const flags =
+      (v.isActive ? 'active' : 'INACTIVE') + ' | ' +
+      (v.noAnchor ? 'noAnchor' : 'anchor-ok');
+    console.log('    ' + String(v.withOverlap).padStart(3) + '/' + String(v.total).padStart(4) + '  [' + flags + ']  ' + name);
+  }
+
+  // Step 6 — top 40 phrases ranked by overlap (the flat UAP candidate view)
+  sep('(B.2) Top 40 flat-corpus candidates for this utterance (by content-word overlap)');
+  const ranked = flat
+    .filter(f => f.overlap > 0)
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, 40);
+  if (!ranked.length) {
+    console.log('  (no phrase in the flat corpus has any content-word overlap with Turn 1)');
+  } else {
+    for (const f of ranked) {
+      console.log(
+        '  overlap=' + f.overlap +
+        '  [' + (f.kcId || '?') + ']  ' +
+        trunc(f.containerTitle, 28).padEnd(30) + ' § ' +
+        trunc(f.sectionLabel || '(idx ' + f.sectionIdx + ')', 28).padEnd(30) +
+        '  "' + trunc(f.phrase, 70) + '"'
+      );
+      if (Array.isArray(f.anchorWords) && f.anchorWords.length) {
+        console.log('        anchorWords(' + f.anchorWords.length + '): ' + f.anchorWords.slice(0, 10).join(', '));
+      }
+    }
+  }
+
+  // Step 7 — No Cooling / New System specific call-out (context, not comparison)
+  sep('(B.3) Where did No Cooling (' + NO_COOLING_KC + ') and New System (' + NEW_SYSTEM_KC + ') rank?');
+  const rankOf = (kcId) => {
+    const firstIdx = flat
+      .filter(f => f.overlap > 0)
+      .sort((a, b) => b.overlap - a.overlap)
+      .findIndex(f => f.kcId === kcId);
+    return firstIdx >= 0 ? (firstIdx + 1) : null;
+  };
+  console.log('  No Cooling top rank: ', rankOf(NO_COOLING_KC));
+  console.log('  New System top rank: ', rankOf(NEW_SYSTEM_KC));
 
   // ────────────────────────────────────────────────────────────────────────
   // (C) CALLER ROUTING PATTERN
