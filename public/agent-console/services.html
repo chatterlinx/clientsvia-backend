@@ -7346,7 +7346,9 @@ window.addEventListener('message', e => {
   }
 
   async function authFetch(url, opts = {}) {
-    const token = localStorage.getItem('authToken') || '';
+    // Match the token source used by all other tabs (Behavior/Intake/Model/Prompt).
+    // Plain localStorage.getItem('authToken') returns empty → 401 on every call.
+    const token = (window.AgentConsoleAuth && AgentConsoleAuth.getToken && AgentConsoleAuth.getToken()) || '';
     const headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const res = await fetch(url, { ...opts, headers });
     const data = await res.json().catch(() => ({}));
