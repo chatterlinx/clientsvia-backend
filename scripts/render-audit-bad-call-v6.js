@@ -68,8 +68,12 @@ function trunc(s, n = 140) {
   await client.connect();
   const db = client.db('clientsvia');
 
-  const customers  = db.collection('customers');
-  const containers = db.collection('companyknowledgecontainers');
+  // NOTE: KC container collection name is camelCase (mongoose model registers it
+  //       as 'companyKnowledgeContainers'). MEMORY.md warns some collections
+  //       store companyId as ObjectId while others store it as String —
+  //       CompanyKnowledgeContainer.companyId is STRING. Filter accordingly.
+  const customers  = db.collection('customers');                    // companyId: ObjectId
+  const containers = db.collection('companyKnowledgeContainers');   // companyId: String
 
   // ────────────────────────────────────────────────────────────────────────
   // (A) BAD CALL — FULL TIMELINE
@@ -102,10 +106,16 @@ function trunc(s, n = 140) {
     console.log('  qaLog length:    ', (dn.qaLog || []).length);
 
     sep('(A.1) qaLog by TURN — chronological gate timeline');
-    const qaLog = (dn.qaLog || []).slice().sort((a, b) => {
-      if (a.turn !== b.turn) return (a.turn || 0) - (b.turn || 0);
-      return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
-    });
+    // Skip cost-tracking events (ELEVENLABS_TTS_CHARS, GROQ_COST_*) — they
+    // clutter the gate view. Section A is for gate decisions, not billing.
+    const COST_TYPES = new Set(['ELEVENLABS_TTS_CHARS', 'GROQ_COST_INPUT', 'GROQ_COST_OUTPUT']);
+    const qaLog = (dn.qaLog || [])
+      .filter(q => !COST_TYPES.has(q.type))
+      .slice()
+      .sort((a, b) => {
+        if (a.turn !== b.turn) return (a.turn || 0) - (b.turn || 0);
+        return String(a.timestamp || '').localeCompare(String(b.timestamp || ''));
+      });
 
     for (const q of qaLog) {
       console.log('  T' + (q.turn ?? '?') + ' [' + q.type + '] ' + trunc(q.question, 80));
@@ -186,15 +196,19 @@ function trunc(s, n = 140) {
     'on','at','for','with','from','by','as','so','just','very','really','now','then',
     'ok','okay','yeah','yes','no','not','like','can','could','would','should','will','up'
   ]);
+  // length >= 2 (keep "AC" — the most important word in HVAC utterances),
+  // but still drop "a", "i", "to", "of", etc. via the STOP list above.
   const contentWords = (utterance.toLowerCase().match(/[a-z']+/g) || [])
-    .filter(w => w.length > 2 && !STOP.has(w));
+    .filter(w => w.length >= 2 && !STOP.has(w));
   console.log('  contentWords:', contentWords.join(', ') || '(none)');
 
   // Step 3 — pull ALL containers, flatten every callerPhrase
+  // companyId stored as STRING (see CompanyKnowledgeContainer.js L371-377)
   const allContainers = await containers
-    .find({ companyId: new ObjectId(COMPANY_ID) })
+    .find({ companyId: COMPANY_ID })
     .project({ kcId: 1, title: 1, isActive: 1, noAnchor: 1, sections: 1 })
     .toArray();
+  console.log('  KC containers found for company:', allContainers.length);
 
   const flat = []; // { containerTitle, kcId, sectionIdx, sectionLabel, phrase, anchorWords, isActive, noAnchor, overlap }
   for (const c of allContainers) {
@@ -223,7 +237,7 @@ function trunc(s, n = 140) {
 
   // Step 4 — score each phrase by content-word overlap with utterance
   for (const f of flat) {
-    const phraseWords = new Set((f.phrase.toLowerCase().match(/[a-z']+/g) || []).filter(w => w.length > 2));
+    const phraseWords = new Set((f.phrase.toLowerCase().match(/[a-z']+/g) || []).filter(w => w.length >= 2));
     let overlap = 0;
     for (const w of contentWords) if (phraseWords.has(w)) overlap += 1;
     f.overlap = overlap;
