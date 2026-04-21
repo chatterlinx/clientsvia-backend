@@ -407,6 +407,31 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       turn,
     });
 
+    // Bug-2 fix — write Claude $ per turn to qaLog (fire-and-forget).
+    // The Turn-1 intake path was instrumented (A2_LLM_INTAKE_TURN_1), but every
+    // follow-up Claude call also costs real $ and was previously invisible to the
+    // Est. Cost card. Now every LLM Agent turn contributes to the rollup.
+    try {
+      const _tIn  = result.tokensUsed?.input  || 0;
+      const _tOut = result.tokensUsed?.output || 0;
+      if (callSid && (_tIn > 0 || _tOut > 0)) {
+        const _usd = costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
+        DiscoveryNotesService.update(String(company?._id || ''), callSid, {
+          qaLog: [{
+            type:       'A2_LLM_FOLLOWUP',
+            turn:       turn || 0,
+            question:   input || null,
+            source:     triggerSource || bucket || 'followup',
+            provider:   'anthropic',
+            latencyMs:  result.latencyMs || null,
+            tokensUsed: { input: _tIn, output: _tOut },
+            cost:       { usd: _usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5' },
+            timestamp:  new Date().toISOString(),
+          }],
+        }).catch(() => {});
+      }
+    } catch (_) { /* never break Claude for a log write */ }
+
     return {
       response: result.response,
       tokensUsed: result.tokensUsed || { input: 0, output: 0 },
@@ -853,6 +878,30 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       usedCallerName,
       turn,
     });
+
+    // Bug-2 fix — write Claude $ per turn to qaLog (fire-and-forget).
+    // The no-match path (T2) fires when no trigger + no KC match catches the
+    // caller. These calls cost real $ and were previously invisible.
+    try {
+      const _tIn  = result.tokensUsed?.input  || 0;
+      const _tOut = result.tokensUsed?.output || 0;
+      if (callSid && (_tIn > 0 || _tOut > 0)) {
+        const _usd = costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
+        DiscoveryNotesService.update(String(company?._id || ''), callSid, {
+          qaLog: [{
+            type:       'A2_LLM_NOMATCH',
+            turn:       turn || 0,
+            question:   input || null,
+            source:     'no_match',
+            provider:   'anthropic',
+            latencyMs:  result.latencyMs || null,
+            tokensUsed: { input: _tIn, output: _tOut },
+            cost:       { usd: _usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5' },
+            timestamp:  new Date().toISOString(),
+          }],
+        }).catch(() => {});
+      }
+    } catch (_) { /* never break Claude for a log write */ }
 
     return {
       response: result.response,

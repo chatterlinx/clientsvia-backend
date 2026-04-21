@@ -763,11 +763,15 @@ function renderSectionTurnCoverage(turns, companyId) {
       costElevenEst   += est;
       costRows.push({ turn: t.turnNumber, category: 'elevenlabs', label: 'ElevenLabs TTS', detail: `~${t.text.length} chars (estimated from agent text)`, usd: est, quality: 'est' });
     }
-    // Groq estimate — only when no real Groq cost was logged for this turn
+    // Groq estimate — ONLY when classifier says this turn truly routed through Groq
+    // AND we have no real Pass 2a qaLog data. The old `kc_hit && !cls.mode` branch
+    // was poisoning UAP Audio pre-cached turns (which cost $0 Groq) with phantom $.
+    // Also increment groqCalls so the drawer count stays consistent with the money.
     const turnHasRealGroq = qc && qc.groqUsd > 0;
-    if (!turnHasRealGroq && (cls.mode === 'groq' || (cls.status === 'kc_hit' && !cls.mode))) {
+    if (!turnHasRealGroq && cls.mode === 'groq') {
       costGroqEstUsd += RATE_GROQ_PER_TURN_EST;
       costGroqEst    += RATE_GROQ_PER_TURN_EST;
+      groqCalls++;
       costRows.push({ turn: t.turnNumber, category: 'groq', label: 'Groq', detail: '~500 tokens (estimated)', usd: RATE_GROQ_PER_TURN_EST, quality: 'est' });
     }
   }
