@@ -144,6 +144,19 @@ function trunc(s, n = 140) {
         console.log('       latencyMs=' + q.latencyMs + ' cost=' + JSON.stringify(q.cost || null).slice(0, 120));
       } else if (q.type === 'KC_GRACEFUL_ACK') {
         console.log('       answer=' + trunc(q.answer, 80));
+      } else if (q.type === 'KC_GROQ_ANSWERED') {
+        // Key forensic detail — reveals which gate emitted this event:
+        //   source='prequal'                → GATE 0.7 _handlePrequalResponse
+        //   path=KC_DIRECT_ANSWER, no source → GATE 3 _handleKCMatch
+        console.log('       path=' + q.path + ' source=' + (q.source || '(none)') + ' intent=' + q.intent);
+        console.log('       containerTitle="' + (q.containerTitle || '') + '" kcId=' + q.kcId + ' containerId=' + q.containerId);
+        console.log('       latencyMs=' + q.latencyMs + ' confidence=' + q.confidence);
+        console.log('       responsePreview=' + trunc(q.responsePreview, 120));
+      } else {
+        // Catch-all — any event type we don't handle above prints a one-line
+        // shape summary so we never miss a signal.
+        const keys = Object.keys(q).filter(k => !['type','turn','timestamp','question','answer'].includes(k));
+        console.log('       [unhandled-type] keys=' + keys.join(',').slice(0, 200));
       }
     }
 
@@ -365,6 +378,35 @@ function trunc(s, n = 140) {
           ? 'GROQ'
           : '(no match)';
     console.log('  ' + n.capturedAt + ' | ' + trunc(n.callReason, 40).padEnd(42) + ' | anchor=' + (n.anchorContainerId || '-').padEnd(26) + ' | ' + winner);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+  // (D) GATE 1 BOOKING INTENT — narrative filter + question filter per-turn
+  // ────────────────────────────────────────────────────────────────────────
+  // Mirror the regex constants from KCDiscoveryRunner.js (lines ~915-955):
+  //   - booking intent regex
+  //   - narrative indicators
+  //   - question filter
+  // Run them against every Turn 1 utterance to see whether GATE 1 would
+  // have fired booking intent and routed away from UAP on T1.
+  // ────────────────────────────────────────────────────────────────────────
+  sep('(D) GATE 1 Booking intent analysis — Turn 1 utterance');
+  if (turn1Q) {
+    const rawInput = String(turn1Q.question || '');
+    const norm     = rawInput.toLowerCase().replace(/[^a-z'\s]/g, ' ').trim();
+
+    const hasQuestionMark = rawInput.includes('?');
+    const bookingRe   = /\b(schedul|book|appoint|come\s+out|send\s+someone|service\s+call|set\s+up)/i;
+    const narrativeRe = /\b(was\s+here|came\s+out|already\s+(came|been\s+out|sent\s+someone|repaired|fixed)|still\s+not\s+(working|cooling|fixed|running|heating|cold|warm|blowing)|didn[''']?t\s+fix|hasn[''']?t\s+(been\s+)?fixed|back\s+again|last\s+time\s+(you|the\s+tech|your|he|she|they)\s+came|i\s+had\s+|we\s+had\s+|you\s+guys\s+(?:have\s+|had\s+|'ve\s+)?(?:been|come|came)|tony\s+was|changed\s+the|now\s+(?:water|it|the))/i;
+
+    console.log('  raw input:                 "' + trunc(rawInput, 120) + '"');
+    console.log('  norm (booking check input):"' + trunc(norm, 120) + '"');
+    console.log('  has "?":                   ', hasQuestionMark);
+    console.log('  matches bookingRe:         ', bookingRe.test(norm));
+    console.log('  matches narrativeIndicators:', narrativeRe.test(rawInput));
+    console.log('  word count:                ', rawInput.split(/\s+/).filter(Boolean).length);
+  } else {
+    console.log('  (no Turn 1 question found in qaLog)');
   }
 
   await client.close();
