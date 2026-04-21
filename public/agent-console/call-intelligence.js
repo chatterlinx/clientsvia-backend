@@ -451,6 +451,26 @@ function renderSectionStory(story, hasGpt4, callSid) {
 // addition — requires a UAP_FALSE_POSITIVE qaLog event type. For now,
 // any ✅ KC row may still be a misroute we can't yet see.
 
+// Render clickable kcId + sectionId chips for any turn that has a kcCard.
+// Container kcId is always present; sectionId only on direct matches (not digressions).
+function _renderKcIds(kc, editUrl) {
+  if (!kc) return '';
+  const chips = [];
+  if (kc.kcId) {
+    chips.push(editUrl
+      ? `<a href="${esc(editUrl)}" target="_blank" class="tc-kc-chip tc-kc-chip-container" title="Open container in editor">${esc(kc.kcId)}</a>`
+      : `<span class="tc-kc-chip tc-kc-chip-container">${esc(kc.kcId)}</span>`);
+  }
+  if (kc.sectionId) {
+    const secUrl = editUrl ? `${editUrl}#section-${kc.sectionIdx ?? ''}` : null;
+    const secLabel = kc.sectionIdx != null ? `§${kc.sectionIdx + 1} ${kc.sectionId}` : kc.sectionId;
+    chips.push(secUrl
+      ? `<a href="${esc(secUrl)}" target="_blank" class="tc-kc-chip tc-kc-chip-section" title="Open section in editor">${esc(secLabel)}</a>`
+      : `<span class="tc-kc-chip tc-kc-chip-section">${esc(secLabel)}</span>`);
+  }
+  return chips.length ? `<div class="tc-kc-ids">${chips.join(' ')}</div>` : '';
+}
+
 function _classifyTurn(t, companyId) {
   if (t.speaker !== 'agent') return null;
 
@@ -484,7 +504,7 @@ function _classifyTurn(t, companyId) {
     let srcSub;
     if (kcTitle) {
       // Section gap: container matched, section didn't — direct author to card
-      srcSub = `Section gap · ${esc(kcTitle)}`;
+      srcSub = `${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint">Section gap · ${esc(kcTitle)}</div>`;
       fixHtml = kcEditUrl
         ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-fix-btn">Open KC Card →</a>
            <div class="tc-fix-hint">Add a section for this caller question</div>`
@@ -516,9 +536,11 @@ function _classifyTurn(t, companyId) {
     const kcLink = kcEditUrl
       ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-kc-link" title="Open KC card">${esc(kc.title || '—')}</a>`
       : esc(kc.title || '—');
-    const srcSub = kc.sectionLabel
+    // Title + sectionLabel on one line, kcId chips on the next
+    const titleLine = kc.sectionLabel
       ? `${kcLink} · ${esc(kc.sectionLabel)}`
       : kcLink;
+    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}`;
     return {
       status: 'kc_hit',
       icon: '✅',

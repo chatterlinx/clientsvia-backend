@@ -988,6 +988,42 @@ button { cursor: pointer; font-family: inherit; }
 }
 .tc-kc-link:hover { color: #1d4ed8; }
 
+/* kcId + sectionId chips under KC source label */
+.tc-kc-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.tc-kc-chip {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  line-height: 1.3;
+}
+.tc-kc-chip-container {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.tc-kc-chip-container:hover { background: #dbeafe; color: #1e40af; }
+.tc-kc-chip-section {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+.tc-kc-chip-section:hover { background: #d1fae5; color: #065f46; }
+.tc-src-hint {
+  font-size: 11px;
+  color: var(--tx-secondary);
+  margin-top: 2px;
+}
+
 .tc-col-content {
   color: var(--tx-secondary);
   font-style: italic;
