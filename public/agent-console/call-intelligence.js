@@ -491,7 +491,8 @@ function _classifyTurn(t, companyId) {
     ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
     : null;
 
-  // ── Turn 1 intake: always expected LLM Agent, excluded from coverage ──
+  // ── Turn 1 intake: always expected LLM Agent, excluded from coverage % ──
+  // BUT still counted in the LLM AGENT stat — Turn 1 IS a Claude call and has $ cost.
   if (turnNum === 1) {
     return {
       status: 'expected',
@@ -499,8 +500,9 @@ function _classifyTurn(t, companyId) {
       srcLabel: 'LLM Agent (Turn 1 intake)',
       srcSub: 'Expected — Claude generates turn 1',
       fixHtml: '<span class="tc-fix-na">Intake</span>',
-      counts: false,
+      counts: false,            // excluded from coverage % denominator
       covered: false,
+      countsAsLLM: true,        // Phase B.5 — count in LLM AGENT stat (honest: Turn 1 = Claude)
     };
   }
 
@@ -684,12 +686,44 @@ function renderSectionTurnCoverage(turns, companyId) {
   const uapText    = agentItems.filter(x => x.cls.mode === 'uap-text' || x.cls.mode === 'uap').length;
   const uapAudio   = agentItems.filter(x => x.cls.mode === 'uap-audio').length;
   const groqHits   = agentItems.filter(x => x.cls.mode === 'groq').length;
-  const fallbacks  = agentItems.filter(x => x.cls.status === 'llm_fallback').length;
+  // Phase B.5 — LLM AGENT count now honestly includes Turn 1 (it's a Claude call)
+  // plus any mid-call fallback. Coverage % denominator unchanged (still excludes T1).
+  const llmFallbacks = agentItems.filter(x => x.cls.status === 'llm_fallback').length;
+  const llmTotal   = agentItems.filter(x => x.cls.countsAsLLM || x.cls.status === 'llm_fallback').length;
   const scripts    = agentItems.filter(x => x.cls.status === 'script').length;
   const coveragePct = counted > 0 ? Math.round((covered / counted) * 100) : 100;
   const coverageClass =
     coveragePct >= 90 ? 'tc-cov-good'  :
     coveragePct >= 75 ? 'tc-cov-mid'   : 'tc-cov-bad';
+
+  // Phase B.5 — Per-call cost estimate
+  // Sums what we actually know from qaLog (Phase A.4 Claude fallback $) and estimates
+  // what we don't yet log (ElevenLabs TTS from spoken char count, Groq/STT flagged unknown).
+  // Rate assumptions match COST_CONSTANTS in KCDiscoveryRunner.js (env-overridable server-side).
+  const RATE_ELEVENLABS_PER_CHAR = 0.30 / 1000;   // $0.30 per 1k chars
+  const RATE_GROQ_PER_TURN_EST   = 0.00025;        // rough: ~500 tok × $0.79/M = $0.0004 — until real logging
+  let   costClaudeUsd   = 0;                       // known from qaEntry.cost
+  let   costElevenUsd   = 0;                       // estimated from agent turn text chars (non-pre-cached)
+  let   costGroqEstUsd  = 0;                       // estimated until Pass 2 backend logging
+  let   elevenCharCount = 0;
+  const costUnknown = { stt: true, twilio: true }; // honestly flagged
+  for (const { turn: t, cls } of agentItems) {
+    // Known: Claude $ per turn from Phase A.4 qaLog write
+    const usd = t.qaEntry?.cost?.usd;
+    if (typeof usd === 'number' && usd > 0) costClaudeUsd += usd;
+    // Estimated: ElevenLabs TTS by spoken char count — skip pre-cached UAP Audio turns
+    const isPreCached = cls.mode === 'uap-audio' || t.audioServed === true;
+    if (!isPreCached && t.text) {
+      elevenCharCount += t.text.length;
+      costElevenUsd   += t.text.length * RATE_ELEVENLABS_PER_CHAR;
+    }
+    // Estimated: Groq formatter calls — every 'groq' mode turn + legacy KC Digression (likely Groq)
+    if (cls.mode === 'groq' || (cls.status === 'kc_hit' && !cls.mode)) {
+      costGroqEstUsd += RATE_GROQ_PER_TURN_EST;
+    }
+  }
+  const costEstTotal = costClaudeUsd + costElevenUsd + costGroqEstUsd;
+  const fmtUsd = (n) => n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(3)}`;
 
   // 3. Collapse consecutive script rows
   const collapsed = _collapseScriptRuns(agentItems);
@@ -767,15 +801,29 @@ function renderSectionTurnCoverage(turns, companyId) {
   // 5. Summary bar + table
   //    KC-hit stat splits into UAP-text / UAP-audio / Groq so admins can see at
   //    a glance how much of each turn went through the expensive Groq formatter.
+  // Build cost tooltip (shown on hover of Est. Cost card)
+  const costTooltip = [
+    `Claude (known): ${fmtUsd(costClaudeUsd)}`,
+    `ElevenLabs TTS (est, ${elevenCharCount} chars): ${fmtUsd(costElevenUsd)}`,
+    `Groq (est, ${groqHits + agentItems.filter(x => x.cls.status === 'kc_hit' && !x.cls.mode).length} turns): ${fmtUsd(costGroqEstUsd)}`,
+    `STT (Deepgram/Twilio): not yet logged`,
+    `Twilio voice minutes: not yet logged`
+  ].join(' • ');
+
   const bodyHtml = `
     <div class="tc-summary">
       <div class="tc-stat"><span class="tc-stat-val">${total}</span><span class="tc-stat-lbl">Agent turns</span></div>
       <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${uapText}</span><span class="tc-stat-lbl">UAP (text)</span></div>
       <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${uapAudio}</span><span class="tc-stat-lbl">UAP Audio</span></div>
       <div class="tc-stat tc-stat-groq"><span class="tc-stat-val">${groqHits}</span><span class="tc-stat-lbl">Groq</span></div>
-      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM Agent</span></div>
+      <div class="tc-stat tc-stat-fallback" title="${esc(llmFallbacks > 0 ? `Turn 1 intake + ${llmFallbacks} mid-call fallback${llmFallbacks > 1 ? 's' : ''}` : 'Turn 1 intake only')}">
+        <span class="tc-stat-val">${llmTotal}</span><span class="tc-stat-lbl">LLM Agent</span>
+      </div>
       <div class="tc-stat tc-stat-script"><span class="tc-stat-val">${scripts}</span><span class="tc-stat-lbl">Scripts</span></div>
       <div class="tc-stat ${coverageClass}"><span class="tc-stat-val">${coveragePct}%</span><span class="tc-stat-lbl">Coverage</span></div>
+      <div class="tc-stat tc-stat-cost" title="${esc(costTooltip)}" style="background:linear-gradient(180deg,#fefce8 0%,#fef3c7 100%);border-left:3px solid #ca8a04;">
+        <span class="tc-stat-val" style="color:#854d0e;">${fmtUsd(costEstTotal)}</span><span class="tc-stat-lbl">Est. Cost</span>
+      </div>
     </div>
     <table class="tc-table">
       <thead>
@@ -787,9 +835,11 @@ function renderSectionTurnCoverage(turns, companyId) {
       <strong>🎵 UAP Audio</strong> — pre-cached audio file served directly (fastest, no TTS, no Groq).
       <strong>✅ UAP (text)</strong> — Fixed section content delivered verbatim via TTS (no Groq formatter).
       <strong>🟣 Groq</strong> — KC content reshaped by Groq formatter (latency cost + variability).
-      <strong>❌ LLM Agent</strong> — Claude <code>answer-from-kb</code> fallback (Turn 1 + when KC has nothing).
-      Turn 1 is always LLM Agent (intake) — excluded from coverage.
-      KC misroute detection (correct path but wrong container) is a future addition.
+      <strong>❌ LLM Agent</strong> — Claude <code>answer-from-kb</code> fallback (Turn 1 intake + mid-call KC misses).
+      Turn 1 counts in the LLM AGENT stat (it's a real Claude call) but is excluded from Coverage %.
+      <strong>💰 Est. Cost</strong> — Claude $ known per turn (Phase A.4); ElevenLabs estimated from
+      spoken chars × $0.30/1k; Groq estimated until backend token logging lands; STT/Twilio not yet logged.
+      Hover the cost card for the full breakdown. KC misroute detection is a future addition.
     </div>`;
 
   return sectionWrap('sec-coverage', '2', 'Turn Coverage',
