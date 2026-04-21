@@ -2218,9 +2218,14 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, co
   const startedAt = transcriptV2?.callMeta?.startedAt || summary?.startedAt;
 
   // Read the ACTUAL stored speechTimeout from company config (no more hardcoded strings)
-  // Priority: agent2.speechDetection.speechTimeout → voiceSettings.speechDetection.speechTimeout → 'auto' default
+  // CANONICAL UI SAVE PATH: aiAgentSettings.speechDetection (v2companyConfiguration.js L2703-2705)
+  // Legacy fallbacks: agent2.speechDetection → voiceSettings.speechDetection
+  // Mirrors _getSpeechDetection() in routes/v2twilio.js L137 — keep in sync.
   const speechDet =
+    company?.aiAgentSettings?.speechDetection ||
+    company?.aiAgentSettings?.agent2?.speechDetection ||
     company?.agent2?.speechDetection ||
+    company?.aiAgentSettings?.voiceSettings?.speechDetection ||
     company?.voiceSettings?.speechDetection ||
     {};
   const speechTimeoutVal = (speechDet.speechTimeout !== undefined && speechDet.speechTimeout !== null)

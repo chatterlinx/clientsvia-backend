@@ -130,14 +130,44 @@ async function getRedis() {
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎙️ SPEECH DETECTION — Single source of truth (NEVER hardcode)
-// Reads from company.aiAgentSettings.agent2.speechDetection
+//
+// CANONICAL UI SAVE PATH: company.aiAgentSettings.speechDetection
+//   Set by routes/company/v2companyConfiguration.js L2703-2705:
+//     aiAgentSettings.speechDetection.speechTimeout
+//     aiAgentSettings.speechDetection.initialTimeout
+//     aiAgentSettings.speechDetection.bargeIn
+//
+// LEGACY FALLBACKS (older companies that haven't re-saved from UI yet):
+//   company.aiAgentSettings.agent2.speechDetection
+//   company.aiAgentSettings.voiceSettings.speechDetection
+//
+// If we fall through to a legacy path we log [SPEECH_DETECTION_DRIFT] so
+// "silent save" drift becomes visible in Render logs. Root cause of
+// regression on call CA04f553d9fabebc32b7edf487d04d720a (April 21 2026):
+// UI saved to aiAgentSettings.speechDetection, server read from
+// aiAgentSettings.agent2.speechDetection → always got {}, fell to 1s default.
+//
 // Schema default: 1.0s (v2Company.js). Twilio Gather requires string.
 // ═══════════════════════════════════════════════════════════════════════════
 
 function _getSpeechDetection(company) {
-  return company?.aiAgentSettings?.agent2?.speechDetection
-      || company?.aiAgentSettings?.voiceSettings?.speechDetection
-      || {};
+  const isNonEmpty = (v) => v && typeof v === 'object' && Object.keys(v).length > 0;
+  const canonical = company?.aiAgentSettings?.speechDetection;
+  if (isNonEmpty(canonical)) return canonical;
+
+  const legacyAgent2 = company?.aiAgentSettings?.agent2?.speechDetection;
+  if (isNonEmpty(legacyAgent2)) {
+    logger.warn('[SPEECH_DETECTION_DRIFT] Fell back to aiAgentSettings.agent2.speechDetection — UI should re-save to populate canonical path', { companyId: company?._id?.toString?.() });
+    return legacyAgent2;
+  }
+
+  const legacyVoice = company?.aiAgentSettings?.voiceSettings?.speechDetection;
+  if (isNonEmpty(legacyVoice)) {
+    logger.warn('[SPEECH_DETECTION_DRIFT] Fell back to aiAgentSettings.voiceSettings.speechDetection — UI should re-save to populate canonical path', { companyId: company?._id?.toString?.() });
+    return legacyVoice;
+  }
+
+  return {};
 }
 
 /**
