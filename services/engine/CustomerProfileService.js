@@ -45,6 +45,63 @@ const logger   = require('../../utils/logger');
 const Customer = require('../../models/Customer');
 
 // ============================================================================
+// KNOWN-NAMES SANITY GUARD — prevents junk strings from polluting the
+// cross-call name corpus. Historical bug: intake LLM captured phrases like
+// "getting ridiculous" into temp.firstName; at call-end the raw name was
+// promoted to callerProfile.knownNames with hardcoded source:'confirmed'.
+// Result: pre-warm + any future consumer of knownNames saw a corrupted corpus.
+//
+// Guard rejects:
+//   1. Empty / wrong type
+//   2. Length outside 2-40 chars
+//   3. Substrings matching known non-name vocabulary (emotional / transactional)
+//   4. Gerund prefixes (getting, being, feeling, …) — a name never starts this way
+//
+// Rejections are LOGGED ([KNOWN_NAMES_REJECTED]) not thrown — observability
+// over call disruption. Writes that pass the guard are LOGGED ([KNOWN_NAMES_WRITE])
+// with true provenance (source='confirmed' vs 'temp') so drift is visible.
+// ============================================================================
+
+const KNOWN_NAMES_STOPWORDS = [
+  'ridiculous', 'whatever', 'want', 'need', "don't", 'dont',
+  'maybe', 'calling', 'waiting', 'annoying', 'crazy', 'stupid',
+  'frustrating', 'frustrated', 'upset', 'angry', 'confused',
+  'hello', 'hi ', 'hey ',
+];
+
+const KNOWN_NAMES_GERUND_PREFIXES = [
+  'getting ', 'being ', 'feeling ', 'calling ', 'waiting ',
+  'trying ', 'looking ', 'hoping ', 'wanting ', 'needing ',
+];
+
+/**
+ * _isPlausibleName — sanity guard. Returns { ok, reason }.
+ * ok=true → safe to promote. ok=false → reason tells us WHY for the log line.
+ */
+function _isPlausibleName(name) {
+  if (!name || typeof name !== 'string') return { ok: false, reason: 'empty_or_wrong_type' };
+  const trimmed = name.trim();
+  if (trimmed.length < 2)  return { ok: false, reason: 'too_short' };
+  if (trimmed.length > 40) return { ok: false, reason: 'too_long' };
+
+  const lower = trimmed.toLowerCase();
+
+  for (const stopword of KNOWN_NAMES_STOPWORDS) {
+    if (lower.includes(stopword)) {
+      return { ok: false, reason: 'stopword:' + stopword.trim() };
+    }
+  }
+
+  for (const prefix of KNOWN_NAMES_GERUND_PREFIXES) {
+    if (lower.startsWith(prefix)) {
+      return { ok: false, reason: 'gerund_prefix:' + prefix.trim() };
+    }
+  }
+
+  return { ok: true, reason: null };
+}
+
+// ============================================================================
 // STAMP — write callHistory + enrich callerProfile at call end
 // ============================================================================
 
@@ -153,29 +210,57 @@ async function stamp(companyId, callSid, customerId, durationSeconds = 0) {
       { $push, $set, ...(Object.keys($inc).length ? { $inc } : {}) }
     );
 
-    // ── Upsert knownName ──────────────────────────────────────────────────
+    // ── Upsert knownName — with REAL provenance + sanity guard ────────────
+    // PROVENANCE (was: hardcoded 'confirmed' — caused false-confirmed corpus):
+    //   source = 'confirmed' ONLY when fullName came from confirmed.firstName
+    //            or confirmed.lastName (caller actually confirmed via BOOKING_CONFIRM)
+    //   source = 'temp'      when fullName came from temp.* only (intake LLM
+    //            captured but never confirmed)
+    //
+    // SANITY GUARD (_isPlausibleName):
+    //   Rejects non-name phrases like "getting ridiculous" before they pollute
+    //   the knownNames corpus. Rejection is logged, not thrown.
+    //
+    // DRIFT-LOG: every accepted write emits [KNOWN_NAMES_WRITE] so cross-call
+    // name provenance is visible in Render logs.
     if (fullName) {
-      // Check if this name already exists in knownNames
-      const nameExists = (existingProfile.knownNames || []).some(n => n.name === fullName);
-      if (nameExists) {
-        await Customer.updateOne(
-          { _id: customerId, companyId, 'callerProfile.knownNames.name': fullName },
-          {
-            $inc: { 'callerProfile.knownNames.$.seenCount': 1 },
-            $set: { 'callerProfile.knownNames.$.lastSeenAt': now }
-          }
-        );
+      const nameFromConfirmed = !!(confirmed.firstName || confirmed.lastName);
+      const actualSource = nameFromConfirmed ? 'confirmed' : 'temp';
+      const guard = _isPlausibleName(fullName);
+
+      if (!guard.ok) {
+        logger.warn('[KNOWN_NAMES_REJECTED] Blocked non-plausible name from promotion', {
+          companyId, customerId: String(customerId), callSid,
+          name: fullName, reason: guard.reason, intendedSource: actualSource
+        });
+        // Skip promotion — corpus stays clean
       } else {
-        await Customer.updateOne(
-          { _id: customerId, companyId },
-          {
-            $push: {
-              'callerProfile.knownNames': {
-                name: fullName, seenCount: 1, lastSeenAt: now, source: 'confirmed'
+        logger.info('[KNOWN_NAMES_WRITE] Promoting name to callerProfile.knownNames', {
+          companyId, customerId: String(customerId), callSid,
+          name: fullName, source: actualSource
+        });
+
+        const nameExists = (existingProfile.knownNames || []).some(n => n.name === fullName);
+        if (nameExists) {
+          await Customer.updateOne(
+            { _id: customerId, companyId, 'callerProfile.knownNames.name': fullName },
+            {
+              $inc: { 'callerProfile.knownNames.$.seenCount': 1 },
+              $set: { 'callerProfile.knownNames.$.lastSeenAt': now }
+            }
+          );
+        } else {
+          await Customer.updateOne(
+            { _id: customerId, companyId },
+            {
+              $push: {
+                'callerProfile.knownNames': {
+                  name: fullName, seenCount: 1, lastSeenAt: now, source: actualSource
+                }
               }
             }
-          }
-        );
+          );
+        }
       }
     }
 
