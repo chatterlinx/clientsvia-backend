@@ -7346,14 +7346,14 @@ window.addEventListener('message', e => {
   }
 
   async function authFetch(url, opts = {}) {
-    // Match the token source used by all other tabs (Behavior/Intake/Model/Prompt).
-    // Plain localStorage.getItem('authToken') returns empty → 401 on every call.
-    const token = (window.AgentConsoleAuth && AgentConsoleAuth.getToken && AgentConsoleAuth.getToken()) || '';
-    const headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const res = await fetch(url, { ...opts, headers });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
+    // Use the canonical apiFetch helper — the same path every other admin tab
+    // (Behavior/Intake/Model/Prompt) uses. It handles Bearer auth, Content-Type,
+    // 401 → clearAndRedirect, and JSON parsing. Avoids token-key / preflight
+    // issues that caused the custom fetch above to fail with 401.
+    if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.apiFetch !== 'function') {
+      throw new Error('AgentConsoleAuth not loaded');
+    }
+    return AgentConsoleAuth.apiFetch(url, opts);
   }
 
   function fmt(n, decimals = 4) {
