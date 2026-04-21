@@ -451,24 +451,29 @@ function renderSectionStory(story, hasGpt4, callSid) {
 // addition — requires a UAP_FALSE_POSITIVE qaLog event type. For now,
 // any ✅ KC row may still be a misroute we can't yet see.
 
-// Render clickable kcId + sectionId chips for any turn that has a kcCard.
-// Container kcId is always present; sectionId only on direct matches (not digressions).
+// Render a single most-specific kcId chip for any turn that has a kcCard.
+// Section IDs already embed the container prefix (700c4-34-09 contains 700c4-34)
+// so showing both is redundant noise. Prefer section; fall back to container.
 function _renderKcIds(kc, editUrl) {
   if (!kc) return '';
-  const chips = [];
-  if (kc.kcId) {
-    chips.push(editUrl
-      ? `<a href="${esc(editUrl)}" target="_blank" class="tc-kc-chip tc-kc-chip-container" title="Open container in editor">${esc(kc.kcId)}</a>`
-      : `<span class="tc-kc-chip tc-kc-chip-container">${esc(kc.kcId)}</span>`);
-  }
+
   if (kc.sectionId) {
     const secUrl = editUrl ? `${editUrl}#section-${kc.sectionIdx ?? ''}` : null;
     const secLabel = kc.sectionIdx != null ? `§${kc.sectionIdx + 1} ${kc.sectionId}` : kc.sectionId;
-    chips.push(secUrl
+    const chip = secUrl
       ? `<a href="${esc(secUrl)}" target="_blank" class="tc-kc-chip tc-kc-chip-section" title="Open section in editor">${esc(secLabel)}</a>`
-      : `<span class="tc-kc-chip tc-kc-chip-section">${esc(secLabel)}</span>`);
+      : `<span class="tc-kc-chip tc-kc-chip-section">${esc(secLabel)}</span>`;
+    return `<div class="tc-kc-ids">${chip}</div>`;
   }
-  return chips.length ? `<div class="tc-kc-ids">${chips.join(' ')}</div>` : '';
+
+  if (kc.kcId) {
+    const chip = editUrl
+      ? `<a href="${esc(editUrl)}" target="_blank" class="tc-kc-chip tc-kc-chip-container" title="Open container in editor">${esc(kc.kcId)}</a>`
+      : `<span class="tc-kc-chip tc-kc-chip-container">${esc(kc.kcId)}</span>`;
+    return `<div class="tc-kc-ids">${chip}</div>`;
+  }
+
+  return '';
 }
 
 function _classifyTurn(t, companyId) {
@@ -479,7 +484,7 @@ function _classifyTurn(t, companyId) {
   const src     = t.sourceKey || '';
   const type    = t.provenanceType || '';
   const kc      = t.kcCard;
-  const mode    = t.answerMode || null;    // 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
+  const mode    = t.answerMode || null;    // 'uap' | 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
   const hasLLMFlag = (t.flags || []).some(f => f.code === 'LLM_FALLBACK');
 
   const kcEditUrl = kc?._id
@@ -527,10 +532,12 @@ function _classifyTurn(t, companyId) {
   }
 
   // ── KC hit branches (UI_OWNED + kcCard present) ─────────────────────────
-  // Split by answerMode: uap-audio / uap-text / groq — so admins know whether
+  // Split by answerMode: uap-audio / uap-text / uap / groq — so admins know whether
   // this turn ran through the Groq formatter (latency cost + variability) vs
   // served verbatim Fixed content vs served a pre-cached audio file.
-  if ((mode === 'uap-text' || mode === 'uap-audio' || mode === 'groq') && kc) {
+  // 'uap' (generic) = we know KC answered but TWIML system turn wasn't logged
+  // to disambiguate text vs audio (don't guess).
+  if ((mode === 'uap' || mode === 'uap-text' || mode === 'uap-audio' || mode === 'groq') && kc) {
     const kcLink = kcEditUrl
       ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-kc-link" title="Open KC card">${esc(kc.title || '—')}</a>`
       : esc(kc.title || '—');
@@ -546,7 +553,11 @@ function _classifyTurn(t, companyId) {
     } else if (mode === 'uap-text') {
       srcLabel = 'UAP (text)';
       icon     = '✅';
-      hintLine = 'Fixed section · verbatim · no Groq';
+      hintLine = 'Fixed section · TTS · no Groq';
+    } else if (mode === 'uap') {
+      srcLabel = 'UAP';
+      icon     = '✅';
+      hintLine = 'KC direct hit · delivery mode unavailable for this turn';
     } else {
       srcLabel = 'Groq';
       icon     = '🟣';
@@ -668,7 +679,9 @@ function renderSectionTurnCoverage(turns, companyId) {
   const counted    = agentItems.filter(x => x.cls.counts).length;          // excludes Turn 1
   const covered    = agentItems.filter(x => x.cls.covered).length;
   const kcHits     = agentItems.filter(x => x.cls.status === 'kc_hit').length;
-  const uapText    = agentItems.filter(x => x.cls.mode === 'uap-text').length;
+  // UAP counters: split by mode. 'uap' = generic (audio signal unavailable),
+  // folded into UAP (text) count since we can't prove audio was served.
+  const uapText    = agentItems.filter(x => x.cls.mode === 'uap-text' || x.cls.mode === 'uap').length;
   const uapAudio   = agentItems.filter(x => x.cls.mode === 'uap-audio').length;
   const groqHits   = agentItems.filter(x => x.cls.mode === 'groq').length;
   const fallbacks  = agentItems.filter(x => x.cls.status === 'llm_fallback').length;

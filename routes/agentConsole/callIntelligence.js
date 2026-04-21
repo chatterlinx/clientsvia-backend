@@ -1929,9 +1929,16 @@ const _HARDCODED_KC_PATHS = new Set([
 //   'groq'       → KC content reshaped by Groq formatter (BK_KC_DIGRESSION or groq-path)
 //   'llm-agent'  → Claude answer-from-kb (Turn 1 intake + KC_LLM_FALLBACK)
 //
-// Heuristic — best-effort from available trace signals. When richer signals
-// ship (explicit `formatterRan`, `audioServed` flags), move the switch here.
-function classifyAnswerMode({ speaker, turnNumber, provPath, sourceKey, flags, prov, kcTrace }) {
+// Signals used:
+//   • TWIML system turn (kind=TWIML_PLAY → cached audio served; kind=TWIML_SAY → TTS)
+//     — ground truth written in v2twilio.js for every agent turn.
+//   • kcTrace.groqLatencyMs / groqIntent — Groq formatter ran.
+//   • flags LLM_FALLBACK + provPath KC_LLM_FALLBACK — Claude answered.
+//
+// No heuristics on prov.audioUrl — that field is set from many sources and is
+// not a reliable per-turn audio-served signal. If the explicit signals are
+// missing, we return the base mode ('uap' generic) rather than guess.
+function classifyAnswerMode({ speaker, turnNumber, provPath, sourceKey, flags, kcTrace, audioServed }) {
   if (speaker !== 'agent') return null;
 
   // Scripts + transfer + unknowns are NOT LLM-generated — return null.
@@ -1950,10 +1957,11 @@ function classifyAnswerMode({ speaker, turnNumber, provPath, sourceKey, flags, p
   if (provPath === 'BK_KC_DIGRESSION') return 'groq';
   if (kcTrace?.groqLatencyMs || kcTrace?.groqIntent === 'answered') return 'groq';
 
-  // UAP hit — split text vs audio based on whether a pre-cached audio URL was served
+  // UAP hit — use TWIML system-turn ground truth (only reliable audio signal).
   if (provPath === 'KC_DIRECT_ANSWER') {
-    const audioUrl = prov?.audioUrl || kcTrace?.audioUrl || null;
-    return audioUrl ? 'uap-audio' : 'uap-text';
+    if (audioServed === true) return 'uap-audio';
+    if (audioServed === false) return 'uap-text';
+    return 'uap';  // signal unavailable — don't guess text vs audio
   }
 
   return null; // unclassified — don't guess
@@ -2436,6 +2444,22 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       return ta - tb;
     });
 
+  // ── TWIML audio-served lookup (ground truth per turn) ──
+  // v2twilio.js writes a companion system turn for every agent turn:
+  //   kind='TWIML_PLAY' → pre-cached audio was served (no TTS)
+  //   kind='TWIML_SAY'  → TTS synthesized (no cached audio)
+  // Map keyed by turnNumber → boolean (true=audio served, false=TTS).
+  const audioServedByTurn = new Map();
+  for (const t of rawTurns) {
+    if (t.speaker !== 'system') continue;
+    if (t.kind !== 'TWIML_PLAY' && t.kind !== 'TWIML_SAY') continue;
+    if (typeof t.turnNumber !== 'number') continue;
+    // First write wins (primary TWIML log for the turn); bridge logs come later.
+    if (!audioServedByTurn.has(t.turnNumber)) {
+      audioServedByTurn.set(t.turnNumber, t.kind === 'TWIML_PLAY');
+    }
+  }
+
   const result = [];
   let displayIndex = 0;
 
@@ -2498,14 +2522,17 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
     const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === t.turnNumber) || null;
 
     // Classify which engine actually produced this agent turn (UAP/Groq/LLMAgent split)
+    const audioServed = audioServedByTurn.has(t.turnNumber)
+      ? audioServedByTurn.get(t.turnNumber)
+      : null; // signal unavailable → classifier returns generic 'uap'
     const answerMode = classifyAnswerMode({
       speaker: t.speaker,
       turnNumber: t.turnNumber,
       provPath,
       sourceKey: srcKey,
       flags,
-      prov,
-      kcTrace
+      kcTrace,
+      audioServed
     });
 
     result.push({
@@ -2523,8 +2550,8 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       provenanceType: provType,
       provenanceLabel: provenanceLabel(provType, srcKey, provPath),
       provenancePath: provPath,
-      answerMode,                         // 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
-      audioUrl: prov?.audioUrl || kcTrace?.audioUrl || null,
+      answerMode,                         // 'uap' | 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
+      audioServed,                        // true=TWIML_PLAY, false=TWIML_SAY, null=no system turn logged
       groqLatencyMs: kcTrace?.groqLatencyMs || null,
       latencyMs: kcTrace.latencyMs || null,
       kcCard: kcCard ? {
