@@ -125,12 +125,18 @@ async function* streamTokens(opts) {
     // Build request body — only add response_format when explicitly requested.
     // Groq requires the word "json" to appear in the system prompt when using
     // json_object mode (otherwise returns 400). Intake system prompt satisfies this.
+    //
+    // Pass 2a — stream_options.include_usage asks Groq to emit a final SSE chunk
+    // with usage counts { prompt_tokens, completion_tokens, total_tokens }. This
+    // is the only way to get real token counts in streaming mode. Zero-cost flag;
+    // if Groq ever drops support we fall back to { input:0, output:0 } like before.
     const requestBody = {
         model:       groqModel,
         max_tokens:  maxTokens,
         temperature,
         messages:    groqMessages,
         stream:      true,
+        stream_options: { include_usage: true },
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
     };
 
@@ -184,6 +190,15 @@ async function* streamTokens(opts) {
                     const chunk = JSON.parse(data);
                     const text  = chunk.choices?.[0]?.delta?.content;
                     if (text) yield text;
+                    // Pass 2a — final usage chunk from include_usage option.
+                    // Shape: { usage: { prompt_tokens, completion_tokens, total_tokens } }
+                    // Stash on the opts object so streamFull can read it after iteration.
+                    if (chunk.usage && opts) {
+                        opts.__lastUsage = {
+                            input:  chunk.usage.prompt_tokens     || 0,
+                            output: chunk.usage.completion_tokens || 0,
+                        };
+                    }
                 } catch {
                     // Malformed SSE chunk — skip silently (Groq occasionally
                     // sends comment lines or empty data lines)
@@ -213,14 +228,17 @@ async function* streamTokens(opts) {
 async function streamFull(opts) {
     const startMs = Date.now();
     let   buffer  = '';
+    // Pass 2a — pass the same object reference to streamTokens so the generator
+    // can stash the final usage chunk on opts.__lastUsage for us to read below.
+    const tokenOpts = opts;
 
     try {
-        for await (const token of streamTokens(opts)) {
+        for await (const token of streamTokens(tokenOpts)) {
             buffer += token;
         }
         return {
             response:      buffer || null,
-            tokensUsed:    { input: 0, output: 0 },  // Groq SSE stream omits usage counts
+            tokensUsed:    tokenOpts.__lastUsage || { input: 0, output: 0 },
             latencyMs:     Date.now() - startMs,
             wasPartial:    false,
             failureReason: buffer ? null : 'EMPTY_RESPONSE',
@@ -228,7 +246,7 @@ async function streamFull(opts) {
     } catch (err) {
         return {
             response:      buffer.length >= 40 ? buffer : null,
-            tokensUsed:    { input: 0, output: 0 },
+            tokensUsed:    tokenOpts.__lastUsage || { input: 0, output: 0 },
             latencyMs:     Date.now() - startMs,
             wasPartial:    buffer.length >= 40,
             failureReason: err.message || 'STREAM_ERROR',

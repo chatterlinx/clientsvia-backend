@@ -1129,6 +1129,9 @@ async function answer(opts) {
       confidence:     parsed.confidence,
       latencyMs:      result.latencyMs,
       containerTitle,
+      // Pass 2a — real Groq tokensUsed from GroqStreamAdapter.streamFull (include_usage).
+      // Callers (KCDiscoveryRunner) compute cost from this and log to qaLog.
+      tokensUsed:     result.tokensUsed || { input: 0, output: 0 },
       // ── Provenance: the section text Groq read to generate its answer ────
       // Clipped to 500 chars for trace events — full text stays in Groq prompt only.
       containerBlockPreview: containerBlock.length > 500

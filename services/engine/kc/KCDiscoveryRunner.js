@@ -136,6 +136,28 @@ function _computeClaudeCost(tokensUsed) {
   };
 }
 
+/**
+ * _computeGroqCost — derive $ from tokensUsed shape { input, output } using
+ * Groq llama-3.3-70b pricing. Pass 2a — used for KC Groq formatter calls.
+ * Returns null when tokensUsed is unavailable (e.g., Groq dropped include_usage).
+ */
+function _computeGroqCost(tokensUsed) {
+  if (!tokensUsed || typeof tokensUsed.input !== 'number' || typeof tokensUsed.output !== 'number') {
+    return null;
+  }
+  if (tokensUsed.input === 0 && tokensUsed.output === 0) return null; // no usage data
+  const inUsd  = (tokensUsed.input  / 1_000_000) * COST_CONSTANTS.GROQ_LLAMA_IN_PER_M;
+  const outUsd = (tokensUsed.output / 1_000_000) * COST_CONSTANTS.GROQ_LLAMA_OUT_PER_M;
+  return {
+    inputTokens:  tokensUsed.input,
+    outputTokens: tokensUsed.output,
+    inputUsd:     Math.round(inUsd  * 1_000_000) / 1_000_000,
+    outputUsd:    Math.round(outUsd * 1_000_000) / 1_000_000,
+    totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
+    model:        'llama-3.3-70b-versatile',
+  };
+}
+
 // ============================================================================
 // PATH CONSTANTS
 // ============================================================================
@@ -2485,6 +2507,27 @@ async function _handlePrequalResponse({
     source:          'prequal',
   });
 
+  // Pass 2a — write Groq $ per turn to qaLog (fire-and-forget, cheap)
+  // Previously only Claude fallback cost was tracked (Phase A.4); now every
+  // Groq formatter call contributes to the per-call cost rollup too.
+  {
+    const _groqCost = _computeGroqCost(kcResult.tokensUsed);
+    _writeDiscoveryNotes(companyId, callSid, {
+      qaLog: [{
+        type:            'KC_GROQ_ANSWERED',
+        turn,
+        question:        userInput,
+        source:          'prequal',
+        containerId,
+        containerTitle,
+        latencyMs:       kcResult.latencyMs || null,
+        tokensUsed:      kcResult.tokensUsed || null,
+        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model } : null,
+        timestamp:       new Date().toISOString(),
+      }],
+    }).catch(() => {});
+  }
+
   return {
     response:      kcResult.response,
     audioHintText: kcResult.audioHintText || null,
@@ -2840,6 +2883,28 @@ async function _handleKCMatch({
     kcId:                  container.kcId || null,
     containerBlockPreview: kcResult.containerBlockPreview || null,
   });
+
+  // Pass 2a — write Groq $ per turn to qaLog (fire-and-forget, cheap)
+  // This is the primary Groq answer path. Every KC direct answer contributes
+  // to the per-call cost rollup.
+  {
+    const _groqCost = _computeGroqCost(kcResult.tokensUsed);
+    _writeDiscoveryNotes(companyId, callSid, {
+      qaLog: [{
+        type:            'KC_GROQ_ANSWERED',
+        turn,
+        question:        userInput,
+        source:          'direct',
+        containerId,
+        containerTitle,
+        kcId:            container.kcId || null,
+        latencyMs:       kcResult.latencyMs || null,
+        tokensUsed:      kcResult.tokensUsed || null,
+        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model } : null,
+        timestamp:       new Date().toISOString(),
+      }],
+    }).catch(() => {});
+  }
 
   logger.info('[KC_ENGINE] ✅ KC_DIRECT_ANSWER complete', {
     companyId, callSid, containerTitle,
