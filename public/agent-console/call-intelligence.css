@@ -1023,6 +1023,13 @@ button { cursor: pointer; font-family: inherit; }
   color: var(--tx-secondary);
   margin-top: 2px;
 }
+.tc-src-hint-faint {
+  font-size: 10px;
+  color: var(--tx-muted);
+  margin-top: 3px;
+  font-style: italic;
+  opacity: 0.8;
+}
 
 .tc-col-content {
   color: var(--tx-secondary);

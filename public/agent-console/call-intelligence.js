@@ -481,13 +481,13 @@ function _classifyTurn(t, companyId) {
   const kc      = t.kcCard;
   const hasLLMFlag = (t.flags || []).some(f => f.code === 'LLM_FALLBACK');
 
-  // ── Turn 1 intake: always expected LLM, excluded from coverage ──
+  // ── Turn 1 intake: always expected LLM Agent, excluded from coverage ──
   if (turnNum === 1) {
     return {
       status: 'expected',
       icon: '🔵',
-      srcLabel: 'LLM (Turn 1 intake)',
-      srcSub: 'Expected — always LLM',
+      srcLabel: 'LLM Agent (Turn 1 intake)',
+      srcSub: 'Expected — Claude generates turn 1',
       fixHtml: '<span class="tc-fix-na">Intake</span>',
       counts: false,
       covered: false,
@@ -518,7 +518,7 @@ function _classifyTurn(t, companyId) {
     return {
       status: 'llm_fallback',
       icon: '❌',
-      srcLabel: 'LLM Fallback',
+      srcLabel: 'LLM Agent Fallback',
       srcSub,
       fixHtml,
       counts: true,
@@ -540,7 +540,7 @@ function _classifyTurn(t, companyId) {
     const titleLine = kc.sectionLabel
       ? `${kcLink} · ${esc(kc.sectionLabel)}`
       : kcLink;
-    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}`;
+    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint tc-src-hint-faint">Answer from KC · formatted by Groq</div>`;
     return {
       status: 'kc_hit',
       icon: '✅',
@@ -720,7 +720,7 @@ function renderSectionTurnCoverage(turns, companyId) {
     <div class="tc-summary">
       <div class="tc-stat"><span class="tc-stat-val">${total}</span><span class="tc-stat-lbl">Agent turns</span></div>
       <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${kcHits}</span><span class="tc-stat-lbl">KC hits</span></div>
-      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM fallbacks</span></div>
+      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM Agent fallbacks</span></div>
       <div class="tc-stat tc-stat-script"><span class="tc-stat-val">${scripts}</span><span class="tc-stat-lbl">Scripts</span></div>
       <div class="tc-stat ${coverageClass}"><span class="tc-stat-val">${coveragePct}%</span><span class="tc-stat-lbl">Coverage</span></div>
     </div>
@@ -731,7 +731,9 @@ function renderSectionTurnCoverage(turns, companyId) {
       <tbody>${rowsHtml}</tbody>
     </table>
     <div class="tc-footnote">
-      Turn 1 is always LLM (intake) — excluded from coverage.
+      <strong>LLM Agent</strong> (Claude) = generates answers in <code>answer-from-kb</code> mode when KC has nothing.
+      <strong>Groq</strong> = formats every KC answer into conversational prose (invisible per-turn — runs on every ✅ row).
+      Turn 1 is always LLM Agent (intake) — excluded from coverage.
       KC misroute detection (✅ but wrong container) is a future addition.
     </div>`;
 
