@@ -7478,6 +7478,22 @@ window.addEventListener('message', e => {
     wire();
     if (!loaded) load();
   });
+
+  // Late-bind: if the page was refreshed while already on #tab=cost, the
+  // initial 'tab-activated' event fired BEFORE this listener was registered.
+  // Detect that case and wire/load now. Wait for S.companyId to be populated.
+  function lateBindIfOnCostTab() {
+    const activePanel = document.querySelector('.tab-panel.active');
+    if (!activePanel || activePanel.id !== 'tab-panel-cost') return;
+    if (!S.companyId) { setTimeout(lateBindIfOnCostTab, 150); return; }
+    wire();
+    if (!loaded) load();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', lateBindIfOnCostTab);
+  } else {
+    lateBindIfOnCostTab();
+  }
 })();
 </script>
 </body>
