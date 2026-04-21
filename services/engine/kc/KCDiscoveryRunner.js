@@ -94,6 +94,49 @@ const CUE_MIN_FIELD_COUNT   = 3;  // At least 3 of 8 cue fields must be populate
 // Anchor confirmation reuses ANCHOR_MATCH_THRESHOLD above
 
 // ============================================================================
+// COST CONSTANTS (per 1M tokens / per 1k chars)  — Phase A.4
+// ============================================================================
+// Admin is flying blind on Groq/Claude spend per fallback. Pricing here is
+// constant per model and lets the Gap page compute $ per turn without a
+// separate billing sync. If a price changes, update these and redeploy —
+// no schema change needed. Override via env for non-standard contracts.
+//
+// Sources (April 2026):
+//   Claude Sonnet 4.5: $3  / 1M input, $15  / 1M output
+//   Groq llama-3.3-70b: $0.59 / 1M input, $0.79 / 1M output  (primary KC Groq model)
+//   ElevenLabs Turbo v2.5: ~$0.30 / 1k chars  (approx; per-tier varies)
+// ============================================================================
+
+const COST_CONSTANTS = {
+  CLAUDE_SONNET_IN_PER_M:   parseFloat(process.env.KC_COST_CLAUDE_IN_PER_M)  || 3.00,
+  CLAUDE_SONNET_OUT_PER_M:  parseFloat(process.env.KC_COST_CLAUDE_OUT_PER_M) || 15.00,
+  GROQ_LLAMA_IN_PER_M:      parseFloat(process.env.KC_COST_GROQ_IN_PER_M)    || 0.59,
+  GROQ_LLAMA_OUT_PER_M:     parseFloat(process.env.KC_COST_GROQ_OUT_PER_M)   || 0.79,
+  ELEVENLABS_PER_1K_CHARS:  parseFloat(process.env.KC_COST_ELEVENLABS_PER_1K) || 0.30,
+};
+
+/**
+ * _computeClaudeCost — derive $ from tokensUsed shape { input, output }.
+ * Returns { inputUsd, outputUsd, totalUsd } rounded to 6 decimals, or null
+ * if tokensUsed is malformed. Cheap: two multiplications per call.
+ */
+function _computeClaudeCost(tokensUsed) {
+  if (!tokensUsed || typeof tokensUsed.input !== 'number' || typeof tokensUsed.output !== 'number') {
+    return null;
+  }
+  const inUsd  = (tokensUsed.input  / 1_000_000) * COST_CONSTANTS.CLAUDE_SONNET_IN_PER_M;
+  const outUsd = (tokensUsed.output / 1_000_000) * COST_CONSTANTS.CLAUDE_SONNET_OUT_PER_M;
+  return {
+    inputTokens:  tokensUsed.input,
+    outputTokens: tokensUsed.output,
+    inputUsd:     Math.round(inUsd  * 1_000_000) / 1_000_000,
+    outputUsd:    Math.round(outUsd * 1_000_000) / 1_000_000,
+    totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
+    model:        'claude-sonnet-4-5',
+  };
+}
+
+// ============================================================================
 // PATH CONSTANTS
 // ============================================================================
 
@@ -3212,6 +3255,11 @@ async function _handleLLMFallback({
     const _qaType = _reason === 'kc_section_gap'
       ? 'KC_SECTION_GAP_ANSWERED'
       : 'KC_LLM_FALLBACK';
+    // Phase A.4 — cost tracking. Every LLM fallback = real $. Admin
+    // needs per-turn $ to compute weekly/monthly spend from qaLog alone
+    // and prioritize which UAP misses to fix (highest $ = highest ROI).
+    const _cost = _computeClaudeCost(llmResult.tokensUsed);
+
     _writeDiscoveryNotes(companyId, callSid, {
       qaLog: [{
         type:      _qaType,
@@ -3236,6 +3284,9 @@ async function _handleLLMFallback({
           bestBelow: semanticDiagnostic.bestBelow,
           reason:    semanticDiagnostic.reason || null,
         } : null,
+        // Phase A.4 — derived $ per turn (null when tokensUsed unavailable).
+        cost:      _cost,
+        latencyMs: Date.now() - startMs,
         timestamp: new Date().toISOString(),
       }],
     }).catch(() => {});
