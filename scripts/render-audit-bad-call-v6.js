@@ -210,6 +210,38 @@ function trunc(s, n = 140) {
     .toArray();
   console.log('  KC containers found for company:', allContainers.length);
 
+  // ── DEBUG probe — per-container section count + first section shape ──────
+  // If "Total phrases in corpus: 0" despite containers being returned, this
+  // tells us whether (a) sections[] is empty, (b) callerPhrases[] is empty,
+  // (c) field names drifted. Uncomment or leave on — it's a few lines.
+  console.log('  ── per-container: section count / callerPhrase total ──');
+  for (const c of allContainers) {
+    const secs = Array.isArray(c.sections) ? c.sections : [];
+    let phraseSum = 0;
+    for (const s of secs) {
+      const cp = Array.isArray(s.callerPhrases) ? s.callerPhrases : [];
+      phraseSum += cp.length;
+    }
+    console.log('    [' + (c.kcId || '?') + '] ' + (c.title || '').padEnd(32) + ' sections=' + secs.length + ' phrases=' + phraseSum);
+  }
+  // Dump raw shape of first container's first section — verifies field names
+  if (allContainers.length > 0) {
+    const first   = allContainers[0];
+    const firstSec = (first.sections || [])[0];
+    if (firstSec) {
+      console.log('  ── first container.firstSection keys:', Object.keys(firstSec).join(','));
+      if (firstSec.callerPhrases && firstSec.callerPhrases[0]) {
+        console.log('     callerPhrases[0] keys:', Object.keys(firstSec.callerPhrases[0]).join(','));
+        console.log('     callerPhrases[0]:', JSON.stringify(firstSec.callerPhrases[0]).slice(0, 250));
+      } else {
+        console.log('     firstSection.callerPhrases empty or missing');
+      }
+    } else {
+      console.log('  ── first container has no sections[] entries');
+      console.log('     first container keys:', Object.keys(first).join(','));
+    }
+  }
+
   const flat = []; // { containerTitle, kcId, sectionIdx, sectionLabel, phrase, anchorWords, isActive, noAnchor, overlap }
   for (const c of allContainers) {
     const secs = Array.isArray(c.sections) ? c.sections : [];
