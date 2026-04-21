@@ -2263,6 +2263,42 @@ class Agent2DiscoveryRunner {
             nextLane: intakeResult.nextLane,
             entitiesExtracted: Object.keys(ext).filter(k => ext[k] != null).length,
           });
+
+          // Pass 2b — write Turn 1 Claude/Groq $ to qaLog (fire-and-forget)
+          // Turn 1 intake was previously invisible to the cost rollup because the
+          // provider/token data was only emitted to trace events, not discoveryNotes.
+          // Now every call's Turn 1 LLM spend is counted in the Call Intel Est. Cost.
+          try {
+            const _tIn  = intakeResult.tokensUsed?.input  || 0;
+            const _tOut = intakeResult.tokensUsed?.output || 0;
+            const _prov = intakeResult.provider || 'anthropic';  // set by streamWithSentences
+            // Env-overridable pricing — same constants as KCDiscoveryRunner.COST_CONSTANTS
+            const _rateIn  = _prov === 'groq'
+              ? (parseFloat(process.env.KC_COST_GROQ_IN_PER_M)  || 0.59)
+              : (parseFloat(process.env.KC_COST_CLAUDE_IN_PER_M) || 3.00);
+            const _rateOut = _prov === 'groq'
+              ? (parseFloat(process.env.KC_COST_GROQ_OUT_PER_M) || 0.79)
+              : (parseFloat(process.env.KC_COST_CLAUDE_OUT_PER_M) || 15.00);
+            const _usd = (_tIn / 1_000_000) * _rateIn + (_tOut / 1_000_000) * _rateOut;
+            DiscoveryNotesService.update(companyId, callSid, {
+              qaLog: [{
+                type:       'A2_LLM_INTAKE_TURN_1',
+                turn:       1,
+                question:   userInput || null,
+                source:     'turn1_intake',
+                provider:   _prov,
+                latencyMs:  intakeResult.latencyMs || null,
+                tokensUsed: { input: _tIn, output: _tOut },
+                cost:       (_tIn > 0 || _tOut > 0) ? {
+                  usd:    Math.round(_usd * 1_000_000) / 1_000_000,
+                  input:  _tIn,
+                  output: _tOut,
+                  model:  _prov === 'groq' ? 'llama-3.3-70b-versatile' : 'claude-sonnet-4-5',
+                } : null,
+                timestamp:  new Date().toISOString(),
+              }],
+            }).catch(() => {});
+          } catch (_costErr) { /* non-fatal — never break Turn 1 for a log write */ }
           emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
             'agent2.llmAgent.intake',
             null,
