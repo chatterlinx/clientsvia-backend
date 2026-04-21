@@ -93,7 +93,16 @@
   .stat-card.hit-rate-red    .stat-value { color: var(--red); }
   .stat-card.hit-rate-neutral .stat-value { color: var(--text-muted); }
 
-  /* ── UAP Health Card ─────────────────────────────────────────────────────── */
+  /* ── UAP pointer banner (UAP Health moved to uap.html Calibration) ──────── */
+  .uap-pointer-banner {
+    margin: 8px 0 16px 0; padding: 10px 14px;
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    font-size: 13px; color: #1e40af;
+  }
+  .uap-pointer-banner a { color: #1d4ed8; font-weight: 600; text-decoration: underline; }
+  .uap-pointer-banner:empty { display: none; }
+
+  /* ── UAP Health Card (deprecated on this page — see uap.html) ──────────── */
   .uap-health {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
     box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 20px;
@@ -646,7 +655,9 @@
     <div id="pageLoading" class="state-loading">Loading gap data...</div>
     <div id="pageContent" style="display:none;">
       <div id="statCards"></div>
-      <div id="uapHealth"></div>
+      <!-- UAP Pipeline Health moved to /agent-console/uap.html Calibration tab.
+           This page now focuses on the actionable miss backlog. -->
+      <div id="uapHealthPointer" class="uap-pointer-banner"></div>
       <div id="recommendations"></div>
       <div id="filterBar"></div>
       <div id="gapTable"></div>
