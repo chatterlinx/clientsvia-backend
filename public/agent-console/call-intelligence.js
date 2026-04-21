@@ -377,9 +377,10 @@ function renderReport(r) {
     $('cr-tokens').innerHTML = `<span class="cr-label">GPT-4 tokens</span><span class="cr-val">${gpt4Meta.tokensUsed.toLocaleString()}</span>`;
   }
 
-  // ── Render all 8 sections ──────────────────────────────────────────────
+  // ── Render all 9 sections ──────────────────────────────────────────────
   $('report-content').innerHTML = [
     renderSectionStory(story, hasGpt4Analysis, header.callSid),
+    renderSectionTurnCoverage(turns, header.companyId),
     renderSectionVitals(vitals, header.recordingUrl),
     renderSectionProtocol(protocolAudit),
     renderSectionTurns(turns, header.companyId, turnFlowMap),
@@ -441,7 +442,294 @@ function renderSectionStory(story, hasGpt4, callSid) {
   `);
 }
 
-// ── S2: Vitals ────────────────────────────────────────────────────────────────
+// ── S2: Turn Coverage ─────────────────────────────────────────────────────────
+//
+// Per-turn routing breakdown: UAP/KC vs LLM fallback vs booking script.
+// For non-Turn-1 LLM fallbacks, shows a fix hint + action button so the
+// admin can close the coverage gap.
+// NOTE: KC misroute detection (container matched wrong topic) is a future
+// addition — requires a UAP_FALSE_POSITIVE qaLog event type. For now,
+// any ✅ KC row may still be a misroute we can't yet see.
+
+function _classifyTurn(t, companyId) {
+  if (t.speaker !== 'agent') return null;
+
+  const turnNum = t.turnNumber;
+  const path    = t.provenancePath || '';
+  const src     = t.sourceKey || '';
+  const type    = t.provenanceType || '';
+  const kc      = t.kcCard;
+  const hasLLMFlag = (t.flags || []).some(f => f.code === 'LLM_FALLBACK');
+
+  // ── Turn 1 intake: always expected LLM, excluded from coverage ──
+  if (turnNum === 1) {
+    return {
+      status: 'expected',
+      icon: '🔵',
+      srcLabel: 'LLM (Turn 1 intake)',
+      srcSub: 'Expected — always LLM',
+      fixHtml: '<span class="tc-fix-na">Intake</span>',
+      counts: false,
+      covered: false,
+    };
+  }
+
+  // ── LLM fallback outside Turn 1: the target of this card ──
+  if (hasLLMFlag || path === 'KC_LLM_FALLBACK') {
+    const kcTitle = kc?.title || null;
+    const kcEditUrl = kc?._id
+      ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
+      : null;
+    let fixHtml;
+    let srcSub;
+    if (kcTitle) {
+      // Section gap: container matched, section didn't — direct author to card
+      srcSub = `Section gap · ${esc(kcTitle)}`;
+      fixHtml = kcEditUrl
+        ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-fix-btn">Open KC Card →</a>
+           <div class="tc-fix-hint">Add a section for this caller question</div>`
+        : `<div class="tc-fix-hint">Add a section to "${esc(kcTitle)}" covering this question</div>`;
+    } else {
+      // No container matched: send to Phrase Finder with caller phrase
+      srcSub = 'No KC match';
+      fixHtml = `<span class="tc-fix-hint">Use Phrase Finder to match or create KC</span>`;
+      // phraseFinderUrl injected by outer loop (needs prior caller text)
+    }
+    return {
+      status: 'llm_fallback',
+      icon: '❌',
+      srcLabel: 'LLM Fallback',
+      srcSub,
+      fixHtml,
+      counts: true,
+      covered: false,
+      needsPhraseFinder: !kcTitle,
+    };
+  }
+
+  // ── KC hit (UI_OWNED + kcCard present) ──
+  if (type === 'UI_OWNED' && kc) {
+    const isDigression = path === 'BK_KC_DIGRESSION';
+    const kcEditUrl = kc._id
+      ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
+      : null;
+    const kcLink = kcEditUrl
+      ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-kc-link" title="Open KC card">${esc(kc.title || '—')}</a>`
+      : esc(kc.title || '—');
+    const srcSub = kc.sectionLabel
+      ? `${kcLink} · ${esc(kc.sectionLabel)}`
+      : kcLink;
+    return {
+      status: 'kc_hit',
+      icon: '✅',
+      srcLabel: isDigression ? 'KC Digression' : 'KC',
+      srcSub,
+      fixHtml: '<span class="tc-fix-dash">—</span>',
+      counts: true,
+      covered: true,
+    };
+  }
+
+  // ── Hardcoded scripts (booking, transfer, intent) ──
+  if (type === 'HARDCODED' || src === 'BOOKING_LOGIC_ENGINE' || path === 'KC_BOOKING_INTENT') {
+    let label;
+    if (path === 'KC_BOOKING_INTENT')         label = 'Booking Intent';
+    else if (src === 'BOOKING_LOGIC_ENGINE')  label = 'Booking Flow';
+    else if (src === 'TRANSFER_ENGINE')       label = 'Transfer Flow';
+    else                                       label = 'Script';
+    return {
+      status: 'script',
+      icon: '⚙️',
+      srcLabel: label,
+      srcSub: 'Hardcoded (deterministic)',
+      fixHtml: '<span class="tc-fix-dash">—</span>',
+      counts: true,
+      covered: true,
+    };
+  }
+
+  // ── Unknown / unclassified ──
+  return {
+    status: 'unknown',
+    icon: '❓',
+    srcLabel: 'Unclassified',
+    srcSub: path || src || 'Unknown provenance',
+    fixHtml: '<span class="tc-fix-dash">—</span>',
+    counts: true,
+    covered: true,   // charitable: don't count as a gap unless we know it is
+  };
+}
+
+// Pair each agent turn with its preceding caller turn (same turnNumber)
+function _pairCallerText(turns, agentTurn) {
+  const paired = turns.find(t =>
+    t.turnNumber === agentTurn.turnNumber && t.speaker === 'caller');
+  return paired?.text || '';
+}
+
+// Collapse runs of 2+ consecutive script rows into one range row
+function _collapseScriptRuns(items) {
+  const out = [];
+  let run = null;
+  const flushRun = () => {
+    if (!run) return;
+    if (run.items.length >= 2) {
+      out.push({ kind: 'range', start: run.items[0].turn.turnNumber,
+                 end: run.items[run.items.length - 1].turn.turnNumber,
+                 items: run.items });
+    } else {
+      out.push({ kind: 'single', ...run.items[0] });
+    }
+    run = null;
+  };
+  for (const it of items) {
+    const isScript = it.cls?.status === 'script';
+    if (isScript) {
+      if (!run) run = { items: [it] };
+      else run.items.push(it);
+    } else {
+      flushRun();
+      out.push({ kind: 'single', ...it });
+    }
+  }
+  flushRun();
+  return out;
+}
+
+function renderSectionTurnCoverage(turns, companyId) {
+  if (!turns?.length) {
+    return sectionWrap('sec-coverage', '2', 'Turn Coverage', '0 turns',
+      `<div class="empty-state"><p>No turn data for coverage analysis.</p></div>`);
+  }
+
+  // 1. Classify each agent turn
+  const agentItems = turns
+    .filter(t => t.speaker === 'agent')
+    .map(t => ({ turn: t, cls: _classifyTurn(t, companyId) }))
+    .filter(x => x.cls);
+
+  // 2. Counts + coverage %
+  const total      = agentItems.length;
+  const counted    = agentItems.filter(x => x.cls.counts).length;          // excludes Turn 1
+  const covered    = agentItems.filter(x => x.cls.covered).length;
+  const kcHits     = agentItems.filter(x => x.cls.status === 'kc_hit').length;
+  const fallbacks  = agentItems.filter(x => x.cls.status === 'llm_fallback').length;
+  const scripts    = agentItems.filter(x => x.cls.status === 'script').length;
+  const coveragePct = counted > 0 ? Math.round((covered / counted) * 100) : 100;
+  const coverageClass =
+    coveragePct >= 90 ? 'tc-cov-good'  :
+    coveragePct >= 75 ? 'tc-cov-mid'   : 'tc-cov-bad';
+
+  // 3. Collapse consecutive script rows
+  const collapsed = _collapseScriptRuns(agentItems);
+
+  // 4. Build table rows
+  const companyIdSafe = encodeURIComponent(companyId || '');
+  const rowsHtml = collapsed.map((entry, entryIdx) => {
+    if (entry.kind === 'range') {
+      // Collapsed script range row
+      const subRows = entry.items.map(it => {
+        const t = it.turn;
+        const preview = (t.text || '').substring(0, 100);
+        return `<tr class="tc-row tc-row-script tc-sub-row">
+          <td class="tc-col-num">${t.turnNumber}</td>
+          <td class="tc-col-src">
+            <span class="tc-icon">${it.cls.icon}</span>
+            <div class="tc-src">
+              <div class="tc-src-lbl">${esc(it.cls.srcLabel)}</div>
+              <div class="tc-src-sub">${it.cls.srcSub}</div>
+            </div>
+          </td>
+          <td class="tc-col-content"><span class="tc-content-muted">${esc(preview)}${t.text?.length > 100 ? '…' : ''}</span></td>
+          <td class="tc-col-fix">${it.cls.fixHtml}</td>
+        </tr>`;
+      }).join('');
+      const rangeId = `tc-range-${entryIdx}`;
+      return `<tr class="tc-row tc-row-range" data-range="${rangeId}" onclick="toggleTcRange('${rangeId}', this)">
+        <td class="tc-col-num">${entry.start}-${entry.end}</td>
+        <td class="tc-col-src">
+          <span class="tc-icon">⚙️</span>
+          <div class="tc-src">
+            <div class="tc-src-lbl">Booking flow · ${entry.items.length} turns</div>
+            <div class="tc-src-sub tc-range-hint">Click to expand individual turns ▸</div>
+          </div>
+        </td>
+        <td class="tc-col-content"><span class="tc-content-muted">Name / address / confirmation steps…</span></td>
+        <td class="tc-col-fix"><span class="tc-fix-dash">—</span></td>
+      </tr>
+      <tr class="tc-range-expand" data-range-body="${rangeId}" style="display:none;"><td colspan="4" style="padding:0;">
+        <table class="tc-subtable"><tbody>${subRows}</tbody></table>
+      </td></tr>`;
+    }
+
+    // Single row (KC hit, LLM fallback, Turn 1, or one-off script)
+    const t = entry.turn;
+    const preview = (t.text || '').substring(0, 110);
+    const rowCls = `tc-row tc-row-${entry.cls.status}`;
+
+    // For LLM fallbacks with no container match, inject a Phrase Finder button
+    // using the prior caller phrase
+    let fixHtml = entry.cls.fixHtml;
+    if (entry.cls.needsPhraseFinder) {
+      const callerPhrase = _pairCallerText(turns, t).substring(0, 120).trim();
+      if (callerPhrase) {
+        const pfUrl = `/agent-console/services.html?companyId=${companyIdSafe}&openPf=${encodeURIComponent(callerPhrase)}`;
+        fixHtml = `<a href="${esc(pfUrl)}" target="_blank" class="tc-fix-btn">Phrase Finder →</a>
+                   <div class="tc-fix-hint">Match "${esc(callerPhrase.slice(0, 40))}…" to KC</div>`;
+      }
+    }
+
+    return `<tr class="${rowCls}">
+      <td class="tc-col-num">${t.turnNumber}</td>
+      <td class="tc-col-src">
+        <span class="tc-icon">${entry.cls.icon}</span>
+        <div class="tc-src">
+          <div class="tc-src-lbl">${esc(entry.cls.srcLabel)}</div>
+          <div class="tc-src-sub">${entry.cls.srcSub}</div>
+        </div>
+      </td>
+      <td class="tc-col-content">${esc(preview)}${t.text?.length > 110 ? '…' : ''}</td>
+      <td class="tc-col-fix">${fixHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // 5. Summary bar + table
+  const bodyHtml = `
+    <div class="tc-summary">
+      <div class="tc-stat"><span class="tc-stat-val">${total}</span><span class="tc-stat-lbl">Agent turns</span></div>
+      <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${kcHits}</span><span class="tc-stat-lbl">KC hits</span></div>
+      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM fallbacks</span></div>
+      <div class="tc-stat tc-stat-script"><span class="tc-stat-val">${scripts}</span><span class="tc-stat-lbl">Scripts</span></div>
+      <div class="tc-stat ${coverageClass}"><span class="tc-stat-val">${coveragePct}%</span><span class="tc-stat-lbl">Coverage</span></div>
+    </div>
+    <table class="tc-table">
+      <thead>
+        <tr><th style="width:60px;">#</th><th style="width:260px;">Source</th><th>Content</th><th style="width:240px;">Fix</th></tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="tc-footnote">
+      Turn 1 is always LLM (intake) — excluded from coverage.
+      KC misroute detection (✅ but wrong container) is a future addition.
+    </div>`;
+
+  return sectionWrap('sec-coverage', '2', 'Turn Coverage',
+    `${coveragePct}% covered`, bodyHtml);
+}
+
+// Click handler for collapsed script ranges
+window.toggleTcRange = function(rangeId, rowEl) {
+  const body = document.querySelector(`[data-range-body="${rangeId}"]`);
+  if (!body) return;
+  const showing = body.style.display !== 'none';
+  body.style.display = showing ? 'none' : '';
+  const hint = rowEl.querySelector('.tc-range-hint');
+  if (hint) hint.textContent = showing
+    ? 'Click to expand individual turns ▸'
+    : 'Click to collapse ▾';
+};
+
+// ── S3: Vitals ────────────────────────────────────────────────────────────────
 
 function renderSectionVitals(vitals, recordingUrl) {
   const items = vitals.metrics.map(m => `
@@ -459,7 +747,7 @@ function renderSectionVitals(vitals, recordingUrl) {
       <button class="rec-skip-btn" onclick="recSkip(10)" title="Forward 10 seconds">10s »</button>
     </div>` : '';
 
-  return sectionWrap('sec-vitals', '2', 'Call Vitals', `${vitals.metrics.length} metrics`, `
+  return sectionWrap('sec-vitals', '3', 'Call Vitals', `${vitals.metrics.length} metrics`, `
     <div class="vitals-grid">${items}</div>
     ${playerHtml}
   `);
@@ -507,7 +795,7 @@ function renderSectionProtocol(audit) {
       </td>
     </tr>`).join('');
 
-  return sectionWrap('sec-protocol', '3', 'Protocol Audit',
+  return sectionWrap('sec-protocol', '4', 'Protocol Audit',
     `${audit.stages.filter(s => s.status === 'pass').length}/${audit.stages.length} stages pass`, `
     ${stagesHtml}
     <div class="divider"></div>
@@ -531,14 +819,14 @@ function renderSectionTurns(turns, companyId, turnFlowMap = {}) {
       onclick="downloadTurnsPdf()">⬇ PDF</button>`;
 
   if (!turns?.length) {
-    return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log', '0 turns', `
+    return sectionWrap('sec-turns', '5', 'Turn-by-Turn Log', '0 turns', `
       <div class="empty-state"><p>No transcript turns found for this call.</p></div>`,
       false, dlActions);
   }
 
   const turnBlocks = turns.map(t => renderTurnBlock(t, companyId, turnFlowMap)).join('');
 
-  return sectionWrap('sec-turns', '4', 'Turn-by-Turn Log',
+  return sectionWrap('sec-turns', '5', 'Turn-by-Turn Log',
     `${turns.length} turns`, `<div class="turns-list">${turnBlocks}</div>`,
     true, dlActions);
 }
@@ -959,7 +1247,7 @@ function renderSectionKC(kcAudit, companyId) {
 
   const matchedBadge = `${kcAudit.matched.length} matched · ${kcAudit.gaps.length} gap${kcAudit.gaps.length !== 1 ? 's' : ''}`;
 
-  return sectionWrap('sec-kc', '5', 'KC Performance', matchedBadge, `
+  return sectionWrap('sec-kc', '6', 'KC Performance', matchedBadge, `
     <p class="kc-section-title">KC Cards Used This Call</p>
     ${kcAudit.matched.length ? `
       <table class="kc-table">
@@ -997,7 +1285,7 @@ function renderSectionLatency(lat) {
 
   const worst = lat.worstTurn;
 
-  return sectionWrap('sec-latency', '6', 'Latency Profile', lat.avgFormatted, `
+  return sectionWrap('sec-latency', '7', 'Latency Profile', lat.avgFormatted, `
     <div class="lat-summary">
       <div class="ls-item"><div class="ls-lbl">Avg latency</div><div class="ls-val">${lat.avgFormatted}</div></div>
       ${worst ? `<div class="ls-item"><div class="ls-lbl">Slowest turn</div><div class="ls-val">${worst.latencyMs}ms</div></div>` : ''}
@@ -1016,7 +1304,7 @@ function renderSectionLatency(lat) {
 
 function renderSectionEntities(et) {
   if (et.note && !et.entries?.length) {
-    return sectionWrap('sec-entities', '7', 'Entity Timeline', 'No data', `
+    return sectionWrap('sec-entities', '8', 'Entity Timeline', 'No data', `
       <p class="text-muted text-sm">${esc(et.note)}</p>`);
   }
 
@@ -1046,7 +1334,7 @@ function renderSectionEntities(et) {
 
   const badge = et.objective ? `Final stage: ${et.objective}` : null;
 
-  return sectionWrap('sec-entities', '7', 'Entity Timeline', badge, `
+  return sectionWrap('sec-entities', '8', 'Entity Timeline', badge, `
     <div class="entity-tl">${events || '<p class="text-muted text-sm">No entity events recorded.</p>'}</div>
     ${missingHtml}
     ${dnarHtml}
@@ -1129,7 +1417,7 @@ function renderSectionIssues(issues, recommendations, companyId) {
     ? `${sorted.filter(i => i.severity === 'critical' || i.severity === 'high').length} high priority`
     : 'No issues';
 
-  return sectionWrap('sec-issues', '8', 'Issues & Actions', badge, `
+  return sectionWrap('sec-issues', '9', 'Issues & Actions', badge, `
     <div class="issues-stack">
       ${issueCards || '<p class="text-muted text-sm">No issues detected.</p>'}
     </div>
