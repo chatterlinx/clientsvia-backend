@@ -7350,7 +7350,10 @@ window.addEventListener('message', e => {
     // (Behavior/Intake/Model/Prompt) uses. It handles Bearer auth, Content-Type,
     // 401 → clearAndRedirect, and JSON parsing. Avoids token-key / preflight
     // issues that caused the custom fetch above to fail with 401.
-    if (!window.AgentConsoleAuth || typeof AgentConsoleAuth.apiFetch !== 'function') {
+    // NOTE: auth.js declares `const AgentConsoleAuth = ...` at top level, which
+    // creates a script-scoped binding accessible by bare name — but NOT a
+    // property of `window`. Use `typeof` to detect, not `window.AgentConsoleAuth`.
+    if (typeof AgentConsoleAuth === 'undefined' || typeof AgentConsoleAuth.apiFetch !== 'function') {
       throw new Error('AgentConsoleAuth not loaded');
     }
     return AgentConsoleAuth.apiFetch(url, opts);
