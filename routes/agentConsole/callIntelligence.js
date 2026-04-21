@@ -1920,6 +1920,45 @@ const _HARDCODED_KC_PATHS = new Set([
   'KC_BOOKING_INTENT',  // "Great! Let me get that scheduled for you."
 ]);
 
+// ── Answer-mode classifier ────────────────────────────────────────────────
+// Returns one of the 4 canonical answer modes that can generate agent speech,
+// or null for deterministic scripts / transfer / unclassified.
+//
+//   'uap-text'   → KC direct hit, Fixed content delivered as TTS (no audio cache)
+//   'uap-audio'  → KC direct hit, pre-cached audio file served (no TTS)
+//   'groq'       → KC content reshaped by Groq formatter (BK_KC_DIGRESSION or groq-path)
+//   'llm-agent'  → Claude answer-from-kb (Turn 1 intake + KC_LLM_FALLBACK)
+//
+// Heuristic — best-effort from available trace signals. When richer signals
+// ship (explicit `formatterRan`, `audioServed` flags), move the switch here.
+function classifyAnswerMode({ speaker, turnNumber, provPath, sourceKey, flags, prov, kcTrace }) {
+  if (speaker !== 'agent') return null;
+
+  // Scripts + transfer + unknowns are NOT LLM-generated — return null.
+  if (_HARDCODED_KC_PATHS.has(provPath)) return null;
+  if (sourceKey === 'BOOKING_LOGIC_ENGINE' && provPath !== 'BK_KC_DIGRESSION') return null;
+  if (sourceKey === 'TRANSFER_ENGINE') return null;
+
+  // LLM Agent — Turn 1 + explicit LLM fallback
+  const hasLLMFallback = (flags || []).some(f => f.code === 'LLM_FALLBACK');
+  if (turnNumber === 1) return 'llm-agent';
+  if (hasLLMFallback) return 'llm-agent';
+  if (provPath === 'KC_LLM_FALLBACK') return 'llm-agent';
+
+  // Groq — booking KC digression goes through KnowledgeContainerService.answer() (Groq formatter),
+  // or explicit groq signal on the trace.
+  if (provPath === 'BK_KC_DIGRESSION') return 'groq';
+  if (kcTrace?.groqLatencyMs || kcTrace?.groqIntent === 'answered') return 'groq';
+
+  // UAP hit — split text vs audio based on whether a pre-cached audio URL was served
+  if (provPath === 'KC_DIRECT_ANSWER') {
+    const audioUrl = prov?.audioUrl || kcTrace?.audioUrl || null;
+    return audioUrl ? 'uap-audio' : 'uap-text';
+  }
+
+  return null; // unclassified — don't guess
+}
+
 function provenanceLabel(type, sourceKey, provPath) {
   // 0. Turn1Engine — lane-specific labels (provPath carries the _exitReason)
   //    sourceKey === 'TURN1_ENGINE' for all 4 lanes.
@@ -2458,6 +2497,17 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
 
     const qaEntry = discoveryNotes?.qaLog?.find(q => q.turn === t.turnNumber) || null;
 
+    // Classify which engine actually produced this agent turn (UAP/Groq/LLMAgent split)
+    const answerMode = classifyAnswerMode({
+      speaker: t.speaker,
+      turnNumber: t.turnNumber,
+      provPath,
+      sourceKey: srcKey,
+      flags,
+      prov,
+      kcTrace
+    });
+
     result.push({
       displayIndex,                      // sequential 1…N for the report
       turnNumber: t.turnNumber,          // raw DB turn number (shown in pipeline trace)
@@ -2473,6 +2523,9 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       provenanceType: provType,
       provenanceLabel: provenanceLabel(provType, srcKey, provPath),
       provenancePath: provPath,
+      answerMode,                         // 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
+      audioUrl: prov?.audioUrl || kcTrace?.audioUrl || null,
+      groqLatencyMs: kcTrace?.groqLatencyMs || null,
       latencyMs: kcTrace.latencyMs || null,
       kcCard: kcCard ? {
         _id: kcCard._id.toString(),

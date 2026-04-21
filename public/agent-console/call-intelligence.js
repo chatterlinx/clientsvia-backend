@@ -479,7 +479,12 @@ function _classifyTurn(t, companyId) {
   const src     = t.sourceKey || '';
   const type    = t.provenanceType || '';
   const kc      = t.kcCard;
+  const mode    = t.answerMode || null;    // 'uap-text' | 'uap-audio' | 'groq' | 'llm-agent' | null
   const hasLLMFlag = (t.flags || []).some(f => f.code === 'LLM_FALLBACK');
+
+  const kcEditUrl = kc?._id
+    ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
+    : null;
 
   // ── Turn 1 intake: always expected LLM Agent, excluded from coverage ──
   if (turnNum === 1) {
@@ -494,31 +499,25 @@ function _classifyTurn(t, companyId) {
     };
   }
 
-  // ── LLM fallback outside Turn 1: the target of this card ──
-  if (hasLLMFlag || path === 'KC_LLM_FALLBACK') {
+  // ── LLM Agent fallback outside Turn 1: the target of this card ──
+  if (mode === 'llm-agent' || hasLLMFlag || path === 'KC_LLM_FALLBACK') {
     const kcTitle = kc?.title || null;
-    const kcEditUrl = kc?._id
-      ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
-      : null;
     let fixHtml;
     let srcSub;
     if (kcTitle) {
-      // Section gap: container matched, section didn't — direct author to card
       srcSub = `${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint">Section gap · ${esc(kcTitle)}</div>`;
       fixHtml = kcEditUrl
         ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-fix-btn">Open KC Card →</a>
            <div class="tc-fix-hint">Add a section for this caller question</div>`
         : `<div class="tc-fix-hint">Add a section to "${esc(kcTitle)}" covering this question</div>`;
     } else {
-      // No container matched: send to Phrase Finder with caller phrase
       srcSub = 'No KC match';
       fixHtml = `<span class="tc-fix-hint">Use Phrase Finder to match or create KC</span>`;
-      // phraseFinderUrl injected by outer loop (needs prior caller text)
     }
     return {
       status: 'llm_fallback',
       icon: '❌',
-      srcLabel: 'LLM Agent Fallback',
+      srcLabel: 'LLM Agent',
       srcSub,
       fixHtml,
       counts: true,
@@ -527,20 +526,54 @@ function _classifyTurn(t, companyId) {
     };
   }
 
-  // ── KC hit (UI_OWNED + kcCard present) ──
-  if (type === 'UI_OWNED' && kc) {
-    const isDigression = path === 'BK_KC_DIGRESSION';
-    const kcEditUrl = kc._id
-      ? `/agent-console/services-item.html?companyId=${encodeURIComponent(companyId)}&itemId=${encodeURIComponent(kc._id)}`
-      : null;
+  // ── KC hit branches (UI_OWNED + kcCard present) ─────────────────────────
+  // Split by answerMode: uap-audio / uap-text / groq — so admins know whether
+  // this turn ran through the Groq formatter (latency cost + variability) vs
+  // served verbatim Fixed content vs served a pre-cached audio file.
+  if ((mode === 'uap-text' || mode === 'uap-audio' || mode === 'groq') && kc) {
     const kcLink = kcEditUrl
       ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-kc-link" title="Open KC card">${esc(kc.title || '—')}</a>`
       : esc(kc.title || '—');
-    // Title + sectionLabel on one line, kcId chips on the next
     const titleLine = kc.sectionLabel
       ? `${kcLink} · ${esc(kc.sectionLabel)}`
       : kcLink;
-    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint tc-src-hint-faint">Answer from KC · formatted by Groq</div>`;
+
+    let srcLabel, icon, hintLine;
+    if (mode === 'uap-audio') {
+      srcLabel = 'UAP Audio';
+      icon     = '🎵';
+      hintLine = 'Pre-cached audio · no TTS, no Groq';
+    } else if (mode === 'uap-text') {
+      srcLabel = 'UAP (text)';
+      icon     = '✅';
+      hintLine = 'Fixed section · verbatim · no Groq';
+    } else {
+      srcLabel = 'Groq';
+      icon     = '🟣';
+      const ms = t.groqLatencyMs ? ` · ${t.groqLatencyMs}ms` : '';
+      hintLine = `Groq formatter reshaped KC content${ms}`;
+    }
+    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint tc-src-hint-faint">${hintLine}</div>`;
+    return {
+      status: 'kc_hit',
+      icon,
+      srcLabel,
+      srcSub,
+      fixHtml: '<span class="tc-fix-dash">—</span>',
+      counts: true,
+      covered: true,
+      mode,
+    };
+  }
+
+  // Legacy fallback — older transcripts without answerMode: keep prior "KC" label
+  if (type === 'UI_OWNED' && kc) {
+    const kcLink = kcEditUrl
+      ? `<a href="${esc(kcEditUrl)}" target="_blank" class="tc-kc-link" title="Open KC card">${esc(kc.title || '—')}</a>`
+      : esc(kc.title || '—');
+    const isDigression = path === 'BK_KC_DIGRESSION';
+    const titleLine = kc.sectionLabel ? `${kcLink} · ${esc(kc.sectionLabel)}` : kcLink;
+    const srcSub = `${titleLine}${_renderKcIds(kc, kcEditUrl)}<div class="tc-src-hint tc-src-hint-faint">Legacy trace — exact mode unavailable</div>`;
     return {
       status: 'kc_hit',
       icon: '✅',
@@ -635,6 +668,9 @@ function renderSectionTurnCoverage(turns, companyId) {
   const counted    = agentItems.filter(x => x.cls.counts).length;          // excludes Turn 1
   const covered    = agentItems.filter(x => x.cls.covered).length;
   const kcHits     = agentItems.filter(x => x.cls.status === 'kc_hit').length;
+  const uapText    = agentItems.filter(x => x.cls.mode === 'uap-text').length;
+  const uapAudio   = agentItems.filter(x => x.cls.mode === 'uap-audio').length;
+  const groqHits   = agentItems.filter(x => x.cls.mode === 'groq').length;
   const fallbacks  = agentItems.filter(x => x.cls.status === 'llm_fallback').length;
   const scripts    = agentItems.filter(x => x.cls.status === 'script').length;
   const coveragePct = counted > 0 ? Math.round((covered / counted) * 100) : 100;
@@ -716,11 +752,15 @@ function renderSectionTurnCoverage(turns, companyId) {
   }).join('');
 
   // 5. Summary bar + table
+  //    KC-hit stat splits into UAP-text / UAP-audio / Groq so admins can see at
+  //    a glance how much of each turn went through the expensive Groq formatter.
   const bodyHtml = `
     <div class="tc-summary">
       <div class="tc-stat"><span class="tc-stat-val">${total}</span><span class="tc-stat-lbl">Agent turns</span></div>
-      <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${kcHits}</span><span class="tc-stat-lbl">KC hits</span></div>
-      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM Agent fallbacks</span></div>
+      <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${uapText}</span><span class="tc-stat-lbl">UAP (text)</span></div>
+      <div class="tc-stat tc-stat-kc"><span class="tc-stat-val">${uapAudio}</span><span class="tc-stat-lbl">UAP Audio</span></div>
+      <div class="tc-stat tc-stat-groq"><span class="tc-stat-val">${groqHits}</span><span class="tc-stat-lbl">Groq</span></div>
+      <div class="tc-stat tc-stat-fallback"><span class="tc-stat-val">${fallbacks}</span><span class="tc-stat-lbl">LLM Agent</span></div>
       <div class="tc-stat tc-stat-script"><span class="tc-stat-val">${scripts}</span><span class="tc-stat-lbl">Scripts</span></div>
       <div class="tc-stat ${coverageClass}"><span class="tc-stat-val">${coveragePct}%</span><span class="tc-stat-lbl">Coverage</span></div>
     </div>
@@ -731,10 +771,12 @@ function renderSectionTurnCoverage(turns, companyId) {
       <tbody>${rowsHtml}</tbody>
     </table>
     <div class="tc-footnote">
-      <strong>LLM Agent</strong> (Claude) = generates answers in <code>answer-from-kb</code> mode when KC has nothing.
-      <strong>Groq</strong> = formats every KC answer into conversational prose (invisible per-turn — runs on every ✅ row).
+      <strong>🎵 UAP Audio</strong> — pre-cached audio file served directly (fastest, no TTS, no Groq).
+      <strong>✅ UAP (text)</strong> — Fixed section content delivered verbatim via TTS (no Groq formatter).
+      <strong>🟣 Groq</strong> — KC content reshaped by Groq formatter (latency cost + variability).
+      <strong>❌ LLM Agent</strong> — Claude <code>answer-from-kb</code> fallback (Turn 1 + when KC has nothing).
       Turn 1 is always LLM Agent (intake) — excluded from coverage.
-      KC misroute detection (✅ but wrong container) is a future addition.
+      KC misroute detection (correct path but wrong container) is a future addition.
     </div>`;
 
   return sectionWrap('sec-coverage', '2', 'Turn Coverage',

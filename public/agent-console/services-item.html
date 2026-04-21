@@ -2358,6 +2358,8 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const row = document.createElement('div');
   row.className = 'section-row' + (sectionIsActive ? '' : ' section-inactive');
   row.dataset.sid = id;
+  row.dataset.sectionIdx = rowCount;       // 0-based index for #section-N anchor scroll from Call Intelligence
+  row.id = `section-${rowCount}`;          // anchor target for Turn Coverage chip links
   row.innerHTML = `
     <div class="section-row-header">
       <span class="section-drag-handle" title="Drag to reorder">
@@ -2965,8 +2967,37 @@ function updateSectionNumbers() {
     if (num) num.textContent = idx + 1;
     const tag = row.querySelector('.section-id-tag');
     if (tag && S.kcId) tag.textContent = `${S.kcId}-${String(idx + 1).padStart(2, '0')}`;
+    // keep anchor id + data-section-idx in sync after reorder/insert/delete
+    row.dataset.sectionIdx = idx;
+    row.id = `section-${idx}`;
   });
 }
+
+// ── Anchor scroll from Call Intelligence Turn Coverage ─────────────────────
+// Chip links from call-intelligence.html land here with hash like #section-8
+// (0-based index). Scroll the matching row into view and flash-highlight it.
+function _scrollToSectionHash() {
+  const m = (location.hash || '').match(/^#section-(\d+)$/);
+  if (!m) return;
+  const idx = Number(m[1]);
+  // Try a few times: sections may still be rendering on first paint
+  let attempts = 0;
+  const tryScroll = () => {
+    const row = document.querySelector(`#sectionsList .section-row[data-section-idx="${idx}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // brief highlight so the user sees where they landed
+      row.style.transition = 'box-shadow 0.3s ease';
+      row.style.boxShadow = '0 0 0 3px rgba(14,165,233,0.4)';
+      setTimeout(() => { row.style.boxShadow = ''; }, 1800);
+    } else if (++attempts < 20) {
+      setTimeout(tryScroll, 150);
+    }
+  };
+  tryScroll();
+}
+window.addEventListener('hashchange', _scrollToSectionHash);
+document.addEventListener('DOMContentLoaded', () => setTimeout(_scrollToSectionHash, 300));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTENT COACH — Gap analysis ("What's missing?")
