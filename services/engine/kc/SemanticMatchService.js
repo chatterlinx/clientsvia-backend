@@ -44,13 +44,8 @@ const logger  = require('../../../utils/logger');
 const CONFIG = {
   MODEL:       'text-embedding-3-small',
   DIMENSIONS:  512,
-  // Minimum cosine similarity to consider a semantic match.
-  // Raised from 0.50 → 0.75 (April 2026) after threshold-sweep harness showed
-  // that strong correct matches score 0.838–0.952 while weak/wrong matches
-  // (including the "AC unit not holding" mis-route to wrong container) scored
-  // 0.639–0.708. 0.75 cleanly separates signal from noise. Env var override
-  // `KC_SEMANTIC_THRESHOLD` still wins if set.
-  MIN_SIMILARITY: parseFloat(process.env.KC_SEMANTIC_THRESHOLD) || 0.75,
+  // Minimum cosine similarity to consider a semantic match
+  MIN_SIMILARITY: parseFloat(process.env.KC_SEMANTIC_THRESHOLD) || 0.50,
   // Batch size for embedding multiple texts in one API call
   MAX_BATCH:   64,
 };
