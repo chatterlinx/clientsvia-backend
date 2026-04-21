@@ -348,8 +348,10 @@ async function synthesizeSpeech({
       if (callSid && _companyId) {
         const _chars = formattedText ? formattedText.length : (text ? text.length : 0);
         // Commit 2 — rates resolved via shared costRates helper (per-company → env → default)
+        // WithMeta variant stamps tier/perKChars onto the qaLog event so the
+        // Cost Breakdown drawer can show "Turbo v2.5 (enterprise) @ $0.15/1k".
         const costRates = require('./costRates');
-        const _usd = costRates.computeElevenLabsCost(_chars, company);
+        const _meta = costRates.computeElevenLabsCostWithMeta(_chars, company);
         // Lazy-require to avoid circular import at module load
         const DiscoveryNotesService = require('./discoveryNotes/DiscoveryNotesService');
         DiscoveryNotesService.update(_companyId, callSid, {
@@ -359,7 +361,7 @@ async function synthesizeSpeech({
             voiceId,
             modelId:   model_id,
             chars:     _chars,
-            cost:      { usd: _usd, chars: _chars, model: model_id },
+            cost:      { usd: _meta.usd, chars: _chars, model: model_id, rate: _meta.rate },
             timestamp: new Date().toISOString(),
           }],
         }).catch(() => {});

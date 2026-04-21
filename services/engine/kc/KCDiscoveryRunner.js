@@ -125,7 +125,8 @@ function _computeClaudeCost(tokensUsed, company) {
   if (!tokensUsed || typeof tokensUsed.input !== 'number' || typeof tokensUsed.output !== 'number') {
     return null;
   }
-  const r = costRates.getRates(company).claude;
+  const rates = costRates.getRates(company);
+  const r = rates.claude;
   const inUsd  = (tokensUsed.input  / 1_000_000) * r.inPerM;
   const outUsd = (tokensUsed.output / 1_000_000) * r.outPerM;
   return {
@@ -136,6 +137,9 @@ function _computeClaudeCost(tokensUsed, company) {
     totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
     model:        'claude-sonnet-4-5',
     tier:         r.tier,
+    // Rate provenance — stamped onto qaLog so the Cost Breakdown drawer
+    // can show "Sonnet 4.5 (enterprise) @ $2.50/M in · $12/M out (company)".
+    rate: { tier: r.tier, inPerM: r.inPerM, outPerM: r.outPerM, source: rates._source },
   };
 }
 
@@ -152,7 +156,8 @@ function _computeGroqCost(tokensUsed, company) {
     return null;
   }
   if (tokensUsed.input === 0 && tokensUsed.output === 0) return null; // no usage data
-  const r = costRates.getRates(company).groq;
+  const rates = costRates.getRates(company);
+  const r = rates.groq;
   const inUsd  = (tokensUsed.input  / 1_000_000) * r.inPerM;
   const outUsd = (tokensUsed.output / 1_000_000) * r.outPerM;
   return {
@@ -162,6 +167,7 @@ function _computeGroqCost(tokensUsed, company) {
     outputUsd:    Math.round(outUsd * 1_000_000) / 1_000_000,
     totalUsd:     Math.round((inUsd + outUsd) * 1_000_000) / 1_000_000,
     model:        'llama-3.3-70b-versatile',
+    rate:         { tier: r.tier, inPerM: r.inPerM, outPerM: r.outPerM, source: rates._source },
     tier:         r.tier,
   };
 }
@@ -2530,7 +2536,7 @@ async function _handlePrequalResponse({
         containerTitle,
         latencyMs:       kcResult.latencyMs || null,
         tokensUsed:      kcResult.tokensUsed || null,
-        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model } : null,
+        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model, rate: _groqCost.rate } : null,
         timestamp:       new Date().toISOString(),
       }],
     }).catch(() => {});
@@ -2908,7 +2914,7 @@ async function _handleKCMatch({
         kcId:            container.kcId || null,
         latencyMs:       kcResult.latencyMs || null,
         tokensUsed:      kcResult.tokensUsed || null,
-        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model } : null,
+        cost:            _groqCost ? { usd: _groqCost.totalUsd, input: _groqCost.inputTokens, output: _groqCost.outputTokens, model: _groqCost.model, rate: _groqCost.rate } : null,
         timestamp:       new Date().toISOString(),
       }],
     }).catch(() => {});
@@ -3358,7 +3364,9 @@ async function _handleLLMFallback({
           reason:    semanticDiagnostic.reason || null,
         } : null,
         // Phase A.4 — derived $ per turn (null when tokensUsed unavailable).
-        cost:      _cost,
+        // Normalize to same shape the aggregator expects ({usd,input,output,model,rate})
+        // so KC_LLM_FALLBACK turns show up in the Cost Breakdown drawer.
+        cost:      _cost ? { usd: _cost.totalUsd, input: _cost.inputTokens, output: _cost.outputTokens, model: _cost.model, rate: _cost.rate } : null,
         latencyMs: Date.now() - startMs,
         timestamp: new Date().toISOString(),
       }],

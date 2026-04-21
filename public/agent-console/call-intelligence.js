@@ -723,18 +723,31 @@ function renderSectionTurnCoverage(turns, companyId) {
       if (qc.claudeUsd > 0) { costClaudeUsd += qc.claudeUsd; costClaudeReal += qc.claudeUsd; }
       if (qc.groqUsd   > 0) { costGroqEstUsd += qc.groqUsd;  costGroqReal   += qc.groqUsd; }
       if (qc.elevenUsd > 0) { costElevenUsd += qc.elevenUsd; costElevenReal += qc.elevenUsd; elevenCharCount += (qc.elevenChars || 0); }
-      // Walk the breakdown[] for per-turn rows + token rollups
+      // Walk the breakdown[] for per-turn rows + token rollups.
+      // `b.rate` (added April 21, 2026) is the per-event rate provenance stamp:
+      //   LLM:  { tier, inPerM, outPerM, source: 'company'|'env'|'default' }
+      //   TTS:  { tier, perKChars, source }
+      // When present, we append it to the row detail so the drawer shows the
+      // exact plan/rate that produced this $ — makes per-company overrides
+      // visually verifiable at a glance.
+      const _rateNote = (r) => {
+        if (!r || !r.tier) return '';
+        const srcBadge = r.source === 'company' ? ' (company)' : (r.source === 'env' ? ' (env)' : '');
+        if (typeof r.inPerM === 'number') return ` · ${r.tier} @ $${r.inPerM}/M in · $${r.outPerM}/M out${srcBadge}`;
+        if (typeof r.perKChars === 'number') return ` · ${r.tier} @ $${r.perKChars}/1k${srcBadge}`;
+        return ` · ${r.tier}${srcBadge}`;
+      };
       if (Array.isArray(qc.breakdown)) {
         for (const b of qc.breakdown) {
           if (b.type === 'claude') {
             claudeCalls++;
-            costRows.push({ turn: t.turnNumber, category: 'claude', label: 'Claude', detail: `${b.source || 'fallback'} · ${b.model || 'claude-sonnet-4-5'}`, usd: b.usd, quality: 'real' });
+            costRows.push({ turn: t.turnNumber, category: 'claude', label: 'Claude', detail: `${b.source || 'fallback'} · ${b.model || 'claude-sonnet-4-5'}${_rateNote(b.rate)}`, usd: b.usd, quality: 'real' });
           } else if (b.type === 'groq') {
             groqCalls++;
-            costRows.push({ turn: t.turnNumber, category: 'groq',   label: 'Groq',   detail: `${b.source || 'kc'} · ${b.model || 'llama-3.3-70b'}`, usd: b.usd, quality: 'real' });
+            costRows.push({ turn: t.turnNumber, category: 'groq',   label: 'Groq',   detail: `${b.source || 'kc'} · ${b.model || 'llama-3.3-70b'}${_rateNote(b.rate)}`, usd: b.usd, quality: 'real' });
           } else if (b.type === 'elevenlabs') {
             elevenCalls++;
-            costRows.push({ turn: t.turnNumber, category: 'elevenlabs', label: 'ElevenLabs TTS', detail: `${b.source || 'tts'} · ${b.chars || '?'} chars`, usd: b.usd, quality: 'real' });
+            costRows.push({ turn: t.turnNumber, category: 'elevenlabs', label: 'ElevenLabs TTS', detail: `${b.source || 'tts'} · ${b.chars || '?'} chars${_rateNote(b.rate)}`, usd: b.usd, quality: 'real' });
           }
         }
       }

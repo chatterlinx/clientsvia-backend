@@ -155,10 +155,36 @@ function computeElevenLabsCost(chars, company) {
     return Math.round(usd * 1_000_000) / 1_000_000;
 }
 
+// ── WithMeta variants — return { usd, rate } so call sites can stamp the ──
+// exact tier/rate used onto each qaLog event (enables the Cost Breakdown
+// drawer to show "Sonnet 4.5 (enterprise) @ $2.50/M" per line).
+function _meta(r, kind) {
+    if (kind === 'elevenlabs') return { tier: r.tier, perKChars: r.perKChars };
+    return { tier: r.tier, inPerM: r.inPerM, outPerM: r.outPerM };
+}
+
+function computeClaudeCostWithMeta(tokensUsed, company) {
+    const rates = getRates(company);
+    return { usd: computeClaudeCost(tokensUsed, company), rate: { ..._meta(rates.claude, 'llm'), source: rates._source } };
+}
+
+function computeGroqCostWithMeta(tokensUsed, company) {
+    const rates = getRates(company);
+    return { usd: computeGroqCost(tokensUsed, company), rate: { ..._meta(rates.groq, 'llm'), source: rates._source } };
+}
+
+function computeElevenLabsCostWithMeta(chars, company) {
+    const rates = getRates(company);
+    return { usd: computeElevenLabsCost(chars, company), rate: { ..._meta(rates.elevenlabs, 'elevenlabs'), source: rates._source } };
+}
+
 module.exports = {
     DEFAULTS,
     getRates,
     computeClaudeCost,
     computeGroqCost,
     computeElevenLabsCost,
+    computeClaudeCostWithMeta,
+    computeGroqCostWithMeta,
+    computeElevenLabsCostWithMeta,
 };

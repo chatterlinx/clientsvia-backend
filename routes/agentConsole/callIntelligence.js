@@ -2539,18 +2539,22 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       for (const q of qaEntriesForTurn) {
         const usd = q.cost?.usd;
         if (typeof usd !== 'number' || usd <= 0) continue;
+        // `rate` is the per-event rate provenance stamp (tier + per-unit rate +
+        // source 'company'|'env'|'default'). Forwarded to the frontend drawer so
+        // each line can render "Sonnet 4.5 (enterprise) @ $2.50/M in (company)".
+        const rate = q.cost?.rate || null;
         // Route by event type + model
         if (q.type === 'ELEVENLABS_TTS_CHARS') {
           elevenUsd  += usd;
           elevenChars += (q.chars || q.cost?.chars || 0);
-          breakdown.push({ type: 'elevenlabs', source: q.source, chars: q.chars, usd });
+          breakdown.push({ type: 'elevenlabs', source: q.source, chars: q.chars, usd, rate });
         } else if (q.provider === 'groq' || q.cost?.model?.includes('llama')) {
           groqUsd += usd;
-          breakdown.push({ type: 'groq', source: q.source || q.type, model: q.cost?.model, usd });
+          breakdown.push({ type: 'groq', source: q.source || q.type, model: q.cost?.model, usd, rate });
         } else {
           // KC_LLM_FALLBACK, A2_LLM_INTAKE_TURN_1 (Claude), etc.
           claudeUsd += usd;
-          breakdown.push({ type: 'claude', source: q.source || q.type, model: q.cost?.model, usd });
+          breakdown.push({ type: 'claude', source: q.source || q.type, model: q.cost?.model, usd, rate });
         }
       }
       const totalUsd = claudeUsd + groqUsd + elevenUsd;

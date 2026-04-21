@@ -415,7 +415,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
       const _tIn  = result.tokensUsed?.input  || 0;
       const _tOut = result.tokensUsed?.output || 0;
       if (callSid && (_tIn > 0 || _tOut > 0)) {
-        const _usd = costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
+        const _meta = costRates.computeClaudeCostWithMeta({ input: _tIn, output: _tOut }, company);
         DiscoveryNotesService.update(String(company?._id || ''), callSid, {
           qaLog: [{
             type:       'A2_LLM_FOLLOWUP',
@@ -425,7 +425,7 @@ async function callLLMAgentForFollowUp({ company, input, followUpQuestion, trigg
             provider:   'anthropic',
             latencyMs:  result.latencyMs || null,
             tokensUsed: { input: _tIn, output: _tOut },
-            cost:       { usd: _usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5' },
+            cost:       { usd: _meta.usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5', rate: _meta.rate },
             timestamp:  new Date().toISOString(),
           }],
         }).catch(() => {});
@@ -886,7 +886,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
       const _tIn  = result.tokensUsed?.input  || 0;
       const _tOut = result.tokensUsed?.output || 0;
       if (callSid && (_tIn > 0 || _tOut > 0)) {
-        const _usd = costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
+        const _meta = costRates.computeClaudeCostWithMeta({ input: _tIn, output: _tOut }, company);
         DiscoveryNotesService.update(String(company?._id || ''), callSid, {
           qaLog: [{
             type:       'A2_LLM_NOMATCH',
@@ -896,7 +896,7 @@ async function callLLMAgentForNoMatch({ company, input, capturedReason, channel,
             provider:   'anthropic',
             latencyMs:  result.latencyMs || null,
             tokensUsed: { input: _tIn, output: _tOut },
-            cost:       { usd: _usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5' },
+            cost:       { usd: _meta.usd, input: _tIn, output: _tOut, model: 'claude-sonnet-4-5', rate: _meta.rate },
             timestamp:  new Date().toISOString(),
           }],
         }).catch(() => {});
@@ -2323,9 +2323,11 @@ class Agent2DiscoveryRunner {
             const _tOut = intakeResult.tokensUsed?.output || 0;
             const _prov = intakeResult.provider || 'anthropic';  // set by streamWithSentences
             // Commit 2 — rates resolved via shared costRates helper (per-company → env → default)
-            const _usd = _prov === 'groq'
-              ? costRates.computeGroqCost({ input: _tIn, output: _tOut }, company)
-              : costRates.computeClaudeCost({ input: _tIn, output: _tOut }, company);
+            // WithMeta variants stamp tier/rate provenance on each qaLog event
+            // so the Cost Breakdown drawer can show exactly which plan tier fired.
+            const _meta = _prov === 'groq'
+              ? costRates.computeGroqCostWithMeta({ input: _tIn, output: _tOut }, company)
+              : costRates.computeClaudeCostWithMeta({ input: _tIn, output: _tOut }, company);
             DiscoveryNotesService.update(companyId, callSid, {
               qaLog: [{
                 type:       'A2_LLM_INTAKE_TURN_1',
@@ -2336,10 +2338,11 @@ class Agent2DiscoveryRunner {
                 latencyMs:  intakeResult.latencyMs || null,
                 tokensUsed: { input: _tIn, output: _tOut },
                 cost:       (_tIn > 0 || _tOut > 0) ? {
-                  usd:    _usd,
+                  usd:    _meta.usd,
                   input:  _tIn,
                   output: _tOut,
                   model:  _prov === 'groq' ? 'llama-3.3-70b-versatile' : 'claude-sonnet-4-5',
+                  rate:   _meta.rate,
                 } : null,
                 timestamp:  new Date().toISOString(),
               }],
