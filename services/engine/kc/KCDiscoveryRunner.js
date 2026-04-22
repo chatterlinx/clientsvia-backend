@@ -1193,6 +1193,40 @@ class KCDiscoveryRunner {
       // Always write cueFrame to discoveryNotes (fire-and-forget enrichment)
       _writeDiscoveryNotes(companyId, callSid, { cueFrame }).catch(() => {});
 
+      // ── Universal CUE_FRAME qaLog emit (per-turn forensics) ────────────
+      // The CueExtractor runs on every turn before any gate decides, but
+      // downstream emits (KC_GROQ_ANSWERED, KC_DIRECT_ANSWER, UAP_AUDIO, etc.)
+      // don't all carry cueFrame. Without a universal emit, the Call
+      // Intelligence dashboard only gets cueFrame on UAP paths, so turns 2+
+      // that route via KC+GROQ or direct answer show empty 8-cue grids.
+      //
+      // Fire a dedicated CUE_FRAME entry here so EVERY turn's qaLog has the
+      // 8-field cue spread — mirrors the pattern used by UAP_LAYER1 (below).
+      if (cueFrame) {
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:       'CUE_FRAME',
+            turn:       turn ?? 0,
+            question:   userInput,
+            cueFrame: {
+              fieldCount:    cueFrame.fieldCount ?? 0,
+              topicWords:    cueFrame.topicWords || [],
+              actionCore:    cueFrame.actionCore || null,
+              modifierCore:  cueFrame.modifierCore || null,
+              urgencyCore:   cueFrame.urgencyCore || null,
+              permissionCue: cueFrame.permissionCue || null,
+              requestCue:    cueFrame.requestCue || null,
+              infoCue:       cueFrame.infoCue || null,
+              directiveCue:  cueFrame.directiveCue || null,
+              tradeMatches:  Array.isArray(cueFrame.tradeMatches)
+                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               : [],
+            },
+            timestamp:  new Date().toISOString(),
+          }],
+        }).catch(() => {});
+      }
+
       if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length > 0) {
         // ── GATE 2.4b — Route via best trade match ───────────────────────
         // First trade match wins (CueExtractor sorts longest-first).
