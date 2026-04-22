@@ -936,7 +936,11 @@ async function updateDigressionTop(companyId, callSid, updates) {
       return null;
     }
 
-    const key = `${CONFIG.REDIS_KEY_PREFIX}:${companyId}:${callSid}`;
+    // R18 FIX (April 2026): use canonical _buildKey() — was `CONFIG.REDIS_KEY_PREFIX`
+    // (undefined field) which produced "undefined:{companyId}:{callSid}" and caused
+    // every call to silently return null. Broke promotions AWAITING_COUPON_CODE
+    // state transition. Stage 7 audit.
+    const key = _buildKey(companyId, callSid);
     const raw = await redis.get(key);
     if (!raw) {
       logger.warn('[DISCOVERY NOTES] updateDigressionTop: key not found', { callSid, key });
