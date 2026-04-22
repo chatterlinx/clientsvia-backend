@@ -2314,6 +2314,11 @@ router.post('/voice', async (req, res) => {
           
           // Fall through to TTS logic below by NOT using the prerecorded branch
           // We achieve this by re-checking TTS conditions
+          // 🧹 STAGE 2 (R6) TODO: This TTS block duplicates ~100 lines of the realtime path below (~L2397).
+          //                       Consolidate into a single `renderGreetingTTS(company, greetingText, gather)` helper
+          //                       that handles: GreetingAudio cache check → ElevenLabs synth → disk write →
+          //                       scheduleTempAudioDelete → gather.play. Keeps a single source of truth for
+          //                       greeting playback & cleanup semantics.
           if (elevenLabsVoice && initResult.greeting) {
             try {
               logger.info(`[GREETING] 🎙️ TTS fallback for missing audio (ElevenLabs: ${elevenLabsVoice})`);
@@ -2394,6 +2399,10 @@ router.post('/voice', async (req, res) => {
         }
       }
       // MODE: REALTIME TTS (ElevenLabs)
+      // 🧹 STAGE 2 (R6) TODO: This block (~100 lines) is the full realtime TTS greeting pipeline.
+      //                       A near-duplicate lives above inside the "prerecorded missing" fallback (~L2317).
+      //                       Consolidate into one `renderGreetingTTS()` helper — single source of truth for
+      //                       GreetingAudio cache → synth → disk → cleanup → play.
       else if (elevenLabsVoice && initResult.greeting) {
         try {
           logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting (source: ${greetingSource})`);
@@ -2491,6 +2500,10 @@ router.post('/voice', async (req, res) => {
           if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
           const filePath = path.join(audioDir, fileName);
           await fs.promises.writeFile(filePath, buffer);
+          // 🧹 STAGE 2 (R5): Schedule disk cleanup for per-call temp greeting (was leaking to disk forever).
+          // 📌 STAGE 2 (Y3): `/audio/` (not `/audio-safe/`) is INTENTIONAL here — this is ephemeral per-call TTS,
+          //                  not meant to survive deploys. Deleted ~2min after Twilio fetches it.
+          scheduleTempAudioDelete(filePath);
           gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
           
           // 📼 BLACK BOX: Log greeting sent
@@ -2554,7 +2567,10 @@ router.post('/voice', async (req, res) => {
       } else {
         // Fallback to Say if no voice or greeting
         logger.debug(`⚠️ Fallback to Twilio Say - Voice: ${elevenLabsVoice ? 'SET' : 'MISSING'}, Greeting: ${initResult.greeting ? 'SET' : 'MISSING'}`);
-        const fallbackGreeting = initResult.greeting || "Configuration error - no greeting configured";
+        // 🧹 STAGE 2 (R7): Multi-tenant rule — no hardcoded business-facing strings. Pull from UI recovery message.
+        const fallbackGreeting = initResult.greeting
+          || (await getRecoveryMessage(company, 'generalError').catch(() => null))
+          || "We're experiencing a technical issue. Please try your call again in a moment.";
         gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackGreeting))));
       }
       
@@ -2583,8 +2599,10 @@ router.post('/voice', async (req, res) => {
         }).catch(() => {});
       }
       
-      // Fallback to simple greeting if V2 Agent fails
-      const fallbackGreeting = `Configuration error - V2 Agent not configured for ${company.businessName || company.companyName}`;
+      // 🧹 STAGE 2 (R7): Multi-tenant rule — no hardcoded business-facing strings. Pull from UI recovery message.
+      // Fallback to UI-configured recovery message if V2 Agent fails (never leak "V2 Agent" internals to caller).
+      const fallbackGreeting = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+        || "We're experiencing a technical issue. Please try your call again in a moment.";
       const gather = twiml.gather({
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
