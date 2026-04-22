@@ -444,16 +444,38 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcC
   // KC content prefers `groqContent` (deep, up to 4000 chars) over `content`
   // (short fixed response, 35-42 words). If only `content` exists, use it.
   if (Array.isArray(kcContext) && kcContext.length > 0) {
+    // Y115 (Stage 16): Bound per-section body at 1500 chars with a
+    // sentence-boundary-aware truncate. groqContent can be ~4000 chars ×
+    // 5 sections ≈ 20KB per Claude call — tokens cost money. Prefer
+    // cutting at a sentence terminal (`. ` / `! ` / `? `) if we find one
+    // past 60% of the cap; otherwise hard-cut with ellipsis.
+    const KC_PROMPT_SECTION_MAX_CHARS = 1500;
     parts.push('\n=== KNOWLEDGE BASE (top matches for this caller\'s question) ===');
     for (const entry of kcContext) {
       if (!entry?.section) continue;
       const containerTitle = entry.container?.title || 'Knowledge';
       const sectionLabel   = entry.section.label || 'Section';
       // Prefer groqContent (deep) → fallback to content (fixed verbatim)
-      const body = (entry.section.groqContent && entry.section.groqContent.trim())
+      let body = (entry.section.groqContent && entry.section.groqContent.trim())
         || (entry.section.content && entry.section.content.trim())
         || '';
       if (!body) continue;
+      if (body.length > KC_PROMPT_SECTION_MAX_CHARS) {
+        const slice = body.slice(0, KC_PROMPT_SECTION_MAX_CHARS);
+        const minCut = Math.floor(KC_PROMPT_SECTION_MAX_CHARS * 0.6);
+        const terminals = ['. ', '! ', '? '];
+        let cutAt = -1;
+        for (const t of terminals) {
+          const idx = slice.lastIndexOf(t);
+          if (idx > cutAt) cutAt = idx;
+        }
+        if (cutAt >= minCut) {
+          // Keep the terminal punctuation (cutAt points at the '.', '!' or '?')
+          body = slice.slice(0, cutAt + 1);
+        } else {
+          body = slice.replace(/\s+\S*$/, '') + '…';
+        }
+      }
       parts.push(`\n--- ${containerTitle} / ${sectionLabel} ---`);
       parts.push(body);
     }

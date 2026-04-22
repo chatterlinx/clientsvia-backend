@@ -65,6 +65,11 @@ const logger                  = require('../../../utils/logger');
 const { buildSectionId }      = require('../../../utils/kcHelpers');
 const { stem }                = require('../../../utils/stem');
 const { getRecoveryMessage }  = require('../../../utils/recoveryMessage');
+// Y121 (Stage 16) — probe LLM response through the TTS sanitizer. When the
+// sanitizer would replace the response with SAFE_FALLBACK (e.g. stack trace
+// quoted from KB), we log KC_LLM_SANITIZER_REJECTED and fall through to the
+// graceful ACK path instead of failing silently at TTS time.
+const { sanitizeForSpeech, SAFE_FALLBACK } = require('../../../utils/sanitizeForSpeech');
 
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
@@ -3298,7 +3303,17 @@ async function _handleLLMFallback({
   fallbackReason     = null,   // Caller-supplied reason override (e.g. 'kc_section_gap')
   uapDiagnostic      = null,   // Phase A.3 — GATE 2.5 "why UAP missed" snapshot
   semanticDiagnostic = null,   // Phase A.3 — GATE 2.8 "closest miss" snapshot
+  direction          = null,   // Stage 16 Y118 — optional HANDOFF_BOOKING signal
 }) {
+  // Y118 (Stage 16): Derive selfScheduling from direction + state. When KC
+  // fallback fires mid-booking (caller wandering to a question during a
+  // BOOKING session), Agent2DiscoveryRunner's LANE LOCK block must render —
+  // otherwise Claude may emit "I'll connect you to scheduling team" while
+  // the call is already in self-booking mode. Mirrors the derivation pattern
+  // used at the other selfScheduling call sites in Agent2DiscoveryRunner.
+  const selfScheduling = direction === 'HANDOFF_BOOKING'
+    || nextState?.sessionMode === 'BOOKING'
+    || !!nextState?.agent2?.discovery?.bookingMode;
   // Reason resolution: explicit override wins, else default based on container count.
   // 'kc_section_gap'          → container matched but no section (answer-from-kb save)
   // 'no_kc_match'             → no container scored above threshold
@@ -3396,6 +3411,7 @@ async function _handleLLMFallback({
       bridgeToken,
       redis,
       callerName,
+      selfScheduling,                  // Y118 — lock booking lane if mid-booking
       onSentence,
       callContext,                     // enriched discoveryNotes + callerProfile
       mode:                'answer-from-kb', // shift prompt posture: ANSWER, don't defer
@@ -3407,7 +3423,40 @@ async function _handleLLMFallback({
     });
   }
 
+  // Y121 (Stage 16): probe the LLM response through the TTS sanitizer BEFORE
+  // we accept it. If the sanitizer would replace it with SAFE_FALLBACK, we've
+  // been silently losing the "Claude said something unspeakable" signal at TTS
+  // boundary. Log the rejection and fall through to the graceful ACK path.
+  let _llmSanitizerRejected = false;
   if (llmResult?.response) {
+    const _probed = sanitizeForSpeech(llmResult.response);
+    if (_probed === SAFE_FALLBACK && llmResult.response !== SAFE_FALLBACK) {
+      _llmSanitizerRejected = true;
+      const _preview = String(llmResult.response).slice(0, 120);
+      logger.warn('[KC_ENGINE] KC_LLM_SANITIZER_REJECTED — Claude response unsafe for TTS, routing to graceful ACK', {
+        companyId, callSid, turn, preview: _preview,
+      });
+      emit('KC_LLM_SANITIZER_REJECTED', {
+        companyId, callSid, turn,
+        preview: _preview,
+        reason:  _reason,
+      });
+      _writeDiscoveryNotes(companyId, callSid, {
+        qaLog: [{
+          type:      'KC_LLM_SANITIZER_REJECTED',
+          turn:      turn ?? 0,
+          question:  userInput,
+          preview:   _preview,
+          reason:    _reason,
+          cost:      null,
+          latencyMs: Date.now() - startMs,
+          timestamp: new Date().toISOString(),
+        }],
+      }).catch(() => {});
+    }
+  }
+
+  if (llmResult?.response && !_llmSanitizerRejected) {
     nextState.agent2            = nextState.agent2 || {};
     nextState.agent2.discovery  = nextState.agent2.discovery || {};
     nextState.agent2.discovery.lastPath = PATH.KC_LLM_FALLBACK;
@@ -3485,6 +3534,7 @@ async function _handleLLMFallback({
       type:      'KC_GRACEFUL_ACK',
       turn:      turn ?? 0,
       question:  userInput,
+      cost:      null,   // Y116 — schema consistency with other qaLog types
       timestamp: new Date().toISOString(),
     }],
   }).catch(() => {});
