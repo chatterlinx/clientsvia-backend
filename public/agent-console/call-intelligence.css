@@ -63,7 +63,7 @@ a:hover { text-decoration: underline; }
 button { cursor: pointer; font-family: inherit; }
 
 /* ── App Shell ────────────────────────────────────────────── */
-#app { min-height: 100vh; display: flex; flex-direction: column; }
+#app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 .view { display: none; flex: 1; flex-direction: column; }
 .view.active { display: flex; }
 
@@ -182,7 +182,7 @@ button { cursor: pointer; font-family: inherit; }
 }
 
 /* ── Dashboard View ──────────────────────────────────────── */
-.dashboard-view { flex: 1; padding: 24px 20px; }
+.dashboard-view { flex: 1; padding: 24px 20px; overflow-y: auto; }
 .dashboard-inner { max-width: 1360px; margin: 0 auto; }
 
 .stats-bar {
