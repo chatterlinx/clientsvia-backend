@@ -1932,6 +1932,91 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
   }
 
   try {
+    // ── Preserve embeddings across saves ────────────────────────────────
+    // The UI save path does not round-trip heavy runtime fields
+    // (contentEmbedding 512 floats, phraseCoreEmbedding, per-phrase embeddings).
+    // Without this merge, `$set: updates.sections` would REPLACE the full
+    // array on every save — wiping embeddings. A fire-and-forget re-embed
+    // below regenerates contentEmbedding + callerPhrases[i].embedding, but
+    // phraseCoreEmbedding is only built by /phrase-score, so it would stay
+    // dead until the next Re-score — dropping Foundation "embeddings %"
+    // on every benign save (observed ~6% per KC).
+    //
+    // Strategy:
+    //   1. Load existing sections (with phraseCoreEmbedding — select:false)
+    //   2. Match new-section → existing by _id first, then by order fallback
+    //   3. Copy forward the embedding/timestamp fields the UI can't send
+    //   4. Match each new phrase → existing phrase by TEXT; copy its embedding
+    //   5. $set the merged array — phrases with changed text lose their
+    //      embedding correctly (fire-and-forget re-embed will refill)
+    if (Array.isArray(updates.sections)) {
+      const existing = await CompanyKnowledgeContainer
+        .findOne(_resolveContainerQuery(id, companyId))
+        .select('sections +sections.phraseCoreEmbedding')
+        .lean();
+
+      const existingSections = existing?.sections || [];
+      const byId    = new Map();
+      const byOrder = new Map();
+      existingSections.forEach((sec, idx) => {
+        if (sec?._id) byId.set(sec._id.toString(), sec);
+        byOrder.set(typeof sec?.order === 'number' ? sec.order : idx, sec);
+      });
+
+      updates.sections = updates.sections.map((newSec, idx) => {
+        const prev = (newSec?._id && byId.get(newSec._id.toString()))
+                  || byOrder.get(typeof newSec?.order === 'number' ? newSec.order : idx)
+                  || null;
+        if (!prev) return newSec;
+
+        // ── Staleness guards ──────────────────────────────────────────
+        // embedSectionContent / embedCallerPhrases in SemanticMatchService
+        // SKIP-IF-PRESENT — they only embed when the field is empty. So we
+        // must NOT preserve embeddings that no longer reflect current text,
+        // otherwise stale vectors stick forever.
+        const contentUnchanged =
+          (prev.content || '') === (newSec.content || '');
+        // phraseScoreHash is the UI's "scoring-relevant state is clean" flag.
+        // Cleared on any edit that affects scoring (phrases, content, groq).
+        // If it's still present on the incoming section, the stored
+        // phraseCoreEmbedding is still valid.
+        const phraseCoreClean =
+          typeof newSec.phraseScoreHash === 'string' &&
+          newSec.phraseScoreHash.length > 0;
+
+        // Preserve contentEmbedding ONLY when content text is unchanged
+        if (contentUnchanged && prev.contentEmbedding?.length) {
+          newSec.contentEmbedding   = prev.contentEmbedding;
+          newSec.contentEmbeddingAt = prev.contentEmbeddingAt || newSec.contentEmbeddingAt;
+        }
+
+        // Preserve phraseCoreEmbedding ONLY when scoring state is clean
+        if (phraseCoreClean && prev.phraseCoreEmbedding?.length) {
+          newSec.phraseCoreEmbedding = prev.phraseCoreEmbedding;
+          newSec.phraseCoreScoredAt  = prev.phraseCoreScoredAt || newSec.phraseCoreScoredAt;
+          newSec.contentCoreScoredAt = prev.contentCoreScoredAt || newSec.contentCoreScoredAt;
+        }
+
+        // Preserve per-phrase embedding when the phrase TEXT is unchanged.
+        // Changed/new phrases get no embedding here — fire-and-forget re-embed
+        // below will fill them in.
+        if (Array.isArray(newSec.callerPhrases) && Array.isArray(prev.callerPhrases)) {
+          const prevPhraseByText = new Map();
+          prev.callerPhrases.forEach(p => {
+            if (p?.text && p?.embedding?.length) {
+              prevPhraseByText.set(p.text, p.embedding);
+            }
+          });
+          newSec.callerPhrases = newSec.callerPhrases.map(p => {
+            const prevEmb = prevPhraseByText.get(p?.text);
+            return prevEmb ? { ...p, embedding: prevEmb } : p;
+          });
+        }
+
+        return newSec;
+      });
+    }
+
     const container = await CompanyKnowledgeContainer.findOneAndUpdate(
       _resolveContainerQuery(id, companyId),
       { $set: updates },
