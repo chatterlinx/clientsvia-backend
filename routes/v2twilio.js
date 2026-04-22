@@ -5084,6 +5084,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     if (!company) {
       // CRITICAL: Company not found - cannot resolve UI config
       // Use system-level minimal safe response (not "repeat that" which frustrates callers)
+      // 📌 STAGE 3 (R9/R10): Hardcoded string + Gather defaults below are INTENTIONAL last-resort
+      //                      safety net. `company` is null here, so getRecoveryMessage() and
+      //                      agent2.speechDetection are inaccessible. Nothing better is possible
+      //                      at this code path — goal is to keep the call alive until the next
+      //                      webhook (which may succeed if it was a transient Mongo error).
       logger.error('[V2TWILIO] Company not found - cannot load UI config', { companyID });
       const twiml = new twilio.twiml.VoiceResponse();
       twiml.say({ voice: TWILIO_FALLBACK_VOICE }, "I can help you with that. One moment please.");
@@ -5130,6 +5135,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // 2) Cached stable partial transcript when SpeechResult missing OR clearly truncated
     //
     // This is critical for deterministic slot extraction (call_reason_detail).
+    //
+    // 🧹 STAGE 3 (R11) TODO: This ~75-line block (Redis read → superset heuristic →
+    //                        DEL cache) is a prime extraction target. Consolidate into
+    //                        `_finalizeSpeechFromPartialCache(callSid, speechResult, redis)`
+    //                        returning `{ text, sourceUsed, cacheCleared, cachedLen, error }`.
+    //                        Keeps the main /v2-agent-respond handler focused on dispatch.
     // ═══════════════════════════════════════════════════════════════════════════
     let inputTextSource = 'speechResult';
     const redis = await getRedis();
@@ -5460,11 +5471,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2TWILIO] Redis read failed', { callSid, error: err.message });
       }
     }
-    if (!callState) {
-      callState = req.session?.callState || null;
-      if (callState) stateSource = 'session';
-    }
-    
+    // 🧹 STAGE 3 (R12): Deleted dead `req.session.callState` fallback read.
+    //                   Twilio webhook POSTs do not return session cookies → express-session
+    //                   MemoryStore never carries callState across requests. The only real
+    //                   state path is Redis (`call:{callSid}`). Session fallback was never
+    //                   reachable. Removed to kill confusion. (Matches Stage 1 cleanup of
+    //                   dead session writes in /voice.)
+
     // Capture loaded state values BEFORE any modifications
     const loadedTurnCount = callState?.turnCount || 0;
     const loadedLane = callState?.sessionMode || 'DISCOVERY';
@@ -6440,7 +6453,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           logger.warn('[V2TWILIO] Redis write failed', { callSid, error: err.message });
         }
       }
-      req.session.callState = persistedState;
+      // 🧹 STAGE 3 (R12): Deleted `req.session.callState = persistedState` — dead write.
+      //                   Twilio webhooks don't return session cookies, so the next request
+      //                   never sees this. Companion read (~L5468) was also deleted.
+      //                   Redis (`call:{callSid}`) is the single source of truth for call state.
 
       if (CallLogger && callSid) {
         await CallLogger.logEvent({
