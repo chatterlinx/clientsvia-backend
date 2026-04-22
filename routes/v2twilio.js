@@ -1414,15 +1414,10 @@ router.post('/voice', async (req, res) => {
     // ────────────────────────────────────────────────────────────────
     // This allows Edge Cases to react to spam score even if call passed filter.
     // Edge cases can enforce "minSpamScore" thresholds for polite hangup.
-    const spamContext = {
-      spamScore: filterResult.spamScore || 0,
-      spamReason: filterResult.reason || null,
-      spamFlags: filterResult.flags || []
-    };
-    
-    // Store in session for /v2-agent-respond to access
-    req.session = req.session || {};
-    req.session.spamContext = spamContext;
+    // NOTE: spamScore/reason/flags are already persisted via CallLogger SPAM_FILTER_CHECK
+    // event and CallTranscriptV2.appendTrace above. Prior code stashed them on req.session
+    // for downstream Twilio webhooks, but Twilio does not send session cookies back on
+    // subsequent webhook POSTs, so those session writes were never read. Removed April 2026.
 
     // ============================================================================
     // 🎯 CALL SOURCE DETECTION (Phase 2: 3-Mode System)
@@ -1798,10 +1793,10 @@ router.post('/voice', async (req, res) => {
           lookupTime: callContext.customerLookupTime
         });
         
-        // Store in session for v2-agent-respond to access (survives between requests)
-        req.session = req.session || {};
-        req.session.callCenterContext = callContext;
-        
+        // NOTE: callContext is re-derived per turn in v2-agent-respond via
+        // CallSummary.findOne({ twilioSid: CallSid }). No session stash needed —
+        // Twilio webhooks do not carry session cookies back. Removed April 2026.
+
       } catch (callCenterErr) {
         // Non-blocking: call still continues even if recognition fails,
         // but log with full stack so issues surface in monitoring.
@@ -1983,17 +1978,13 @@ router.post('/voice', async (req, res) => {
     // ════════════════════════════════════════════════════════════════════════════
     const awProof = computeAwProof(company);
     const traceRunId = `tr-${req.body.CallSid || Date.now()}`;
-    
-    // ════════════════════════════════════════════════════════════════════════════
-    // V98 FIX: Persist awHash + traceRunId to session for v2-agent-respond access
-    // ════════════════════════════════════════════════════════════════════════════
-    // Without this, Turn 1 has awHash=null because callState is created fresh.
-    // ════════════════════════════════════════════════════════════════════════════
-    req.session = req.session || {};
-    req.session.awHash = awProof.awHash;
-    req.session.effectiveConfigVersion = awProof.effectiveConfigVersion;
-    req.session.traceRunId = traceRunId;
-    
+
+    // NOTE: awHash / effectiveConfigVersion / traceRunId are persisted via
+    // CallLogger.initCall() below (keyed by CallSid). Subsequent turns look them
+    // up from the black box, not from session. Prior "V98 FIX" stashed them on
+    // req.session, but Twilio does not return session cookies on webhook POSTs,
+    // so those writes were never read. Removed April 2026.
+
     if (CallLogger) {
       try {
         await CallLogger.initCall({
@@ -2081,12 +2072,6 @@ router.post('/voice', async (req, res) => {
         voiceId: initResult.voiceSettings?.voiceId || null,
         timestamp: new Date().toISOString()
       });
-      
-      // DOUBLE-CHECK: Reload company to verify voiceSettings are in DB
-      logger.debug(`🔍 [CALL-4] Double-checking voice settings from database...`);
-      const freshCompany = await Company.findById(company._id);
-      logger.debug(`🔍 [CALL-5] Fresh company.aiAgentSettings exists:`, Boolean(freshCompany.aiAgentSettings));
-      logger.debug(`🔍 [CALL-6] Fresh company.aiAgentSettings.voiceSettings:`, JSON.stringify(freshCompany.aiAgentSettings?.voiceSettings, null, 2));
       
       logger.debug(`[V2 AGENT] Call initialized, greeting: "${initResult.greeting}"`);
       logger.debug(`[V2 VOICE] Voice settings:`, JSON.stringify(initResult.voiceSettings, null, 2));
