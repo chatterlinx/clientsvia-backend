@@ -2637,6 +2637,13 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       score:  typeof kcTrace.score === 'number' ? kcTrace.score : null,
       intent: kcTrace.intent || null,
       qaEntry,
+      // ── PR 2b (Apr 22, 2026) — forward the FULL per-turn qaLog so the
+      // Call Intelligence UAP Decision panel can render the complete
+      // gate timeline for a turn (Layer 1 hit + SECTION_GAP + LLM fallback
+      // often all exist on the same turn). qaEntry remains for backward
+      // compat. ELEVENLABS_TTS_CHARS rows are stripped here — they carry
+      // no decision info and bloat the payload.
+      qaEntries: qaEntriesForTurn.filter(q => q && q.type !== 'ELEVENLABS_TTS_CHARS'),
       qaCosts,  // Pass 2d — aggregated real cost breakdown for Est. Cost card
       flags
     });

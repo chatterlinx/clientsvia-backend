@@ -1638,6 +1638,24 @@ class KCDiscoveryRunner {
             anchorGate:  uapDiagnostic?.anchorGate || null,
             coreGate:    uapDiagnostic?.coreGate   || null,
             topicWords:  uapResult.topicWords || [],
+            // ── PR 2a (Apr 22, 2026) — cueFrame snapshot so the Call Intelligence
+            // UAP Decision panel can render the 8-field cue breakdown for hits,
+            // not just UAP_MISS_KEYWORD_RESCUED rows. Lets the admin see WHY a
+            // phrase won (which cues fired + topicWords + tradeTerms).
+            cueFrame: cueFrame ? {
+              fieldCount:    cueFrame.fieldCount ?? 0,
+              topicWords:    cueFrame.topicWords || [],
+              actionCore:    cueFrame.actionCore || null,
+              modifierCore:  cueFrame.modifierCore || null,
+              urgencyCore:   cueFrame.urgencyCore || null,
+              permissionCue: cueFrame.permissionCue || null,
+              requestCue:    cueFrame.requestCue || null,
+              infoCue:       cueFrame.infoCue || null,
+              directiveCue:  cueFrame.directiveCue || null,
+              tradeMatches:  Array.isArray(cueFrame.tradeMatches)
+                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               : [],
+            } : null,
             timestamp:   new Date().toISOString(),
           }],
         }).catch(() => {});
@@ -1670,6 +1688,23 @@ class KCDiscoveryRunner {
               belowThreshold: true,
               threshold:     UAP_CONFIDENCE_THRESHOLD,
               topicWords:    uapResult.topicWords || [],
+              // ── PR 2a — cueFrame on fuzzy-recovery below-threshold rows so
+              // calibration dashboard can correlate which cues fired when a
+              // phonetic/synonym candidate didn't clear the bar.
+              cueFrame: cueFrame ? {
+                fieldCount:    cueFrame.fieldCount ?? 0,
+                topicWords:    cueFrame.topicWords || [],
+                actionCore:    cueFrame.actionCore || null,
+                modifierCore:  cueFrame.modifierCore || null,
+                urgencyCore:   cueFrame.urgencyCore || null,
+                permissionCue: cueFrame.permissionCue || null,
+                requestCue:    cueFrame.requestCue || null,
+                infoCue:       cueFrame.infoCue || null,
+                directiveCue:  cueFrame.directiveCue || null,
+                tradeMatches:  Array.isArray(cueFrame.tradeMatches)
+                                 ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                                 : [],
+              } : null,
               timestamp:     new Date().toISOString(),
             }],
           }).catch(() => {});
@@ -1688,6 +1723,24 @@ class KCDiscoveryRunner {
             noCandidate: true,
             reason:     'NO_PHRASE_CANDIDATE',
             topicWords: uapResult?.topicWords || [],
+            // ── PR 2a — cueFrame on no-candidate rows. Critical for the admin
+            // because THIS is where new phrases/anchors get born — knowing
+            // which cues fired on a corpus miss is the fastest path to
+            // "should I add this to callerPhrases/anchorWords?".
+            cueFrame: cueFrame ? {
+              fieldCount:    cueFrame.fieldCount ?? 0,
+              topicWords:    cueFrame.topicWords || [],
+              actionCore:    cueFrame.actionCore || null,
+              modifierCore:  cueFrame.modifierCore || null,
+              urgencyCore:   cueFrame.urgencyCore || null,
+              permissionCue: cueFrame.permissionCue || null,
+              requestCue:    cueFrame.requestCue || null,
+              infoCue:       cueFrame.infoCue || null,
+              directiveCue:  cueFrame.directiveCue || null,
+              tradeMatches:  Array.isArray(cueFrame.tradeMatches)
+                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               : [],
+            } : null,
             timestamp:  new Date().toISOString(),
           }],
         }).catch(() => {});
@@ -2231,6 +2284,25 @@ class KCDiscoveryRunner {
           gapOriginalCount: _gapOriginalCount,
           gapFilteredCount: _gapFilteredCount,
           gapTopSections:   _gapTopSections,
+          // ── PR 2a (Apr 22, 2026) — cueFrame snapshot on SECTION_GAP so the
+          // Call Intelligence UAP Decision panel can show which cues fired
+          // when the container matched but no section cleared. This is the
+          // highest-value signal for section authoring: the cueFrame tells
+          // the admin what NEW section needs to exist.
+          cueFrame: cueFrame ? {
+            fieldCount:    cueFrame.fieldCount ?? 0,
+            topicWords:    cueFrame.topicWords || [],
+            actionCore:    cueFrame.actionCore || null,
+            modifierCore:  cueFrame.modifierCore || null,
+            urgencyCore:   cueFrame.urgencyCore || null,
+            permissionCue: cueFrame.permissionCue || null,
+            requestCue:    cueFrame.requestCue || null,
+            infoCue:       cueFrame.infoCue || null,
+            directiveCue:  cueFrame.directiveCue || null,
+            tradeMatches:  Array.isArray(cueFrame.tradeMatches)
+                             ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                             : [],
+          } : null,
           timestamp:        new Date().toISOString(),
         }],
       }).catch(() => {});

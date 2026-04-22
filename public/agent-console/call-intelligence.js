@@ -1215,96 +1215,201 @@ function outcomeClass(outcome) {
   return 'outcome-other';
 }
 
-// ── Phase B: "Why?" panel + "Fix in Gap Page" deep-link ────────────────────────
-// Renders per-turn UAP diagnostic detail when the caller turn has a rich qaEntry.
-// Shows anchorGate/coreGate (Logic 1/2), semantic best-below-threshold, keyword-rescue
-// pre-gate snapshot (uap25/semantic28), and an orange CTA that jumps to todo.html
-// with filterContainer/filterSection/filterPhrase pre-applied.
-function _renderWhyPanel(qa, companyId) {
-  if (!qa || !qa.type) return '';
+// ── PR 2c (Apr 22, 2026) — UAP Decision panel ───────────────────────────────
+// Upgraded from "Why UAP Missed" → full decision forensics for every caller
+// turn. Shows (a) caller utterance, (b) 8-field cueFrame extracted from it,
+// (c) gate timeline (one row per qaLog gate event), (d) for hits: winning
+// phrase + matchType + confidence + anchor ratio + core embedding score,
+// (e) for section gaps: top 3 alternate sections with scores, (f) for LLM
+// fallback: model + cost + tokens.
+//
+// Backward-compat: still accepts `(qa, companyId)` signature. When called
+// as `(qa, companyId, allQaEntries, turn)` renders the full timeline.
+function _renderWhyPanel(qa, companyId, allQaEntries, turn) {
+  const entries = Array.isArray(allQaEntries) && allQaEntries.length
+    ? allQaEntries
+    : (qa ? [qa] : []);
+  if (!entries.length) return '';
 
   const pct = (n, d = 0) => (n == null ? '—' : (n * 100).toFixed(d) + '%');
   const num = (n, d = 2) => (n == null ? '—' : (typeof n === 'number' ? n.toFixed(d) : n));
-  const esc2 = esc; // alias for clarity
+  const esc2 = esc;
 
-  // Determine context per event type — nothing to show for simple hits
-  const showTypes = new Set([
-    'UAP_LAYER1',            // only when hit=false or has anchorGate diagnostic
+  // Event types that carry decision info worth rendering in the timeline
+  const GATE_TYPES = new Set([
+    'UAP_LAYER1',
     'UAP_SEMANTIC_MISS',
     'UAP_MISS_KEYWORD_RESCUED',
+    'NEGATIVE_KEYWORD_BLOCK',
     'KC_SECTION_GAP',
-    'KC_LLM_FALLBACK'
+    'KC_SECTION_GAP_ANSWERED',
+    'KC_LLM_FALLBACK',
+    'KC_GROQ_ANSWERED',
+    'KC_DIRECT_ANSWER',
+    'A2_LLM_FOLLOWUP',
   ]);
-  if (!showTypes.has(qa.type)) return '';
-  // UAP_LAYER1 hits with no diagnostic data → nothing interesting to show
-  if (qa.type === 'UAP_LAYER1' && qa.hit && !qa.anchorGate && !qa.coreGate) return '';
+  const timeline = entries.filter(q => q && GATE_TYPES.has(q.type));
+  if (!timeline.length) return '';
 
-  // ── Build diagnostic rows ──────────────────────────────────────────────────
-  const rows = [];
+  // Pick the cueFrame — any entry that has one (all UAP sites write it now)
+  const withCue = timeline.find(q => q.cueFrame) || qa || timeline[0];
+  const cf = withCue?.cueFrame || null;
 
-  // GATE 2.5 — UAP Layer 1 anchor/core detail (from Phase A.1)
-  const ag = qa.anchorGate || qa.uap25?.anchorGate;
-  const cg = qa.coreGate   || qa.uap25?.coreGate;
-  if (ag) {
-    const verdict = ag.passed ? '<span style="color:#059669;font-weight:600;">PASS</span>' : '<span style="color:#dc2626;font-weight:600;">FAIL</span>';
-    const missedChips = (ag.missed || []).slice(0, 6).map(w => `<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:3px;font-size:10px;margin-right:3px;">${esc2(w)}</span>`).join('');
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Anchor Gate (2.5 L1)</span><span class="pr-icon">→</span>
-      <span class="pr-detail">${verdict} · ratio ${pct(ag.ratio, 0)} (${ag.hits || 0}/${(ag.required?.length || 0)}) threshold ${pct(ag.threshold, 0)}
-      ${missedChips ? `<br><span style="font-size:11px;color:var(--tx-secondary);">Missed:</span> ${missedChips}` : ''}
-      ${ag.reason ? `<br><span style="font-size:11px;color:#6b7280;font-style:italic;">${esc2(ag.reason)}</span>` : ''}</span></div>`);
-  }
-  if (cg && cg.ran) {
-    const verdict = cg.passed ? '<span style="color:#059669;font-weight:600;">PASS</span>' : '<span style="color:#dc2626;font-weight:600;">FAIL</span>';
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Core Embedding (2.5 L2)</span><span class="pr-icon">→</span>
-      <span class="pr-detail">${verdict} · score ${num(cg.score)} vs threshold ${num(cg.threshold)}
-      ${cg.callerCore ? `<br><span style="font-size:11px;color:#6b7280;">callerCore: "${esc2((cg.callerCore || '').slice(0, 100))}"</span>` : ''}</span></div>`);
-  }
+  // Caller utterance (prefer turn.text > first qa.question)
+  const callerText = (turn?.text || turn?.callerText || qa?.question || timeline[0]?.question || '').trim();
 
-  // GATE 2.8 — Semantic best-below-threshold (from Phase A.2)
-  const sem = qa.semantic28 || (qa.type === 'UAP_SEMANTIC_MISS' ? qa : null);
-  if (sem && (sem.similarity != null || sem.bestBelowThreshold)) {
-    const sim = sem.similarity ?? sem.bestBelowThreshold?.similarity;
-    const thr = sem.threshold ?? 0.50;
-    const bb  = sem.bestBelowThreshold || sem;
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Semantic (2.8)</span><span class="pr-icon">→</span>
-      <span class="pr-detail"><span style="color:#b45309;font-weight:600;">BELOW</span> · closest ${num(sim, 3)} (threshold ${num(thr, 2)})
-      ${bb.containerTitle ? `<br><span style="font-size:11px;color:#6b7280;">closest container: <strong>${esc2(bb.containerTitle)}</strong>${bb.sectionLabel ? ` → ${esc2(bb.sectionLabel)}` : ''}</span>` : ''}
-      ${bb.matchedPhrase ? `<br><span style="font-size:11px;color:#6b7280;font-style:italic;">"${esc2((bb.matchedPhrase || '').slice(0, 100))}"</span>` : ''}</span></div>`);
-  }
+  // ── Header: 8-field cueFrame chips ─────────────────────────────────────────
+  const chipS = 'display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;margin:1px 3px 1px 0;';
+  const cueChipsHtml = cf ? (() => {
+    const parts = [];
+    const add = (label, val, bg, fg) => {
+      if (val == null || val === '') return;
+      const v = typeof val === 'string' ? val : JSON.stringify(val);
+      parts.push(`<span style="${chipS}background:${bg};color:${fg};"><strong>${esc2(label)}:</strong> ${esc2(v)}</span>`);
+    };
+    add('permission', cf.permissionCue, '#fef3c7', '#92400e');
+    add('info',        cf.infoCue,       '#dbeafe', '#1e40af');
+    add('action',      cf.actionCore,    '#dcfce7', '#166534');
+    add('modifier',    cf.modifierCore,  '#ede9fe', '#5b21b6');
+    add('urgency',     cf.urgencyCore,   '#fee2e2', '#991b1b');
+    add('request',     cf.requestCue,    '#cffafe', '#155e75');
+    add('directive',   cf.directiveCue,  '#fce7f3', '#9d174d');
+    if (Array.isArray(cf.tradeMatches) && cf.tradeMatches.length) {
+      parts.push(`<span style="${chipS}background:#ecfccb;color:#3f6212;"><strong>trade:</strong> ${cf.tradeMatches.map(esc2).join(', ')}</span>`);
+    }
+    const topic = Array.isArray(cf.topicWords) && cf.topicWords.length
+      ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;">topicWords: <span style="font-family:monospace;color:#374151;">${cf.topicWords.slice(0, 12).map(esc2).join(' · ')}</span></div>`
+      : '';
+    return `
+      <div style="margin-top:6px;">
+        <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">8-field cueFrame (${cf.fieldCount || 0} filled)</div>
+        <div>${parts.join('') || '<span style="font-size:11px;color:#9ca3af;font-style:italic;">no cues fired</span>'}</div>
+        ${topic}
+      </div>`;
+  })() : '<div style="margin-top:6px;font-size:11px;color:#9ca3af;font-style:italic;">no cueFrame captured</div>';
 
-  // GATE 3 — Keyword rescue (when UAP_MISS_KEYWORD_RESCUED)
-  if (qa.type === 'UAP_MISS_KEYWORD_RESCUED') {
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Keyword Rescue (3)</span><span class="pr-icon">→</span>
-      <span class="pr-detail"><span style="color:#059669;font-weight:600;">RESCUED</span> · score ${num(qa.rescuedScore)}
-      ${qa.rescuedContainerTitle ? `<br><span style="font-size:11px;color:#6b7280;">→ <strong>${esc2(qa.rescuedContainerTitle)}</strong>${qa.rescuedSection ? ` · ${esc2(qa.rescuedSection)}` : ''}</span>` : ''}
-      <br><span style="font-size:11px;color:#b45309;font-weight:500;">\u26a0 UAP should have caught this — add phrase to container to avoid keyword fallback.</span></span></div>`);
-  }
+  // ── Timeline rows (one per gate event) ─────────────────────────────────────
+  const rowS    = 'display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px dashed #e5e7eb;';
+  const stageS  = 'min-width:150px;font-size:11px;font-weight:600;color:#374151;';
+  const detailS = 'flex:1;font-size:12px;color:#1f2937;';
+  const vBase   = 'display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;margin-right:6px;';
 
-  // GATE 4 — Claude LLM fallback (when KC_LLM_FALLBACK)
-  if (qa.type === 'KC_LLM_FALLBACK') {
-    const cost = qa.cost;
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Claude Fallback (4)</span><span class="pr-icon">→</span>
-      <span class="pr-detail"><span style="color:#dc2626;font-weight:600;">FIRED</span>
-      ${cost?.usd != null ? ` · $${cost.usd.toFixed(4)} (${cost.input || 0}in/${cost.output || 0}out tokens)` : ''}
-      ${qa.latencyMs ? ` · ${qa.latencyMs}ms` : ''}
-      <br><span style="font-size:11px;color:#b45309;font-weight:500;">\u26a0 No KC matched — create a new section or add callerPhrases to an existing one.</span></span></div>`);
-  }
+  const rows = timeline.map(q => {
+    const tt = q.type;
 
-  // KC_SECTION_GAP (container matched, no section)
-  if (qa.type === 'KC_SECTION_GAP') {
-    rows.push(`<div class="pipe-row"><span class="pr-stage">Section Gap</span><span class="pr-icon">→</span>
-      <span class="pr-detail"><span style="color:#ea580c;font-weight:600;">CONTAINER MATCHED, NO SECTION</span>
-      ${qa.containerTitle ? `<br><span style="font-size:11px;color:#6b7280;">Container: <strong>${esc2(qa.containerTitle)}</strong></span>` : ''}
-      <br><span style="font-size:11px;color:#b45309;font-weight:500;">\u26a0 Add a section to this container covering this symptom.</span></span></div>`);
-  }
+    // ── UAP Layer 1 — hit / below-threshold / no-candidate ──
+    if (tt === 'UAP_LAYER1') {
+      const stage = 'UAP Layer 1 (2.5)';
+      if (q.hit) {
+        const ag = q.anchorGate;
+        const cg = q.coreGate;
+        const agRow = ag ? `<br><span style="font-size:11px;color:#6b7280;">Anchor Gate: <strong>${ag.passed ? 'PASS' : 'FAIL'}</strong> · ${pct(ag.ratio, 0)} (${ag.hits || 0}/${(ag.required?.length || 0)})</span>` : '';
+        const cgRow = (cg && cg.ran) ? `<br><span style="font-size:11px;color:#6b7280;">Core Embedding: <strong>${cg.passed ? 'PASS' : 'FAIL'}</strong> · ${num(cg.score)} vs ${num(cg.threshold)}</span>` : '';
+        return `<div style="${rowS}"><span style="${stageS}">${stage}</span><span style="${detailS}">
+          <span style="${vBase}background:#dcfce7;color:#166534;">WON</span>
+          <strong>${esc2(q.matchType || 'match')}</strong> @ ${pct(q.confidence, 0)}
+          ${q.phrase ? `<br><span style="font-size:11px;color:#6b7280;">phrase: <em>"${esc2((q.phrase || '').slice(0, 140))}"</em></span>` : ''}
+          ${agRow}${cgRow}
+        </span></div>`;
+      }
+      if (q.noCandidate) {
+        return `<div style="${rowS}"><span style="${stageS}">${stage}</span><span style="${detailS}">
+          <span style="${vBase}background:#f3f4f6;color:#6b7280;">NO CANDIDATE</span>
+          <span style="font-size:11px;color:#6b7280;">${esc2(q.reason || 'NO_PHRASE_CANDIDATE')}</span>
+        </span></div>`;
+      }
+      if (q.belowThreshold) {
+        return `<div style="${rowS}"><span style="${stageS}">${stage}</span><span style="${detailS}">
+          <span style="${vBase}background:#fef3c7;color:#92400e;">BELOW</span>
+          <strong>${esc2(q.matchType || 'match')}</strong> @ ${pct(q.confidence, 0)} (threshold ${pct(q.threshold, 0)})
+          ${q.fuzzyRecovery ? ` · <span style="color:#b45309;font-weight:600;">fuzzy</span>` : ''}
+          ${q.phrase ? `<br><span style="font-size:11px;color:#6b7280;">closest phrase: <em>"${esc2((q.phrase || '').slice(0, 140))}"</em></span>` : ''}
+        </span></div>`;
+      }
+      return `<div style="${rowS}"><span style="${stageS}">${stage}</span><span style="${detailS}">
+        <span style="${vBase}background:#fee2e2;color:#991b1b;">MISS</span>
+        ${q.anchorGate ? `Anchor gate ${q.anchorGate.passed ? 'passed' : 'failed'}` : 'no details'}
+      </span></div>`;
+    }
+
+    // ── Semantic (2.8) ──
+    if (tt === 'UAP_SEMANTIC_MISS') {
+      const sim = q.similarity ?? q.bestBelowThreshold?.similarity;
+      const thr = q.threshold ?? 0.50;
+      const bb  = q.bestBelowThreshold || {};
+      return `<div style="${rowS}"><span style="${stageS}">Semantic (2.8)</span><span style="${detailS}">
+        <span style="${vBase}background:#fef3c7;color:#92400e;">BELOW</span>
+        closest ${num(sim, 3)} (threshold ${num(thr, 2)})
+        ${bb.containerTitle ? `<br><span style="font-size:11px;color:#6b7280;">→ <strong>${esc2(bb.containerTitle)}</strong>${bb.sectionLabel ? ` · ${esc2(bb.sectionLabel)}` : ''}</span>` : ''}
+      </span></div>`;
+    }
+
+    // ── Negative Keyword Checkpoint (2.9) ──
+    if (tt === 'NEGATIVE_KEYWORD_BLOCK') {
+      return `<div style="${rowS}"><span style="${stageS}">Negative KW (2.9)</span><span style="${detailS}">
+        <span style="${vBase}background:#fee2e2;color:#991b1b;">BLOCKED</span>
+        ${q.blockedContainerTitle ? `<strong>${esc2(q.blockedContainerTitle)}</strong>` : ''}
+        ${q.negKeyword ? ` · "${esc2(q.negKeyword)}"` : ''}
+      </span></div>`;
+    }
+
+    // ── Keyword rescue (3) ──
+    if (tt === 'UAP_MISS_KEYWORD_RESCUED') {
+      return `<div style="${rowS}"><span style="${stageS}">Keyword Rescue (3)</span><span style="${detailS}">
+        <span style="${vBase}background:#fed7aa;color:#9a3412;">RESCUED</span>
+        score ${num(q.rescuedScore, 0)}
+        ${q.rescuedContainerTitle ? `<br><span style="font-size:11px;color:#6b7280;">→ <strong>${esc2(q.rescuedContainerTitle)}</strong>${q.rescuedSection ? ` · ${esc2(q.rescuedSection)}` : ''}</span>` : ''}
+        <br><span style="font-size:11px;color:#b45309;">\u26a0 UAP should have caught this — add phrase to callerPhrases.</span>
+      </span></div>`;
+    }
+
+    // ── Section gap ──
+    if (tt === 'KC_SECTION_GAP') {
+      const top = Array.isArray(q.gapTopSections) ? q.gapTopSections.slice(0, 3) : [];
+      const topRows = top.length ? `<br><span style="font-size:11px;color:#6b7280;">top alternates:</span><ol style="margin:3px 0 0 18px;padding:0;font-size:11px;color:#374151;">${top.map(s => `<li><strong>${esc2(s.label || '(no label)')}</strong> — score ${num(s.score, 0)}</li>`).join('')}</ol>` : '';
+      return `<div style="${rowS}"><span style="${stageS}">Section Gap</span><span style="${detailS}">
+        <span style="${vBase}background:#fed7aa;color:#9a3412;">CONTAINER ✓ / SECTION ✗</span>
+        ${q.containerTitle ? `Container: <strong>${esc2(q.containerTitle)}</strong>` : ''}
+        ${q.gapFiltered ? `<br><span style="font-size:11px;color:#6b7280;">pre-filtered ${q.gapOriginalCount} → ${q.gapFilteredCount} sections</span>` : ''}
+        ${topRows}
+      </span></div>`;
+    }
+
+    // ── LLM fire events (Claude fallback / section-gap answer / follow-up) ──
+    if (tt === 'KC_SECTION_GAP_ANSWERED' || tt === 'KC_LLM_FALLBACK' || tt === 'A2_LLM_FOLLOWUP') {
+      const cost  = q.cost;
+      const label = tt === 'KC_SECTION_GAP_ANSWERED' ? 'Section Gap → Claude'
+                  : tt === 'A2_LLM_FOLLOWUP'         ? 'LLM Follow-up'
+                  : 'Claude Fallback (4)';
+      const vBg   = tt === 'KC_LLM_FALLBACK' ? 'background:#fee2e2;color:#991b1b;' : 'background:#e0e7ff;color:#3730a3;';
+      return `<div style="${rowS}"><span style="${stageS}">${label}</span><span style="${detailS}">
+        <span style="${vBase}${vBg}">FIRED</span>
+        ${cost?.usd != null ? `$${cost.usd.toFixed(4)} · ${cost.input || 0}in/${cost.output || 0}out tokens` : ''}
+        ${cost?.model ? ` · <span style="font-size:11px;color:#6b7280;">${esc2(cost.model)}</span>` : ''}
+        ${q.latencyMs ? ` · ${q.latencyMs}ms` : ''}
+      </span></div>`;
+    }
+
+    // ── Successful KC answer (Groq or direct) ──
+    if (tt === 'KC_GROQ_ANSWERED' || tt === 'KC_DIRECT_ANSWER') {
+      const cost = q.cost;
+      return `<div style="${rowS}"><span style="${stageS}">${tt === 'KC_GROQ_ANSWERED' ? 'Groq Answer' : 'Direct KC Answer'}</span><span style="${detailS}">
+        <span style="${vBase}background:#dcfce7;color:#166534;">ANSWERED</span>
+        ${q.containerTitle ? `<strong>${esc2(q.containerTitle)}</strong>` : ''}${q.sectionLabel ? ` · ${esc2(q.sectionLabel)}` : ''}
+        ${cost?.usd != null ? `<br><span style="font-size:11px;color:#6b7280;">cost: $${cost.usd.toFixed(4)}${cost.model ? ` · ${esc2(cost.model)}` : ''}</span>` : ''}
+      </span></div>`;
+    }
+
+    return '';
+  }).filter(Boolean);
 
   if (!rows.length) return '';
 
   // ── Fix in Gap Page deep-link ──────────────────────────────────────────────
-  // Priority: rescuedContainerId > containerId > nothing
-  const filterContainer = qa.rescuedContainerId || qa.containerId || qa.rescuedKcId || qa.kcId || null;
-  const filterSection   = qa.rescuedSection   || qa.sectionLabel || null;
-  const filterPhrase    = qa.question || null;
+  const anchor = timeline.find(q => q.rescuedContainerId) || timeline.find(q => q.containerId) || qa || timeline[0];
+  const filterContainer = anchor?.rescuedContainerId || anchor?.containerId || anchor?.rescuedKcId || anchor?.kcId || null;
+  const filterSection   = anchor?.rescuedSection   || anchor?.sectionLabel || null;
+  const filterPhrase    = callerText || anchor?.question || null;
   const gapParams = new URLSearchParams();
   if (companyId)        gapParams.set('companyId', companyId);
   if (filterContainer)  gapParams.set('filterContainer', filterContainer);
@@ -1315,13 +1420,15 @@ function _renderWhyPanel(qa, companyId) {
   return `
     <div class="td-section" style="background:linear-gradient(180deg,#fff7ed 0%,#fffbeb 100%);border-left:3px solid #f59e0b;border-radius:6px;padding:12px 14px;margin-top:10px;">
       <div class="td-sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-        <span style="color:#b45309;">\u2753 Why UAP Missed (Diagnostic)</span>
+        <span style="color:#b45309;">\ud83e\udded UAP Decision</span>
         <a href="${esc2(gapUrl)}" target="_blank"
            style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:#f59e0b;color:#fff;text-decoration:none;border-radius:5px;font-size:12px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
            \ud83d\udd27 Fix in Gap Page
         </a>
       </div>
-      <div class="pipeline-rows" style="margin-top:8px;">${rows.join('')}</div>
+      ${callerText ? `<div style="margin-top:8px;font-size:12px;color:#374151;"><span style="font-size:11px;color:#6b7280;">caller:</span> <em>"${esc2(callerText.slice(0, 200))}"</em></div>` : ''}
+      ${cueChipsHtml}
+      <div style="margin-top:10px;">${rows.join('')}</div>
     </div>`;
 }
 
@@ -1564,8 +1671,14 @@ function renderTurnBlock(t, companyId, turnFlowMap = {}) {
       </div>`;
   }
 
-  // 5) Why UAP Missed panel (Phase B — caller turns with rich qaEntry only)
-  const whyHtml = isCaller && t.qaEntry ? _renderWhyPanel(t.qaEntry, companyId) : '';
+  // 5) UAP Decision panel (PR 2c — caller turns render full gate timeline)
+  //    Pass the full qaEntries[] so the panel can show every gate event
+  //    (Layer 1 + SECTION_GAP + LLM fallback often co-occur on one turn).
+  //    Falls back to the single qaEntry when the backend hasn't sent the
+  //    array yet (stale API response safety).
+  const whyHtml = isCaller
+    ? _renderWhyPanel(t.qaEntry, companyId, t.qaEntries, t)
+    : '';
 
   // 6) Compliance flags
   let complianceHtml = '';
