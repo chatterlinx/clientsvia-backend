@@ -212,12 +212,20 @@
       font-family: inherit;
     }
     .section-label-input::placeholder { color: var(--text-xs); font-weight: 400; }
+    /* Visible red "Delete" button — trash icon + label so the delete action
+       is obviously a delete action (the old subtle × was easy to miss). */
     .btn-section-delete {
-      border: none; background: none; cursor: pointer; padding: 4px;
-      color: var(--text-xs); border-radius: 4px; display: flex; align-items: center;
-      transition: color .15s, background .15s;
+      border: 1px solid #fecaca; background: #fef2f2; cursor: pointer;
+      padding: 5px 10px; color: #dc2626; border-radius: 5px;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; line-height: 1;
+      transition: color .15s, background .15s, border-color .15s, box-shadow .15s;
     }
-    .btn-section-delete:hover { color: #ef4444; background: #fef2f2; }
+    .btn-section-delete:hover {
+      color: #fff; background: #dc2626; border-color: #b91c1c;
+      box-shadow: 0 1px 3px rgba(220,38,38,0.25);
+    }
+    .btn-section-delete svg { flex: 0 0 auto; }
     .section-row-body { padding: 16px 18px; }
 
     /* ── Section active/inactive toggle ───────────────────────────────── */
@@ -2380,8 +2388,14 @@ function addSection(label = '', content = '', sectionMeta = null) {
           ${sectionIsActive ? 'checked' : ''}>
         <span class="section-active-knob"></span>
       </label>
-      <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Remove section">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Delete this section">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6M14 11v6"/>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+        Delete
       </button>
     </div>
     <div class="section-row-body">
