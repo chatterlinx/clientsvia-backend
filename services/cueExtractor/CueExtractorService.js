@@ -49,6 +49,7 @@ const PhraseReducerService   = require('../phraseIntelligence/PhraseReducerServi
 const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
 const { getSharedRedisClient }  = require('../redisClientFactory');
 const logger                    = require('../../utils/logger');
+const { stem: _stem }           = require('../../utils/stem');
 
 // ── Trade index cache ──────────────────────────────────────────────────────
 // In-memory + Redis. Redis key: cue-trade-idx:{companyId}
@@ -65,34 +66,15 @@ const CUE_FIELDS = [
   'actionCore', 'urgencyCore', 'modifierCore',
 ];
 
-// ── Stemmer (P3, April 2026) ────────────────────────────────────────────────
-// Mirrors _stem() in KCDiscoveryRunner.js with one extra rule (trailing "e"
-// preceded by 4+ word chars) to collapse "schedule" with "scheduled"/"scheduling".
-// Used ONLY for single-word cue patterns to catch English inflections without
-// expanding the cuePhrases dictionary 3-5x. Multi-word idiomatic patterns
-// ("do i have to", "i need", "right now") remain substring-matched verbatim.
+// ── Stemmer ─────────────────────────────────────────────────────────────────
+// Imported from utils/stem.js — single source of truth shared with
+// KCDiscoveryRunner's Anchor Gate (Logic 1). Stage 12 audit harmonized the
+// two previously-drifting copies. Used ONLY for single-word cue patterns to
+// catch English inflections without expanding the cuePhrases dictionary 3-5x.
+// Multi-word idiomatic patterns ("do i have to", "i need", "right now")
+// remain substring-matched verbatim.
 //
-// Length guard (<4 chars → return as-is) protects short words from collisions
-// like "her" vs "here" or "the" vs "they". The (\w{4,})e$ pattern protects
-// short words like "have", "here", "home" while still collapsing
-// "schedule"→"schedul", "charge"→"charg", "phone"→"phon".
-//
-// Known limitation: irregular past tense ("paid", "made", "took") does NOT
-// stem to base form. Add the irregular form as a separate pattern if needed.
-function _stem(word) {
-  const w = String(word || '').toLowerCase();
-  if (w.length < 4) return w;
-  return w
-    .replace(/ings?$/,        '')   // scheduling/schedulings → schedul
-    .replace(/ations?$/,      '')   // installation/installations → install
-    .replace(/ers?$/,         '')   // installer/installers → install
-    .replace(/ed$/,           '')   // scheduled → schedul
-    .replace(/ly$/,           '')   // currently → current
-    .replace(/ies$/,          'y')  // warranties → warranty
-    .replace(/ves$/,          'f')  // leaves → leaf
-    .replace(/s$/,            '')   // weekends → weekend
-    .replace(/(\w{4,})e$/,    '$1');// schedule → schedul (4+ char prefix only)
-}
+// See utils/stem.js for full design notes + known limitations.
 
 // ── Determiners (April 2026) ────────────────────────────────────────────────
 // Words that strongly signal "what follows is a noun phrase, not a verb".

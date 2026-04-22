@@ -210,32 +210,13 @@ function _gracefulAck() {
 // UTILITIES
 // ============================================================================
 
-/**
- * _stem — Strip common English suffixes so inflected forms match their root.
- *
- * Covers the vast majority of caller speech variation without any library:
- *   weekends   → weekend   (plural)
- *   services   → service   (plural)
- *   scheduled  → schedule  (past tense)
- *   scheduling → schedule  (gerund)
- *   installer  → install   (agent noun)
- *   pricing    → price     (gerund)
- *
- * Order matters — longer suffixes stripped first to avoid double-stripping.
- * Applied to BOTH admin anchor words and caller utterance words before compare.
- */
-function _stem(word) {
-  return word
-    .replace(/ings?$/,  '')   // scheduling → schedul, bookings → booking — wait, strip 'ings' then check
-    .replace(/ing$/,    '')   // scheduling → schedul
-    .replace(/ations?$/, '')  // installation → install
-    .replace(/ers?$/,   '')   // installer → install, installers → install
-    .replace(/ed$/,     '')   // scheduled → schedul
-    .replace(/ly$/,     '')   // currently → current
-    .replace(/ies$/,    'y')  // warranties → warranty
-    .replace(/ves$/,    'f')  // leaves → leaf (minor, rarely needed)
-    .replace(/s$/,      '');  // weekends → weekend, services → service
-}
+// Y71 FIX (Stage 12 audit, April 2026): stemmer harmonized with CueExtractor.
+// Previously this file had its own looser _stem that lacked the 4-char length
+// guard, null-safety, and trailing-e strip present in CueExtractor's version.
+// Consequence: admin anchor "schedule" (base form) vs caller "scheduled"
+// stemmed to different roots ("schedule" vs "schedul") → Logic 1 MISS on a
+// correct utterance. Single source of truth now lives at utils/stem.js.
+const { stem: _stem } = require('../../../utils/stem');
 
 /** Clip a string to maxLen characters for safe logging. */
 function _clip(str, maxLen = 80) {
