@@ -765,7 +765,7 @@ function _renderInlineUapSummary(agentTurn, turns) {
 
     gridLine = `<div style="margin-top:5px;">
       <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame${driftChip}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+      <div style="display:grid;grid-template-columns:1fr;gap:4px;">${cells}</div>
     </div>`;
   }
 
