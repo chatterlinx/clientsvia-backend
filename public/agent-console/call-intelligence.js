@@ -198,15 +198,27 @@ async function loadDashboard() {
   if (state.filterStatus) params.set('status', state.filterStatus);
   if (state.searchQuery)  params.set('search', state.searchQuery);
 
+  // Apr 22, 2026 — Sentinels for "request failed" vs "request returned nothing".
+  // Previously we swallowed fetch errors with a default empty payload, which
+  // caused the dashboard to briefly wipe the list every time a background poll
+  // encountered a transient network blip. Now the `.catch` returns a distinct
+  // failure object and we preserve prior render state until the next good poll.
   try {
-    // Load stats and list in parallel
     const [statsData, listData] = await Promise.all([
-      apiFetch(`/api/call-intelligence/company/${state.companyId}/stats?timeRange=${state.filterTime}`).catch(() => null),
-      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(() => ({ items: [], total: 0, pages: 1 }))
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/stats?timeRange=${state.filterTime}`).catch(err => ({ __failed: true, error: err.message })),
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/list?${params}`).catch(err => ({ __failed: true, error: err.message }))
     ]);
 
-    renderStats(statsData);
-    renderCallsList(listData);
+    if (statsData && !statsData.__failed) {
+      renderStats(statsData);
+    }
+    if (listData && !listData.__failed) {
+      renderCallsList(listData);
+    } else {
+      console.warn('[dashboard] list fetch failed, preserving last-good render:', listData?.error);
+      _showTransientRefreshError(listData?.error || 'refresh failed');
+    }
+
     _stampLastUpdated();
   } catch (err) {
     console.error('[dashboard]', err);
@@ -216,6 +228,22 @@ async function loadDashboard() {
   }
 }
 
+// Non-destructive: flash a small warning chip next to the "last updated"
+// stamp without touching the rendered list/stats. Auto-clears on next success.
+function _showTransientRefreshError(msg) {
+  const el = document.getElementById('last-updated');
+  if (!el) return;
+  const prev = el.textContent;
+  el.textContent = `\u26a0 ${msg} (showing last-good data)`;
+  el.style.color = '#b45309';
+  setTimeout(() => {
+    if (el.textContent.startsWith('\u26a0')) {
+      el.textContent = prev;
+      el.style.color = '';
+    }
+  }, 4000);
+}
+
 function renderStats(data) {
   if (!data) return;
   $('sv-today').textContent    = data.todayCount  ?? '—';
@@ -223,9 +251,13 @@ function renderStats(data) {
   $('sv-critical').textContent = data.critical    ?? '—';
   $('sv-needs').textContent    = data.needsImprovement ?? '—';
   $('sv-good').textContent     = data.performingWell   ?? '—';
-  $('sv-total').textContent    = data.total        ?? '—';
+  // Apr 22, 2026 — prefer `analyzedCount` (in-range CallIntelligence count).
+  // Falls back to `total` for legacy servers that haven't been redeployed yet.
+  $('sv-total').textContent    = data.analyzedCount ?? data.total ?? '—';
   if (data.avgCost != null) {
     $('sv-avgcost').textContent = `$${Number(data.avgCost).toFixed(4)}`;
+  } else {
+    $('sv-avgcost').textContent = '—';
   }
 }
 
@@ -1258,6 +1290,19 @@ function _renderWhyPanel(qa, companyId, allQaEntries, turn) {
   // Caller utterance (prefer turn.text > first qa.question)
   const callerText = (turn?.text || turn?.callerText || qa?.question || timeline[0]?.question || '').trim();
 
+  // ── Topic-drift warning (Apr 22, 2026) ─────────────────────────────────────
+  // When topicWords is empty but tradeMatches has >5 hits, the caller clearly
+  // named a topic but the noun extractor didn't catch it — the root cause of
+  // most section-gap fallbacks on narrative/colloquial utterances. Show this
+  // at the top of the panel so it's the first thing surfaced.
+  const _topicCount = Array.isArray(cf?.topicWords) ? cf.topicWords.length : 0;
+  const _tradeCount = Array.isArray(cf?.tradeMatches) ? cf.tradeMatches.length : 0;
+  const topicDriftHtml = (cf && _topicCount === 0 && _tradeCount > 5)
+    ? `<div style="margin-top:8px;padding:8px 10px;background:#fef2f2;border-left:3px solid #dc2626;border-radius:4px;font-size:12px;color:#991b1b;">
+         <strong>\u26a0 TOPIC DRIFT</strong> &mdash; trade signal present (<strong>${_tradeCount}</strong> matches) but topic nouns not extracted. Anchor gate cannot fire &rarr; likely dropped to LLM fallback. Add the caller's phrasing to <code>callerPhrases</code> or enrich the noun extractor.
+       </div>`
+    : '';
+
   // ── Header: 8-field cueFrame chips ─────────────────────────────────────────
   const chipS = 'display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;margin:1px 3px 1px 0;';
   const cueChipsHtml = cf ? (() => {
@@ -1275,7 +1320,19 @@ function _renderWhyPanel(qa, companyId, allQaEntries, turn) {
     add('request',     cf.requestCue,    '#cffafe', '#155e75');
     add('directive',   cf.directiveCue,  '#fce7f3', '#9d174d');
     if (Array.isArray(cf.tradeMatches) && cf.tradeMatches.length) {
-      parts.push(`<span style="${chipS}background:#ecfccb;color:#3f6212;"><strong>trade:</strong> ${cf.tradeMatches.map(esc2).join(', ')}</span>`);
+      // tradeMatches entries are objects { term, containerId, sectionIdx, sectionLabel }
+      // — unique-by-term, capped at 10 for display. Previously rendered "[object Object]".
+      const _seenTerms = new Set();
+      const _tradeTerms = [];
+      for (const tm of cf.tradeMatches) {
+        const term = tm && typeof tm === 'object' ? (tm.term || '') : String(tm || '');
+        if (!term || _seenTerms.has(term)) continue;
+        _seenTerms.add(term);
+        _tradeTerms.push(term);
+        if (_tradeTerms.length >= 10) break;
+      }
+      const _overflow = cf.tradeMatches.length > _tradeTerms.length ? ` +${cf.tradeMatches.length - _tradeTerms.length} more` : '';
+      parts.push(`<span style="${chipS}background:#ecfccb;color:#3f6212;"><strong>trade:</strong> ${_tradeTerms.map(esc2).join(', ')}${_overflow}</span>`);
     }
     const topic = Array.isArray(cf.topicWords) && cf.topicWords.length
       ? `<div style="margin-top:4px;font-size:11px;color:#6b7280;">topicWords: <span style="font-family:monospace;color:#374151;">${cf.topicWords.slice(0, 12).map(esc2).join(' · ')}</span></div>`
@@ -1427,6 +1484,7 @@ function _renderWhyPanel(qa, companyId, allQaEntries, turn) {
         </a>
       </div>
       ${callerText ? `<div style="margin-top:8px;font-size:12px;color:#374151;"><span style="font-size:11px;color:#6b7280;">caller:</span> <em>"${esc2(callerText.slice(0, 200))}"</em></div>` : ''}
+      ${topicDriftHtml}
       ${cueChipsHtml}
       <div style="margin-top:10px;">${rows.join('')}</div>
     </div>`;

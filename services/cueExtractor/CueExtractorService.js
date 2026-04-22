@@ -397,6 +397,33 @@ async function extract(companyId, utterance) {
   if (frame.tradeMatches.length > 0) count++;
   frame.fieldCount = count;
 
+  // ── topicWords rescue (Apr 22, 2026) ──────────────────────────────────
+  // Narrative/colloquial callers ("we keep having problems here with the
+  // AC units, just simply not cooling") defeat noun-phrase extractors —
+  // upstream UAP reports topicWords=[] even when the caller clearly named
+  // a topic. tradeMatches is a reliable fallback signal because it already
+  // parsed the same utterance through the company trade vocabulary.
+  //
+  // Promote up to 5 unique trade terms (shortest-first → most specific
+  // topical noun wins over "ac" beating "ac maintenance plan") onto the
+  // cueFrame.topicWords field. Downstream (KCDiscoveryRunner merge at the
+  // qaLog write sites) will pick this up automatically — no consumer
+  // change needed because the existing code uses `cueFrame.topicWords || []`.
+  frame.topicWords = [];
+  if (frame.tradeMatches.length > 0) {
+    const seen = new Set();
+    const terms = frame.tradeMatches
+      .map(tm => (tm && tm.term ? String(tm.term).toLowerCase().trim() : ''))
+      .filter(Boolean)
+      .sort((a, b) => a.length - b.length); // shortest-first = most general noun
+    for (const t of terms) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      frame.topicWords.push(t);
+      if (frame.topicWords.length >= 5) break;
+    }
+  }
+
   // ── Company trade context — enables single-trade bypass in GATE 2.4 ──
   frame.companyTradeKeys = companyTradeKeys;
   frame.isSingleTrade    = companyTradeKeys.length <= 1;

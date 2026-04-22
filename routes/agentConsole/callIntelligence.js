@@ -1252,11 +1252,24 @@ router.get('/company/:companyId/summary', async (req, res) => {
 /**
  * GET /api/call-intelligence/company/:companyId/stats
  * Dashboard stats bar — reads CallSummary (all calls) + CallIntelligence (analyzed calls).
- * Returns: todayCount, weekCount, total, critical, needsImprovement, performingWell, avgCost
+ *
+ * Apr 22, 2026 — honour ?timeRange=today|week|month on the stat cards
+ * that the UI presents as "in range" (critical / needs / performing / avgCost
+ * / analyzedCount). todayCount/weekCount remain fixed-window counters,
+ * totalAllTime preserves backward compat for anything still reading `total`.
+ *
+ * Returns:
+ *   todayCount, weekCount       — fixed windows (today / last 7d)
+ *   totalAllTime                — all-time CallSummary count (prior `total`)
+ *   analyzedCount               — CallIntelligence count inside timeRange
+ *                                  (this is what "TOTAL ANALYZED" means)
+ *   critical / needsImprovement / performingWell / avgCost — in timeRange
+ *   timeRange                   — echoed back so UI can verify
  */
 router.get('/company/:companyId/stats', async (req, res) => {
   try {
     const { companyId } = req.params;
+    const { timeRange } = req.query;
     const companyOid = mongoose.Types.ObjectId.isValid(companyId)
       ? new mongoose.Types.ObjectId(companyId)
       : companyId;
@@ -1265,12 +1278,20 @@ router.get('/company/:companyId/stats', async (req, res) => {
     const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
     const weekStart  = new Date(now); weekStart.setDate(now.getDate() - 7);
 
-    const [todayCount, weekCount, total, intelStats] = await Promise.all([
+    // buildCallSummaryDateRange returns { startedAt: { $gte, $lte } } for CallSummary.
+    // For the CallIntelligence aggregate we need the same window but on `analyzedAt`.
+    const summaryRange = buildCallSummaryDateRange(timeRange);
+    const intelRange   = summaryRange.startedAt
+      ? { analyzedAt: { $gte: summaryRange.startedAt.$gte, $lte: summaryRange.startedAt.$lte } }
+      : {};
+
+    const [todayCount, weekCount, totalAllTime, analyzedCount, intelStats] = await Promise.all([
       CallSummary.countDocuments({ companyId: companyOid, startedAt: { $gte: todayStart } }),
       CallSummary.countDocuments({ companyId: companyOid, startedAt: { $gte: weekStart } }),
       CallSummary.countDocuments({ companyId: companyOid }),
+      CallIntelligence.countDocuments({ companyId: companyId.toString(), ...intelRange }),
       CallIntelligence.aggregate([
-        { $match: { companyId: companyId.toString() } },
+        { $match: { companyId: companyId.toString(), ...intelRange } },
         { $group: {
           _id: null,
           critical:         { $sum: { $cond: [{ $eq: ['$status', 'critical'] }, 1, 0] } },
@@ -1286,11 +1307,19 @@ router.get('/company/:companyId/stats', async (req, res) => {
       ok: true,
       todayCount,
       weekCount,
-      total,
+      totalAllTime,
+      // Backward compat: `total` used to mean all-time CallSummary. Keep it
+      // so anything old still works, but the frontend should move to
+      // `analyzedCount` for the "TOTAL ANALYZED" card since that's what
+      // actually corresponds to the stat cards below it (which filter by
+      // timeRange via CallIntelligence).
+      total: totalAllTime,
+      analyzedCount,
       critical:         intel.critical         || 0,
       needsImprovement: intel.needsImprovement || 0,
       performingWell:   intel.performingWell   || 0,
-      avgCost:          intel.avgCost          ?? null
+      avgCost:          intel.avgCost          ?? null,
+      timeRange:        timeRange || 'all'
     });
   } catch (err) {
     console.error('[call-intelligence stats]', err.message);
@@ -1317,7 +1346,12 @@ router.get('/company/:companyId/list', async (req, res) => {
       : companyId;
     const summaryQuery = { companyId: companyObjectId, ...dateFilter };
 
-    let [summaries, totalSummaries] = await Promise.all([
+    // Apr 22, 2026 — returns the honest count for the requested timeRange.
+    // Previously this fell back to "companyId only" when the range was empty,
+    // which caused the flickering-UX bug (list appears to randomly show/hide
+    // calls between refreshes when the range is narrow). The UI now renders
+    // a proper empty state when totalSummaries === 0 and timeRange is set.
+    const [summaries, totalSummaries] = await Promise.all([
       CallSummary.find(summaryQuery)
         .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
@@ -1326,20 +1360,6 @@ router.get('/company/:companyId/list', async (req, res) => {
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
-
-    if (summaries.length === 0 && timeRange) {
-      console.log('[CallIntelligence] No calls found for timeRange, retrying without date filter');
-      const fallbackQuery = { companyId: companyObjectId };
-      [summaries, totalSummaries] = await Promise.all([
-        CallSummary.find(fallbackQuery)
-          .sort({ startedAt: -1 })
-          .skip((pageNum - 1) * limitNum)
-          .limit(limitNum)
-          .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns hasRecording recordingUrl recordingSid recordingDuration')
-          .lean(),
-        CallSummary.countDocuments(fallbackQuery)
-      ]);
-    }
 
     const callSids = summaries.map(c => c.twilioSid || c.callId).filter(Boolean);
     const intelligenceDocs = callSids.length > 0
