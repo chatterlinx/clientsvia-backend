@@ -301,13 +301,17 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
           ],
 
           // ── Phase A.4 — Cost aggregates (Claude $/turn on fallbacks) ────
+          // Field shape note: KCDiscoveryRunner.js:3507 + LLMFollowUpService.js:373
+          // write cost as { usd, input, output, model, rate } — aggregation INPUT
+          // must reference those names. OUTPUT fields (totalUsd/inputTokens/
+          // outputTokens) preserved for API-response backward compat.
           llmCostTotal: [
-            { $match: { type: { $in: ['KC_LLM_FALLBACK', 'KC_SECTION_GAP_ANSWERED'] }, 'cost.totalUsd': { $exists: true, $ne: null } } },
+            { $match: { type: { $in: ['KC_LLM_FALLBACK', 'KC_SECTION_GAP_ANSWERED'] }, 'cost.usd': { $exists: true, $ne: null } } },
             { $group: {
               _id:          null,
-              totalUsd:     { $sum: '$cost.totalUsd' },
-              inputTokens:  { $sum: '$cost.inputTokens' },
-              outputTokens: { $sum: '$cost.outputTokens' },
+              totalUsd:     { $sum: '$cost.usd' },
+              inputTokens:  { $sum: '$cost.input' },
+              outputTokens: { $sum: '$cost.output' },
               fallbackN:    { $sum: 1 },
               avgLatencyMs: { $avg: '$latencyMs' },
             } },
@@ -315,13 +319,13 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
           // Top 10 most-expensive UAP miss patterns grouped by question shape —
           // highest-ROI fixes (add a phrase here, save these $ going forward).
           topCostDrivers: [
-            { $match: { type: 'KC_LLM_FALLBACK', 'cost.totalUsd': { $exists: true, $ne: null } } },
+            { $match: { type: 'KC_LLM_FALLBACK', 'cost.usd': { $exists: true, $ne: null } } },
             { $group: {
               _id:       { $toLower: { $substr: ['$question', 0, 60] } },
               question:  { $first: '$question' },
               count:     { $sum: 1 },
-              totalUsd:  { $sum: '$cost.totalUsd' },
-              avgUsd:    { $avg: '$cost.totalUsd' },
+              totalUsd:  { $sum: '$cost.usd' },
+              avgUsd:    { $avg: '$cost.usd' },
               closestContainer: { $first: '$semantic28.bestBelow.containerTitle' },
               closestScore:     { $first: '$semantic28.bestBelow.similarity' },
             } },
