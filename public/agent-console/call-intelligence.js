@@ -679,14 +679,9 @@ function _pairQaEntries(turns, agentTurn) {
   return paired?.qaEntries || [];
 }
 
-// UAP inline forensics panel — vertical single-column, large font, black on white.
-// Apr 22, 2026 — Marc: "line by line 1 column vertical, larger font black on white".
-// 5 rows stacked vertically, separated by thin dividers:
-//   1) CALLER   — verbatim STT
-//   2) UAP      — 8 cueFrame fields as a vertical label→value list
-//   3) ANCHORS  — required words + match ratio + PASS/FAIL
-//   4) PHRASE   — outcome badge + phrase / section / reason
-//   5) RESPONSE — agent reply
+// UAP inline forensics — pure single column, no flex/grid, everything stacks
+// top-to-bottom as plain blocks. Label on its own line, value on the next line.
+// Apr 22, 2026 — Marc: truly 1 column, no side-by-side at all.
 function _renderInlineUapSummary(agentTurn, turns) {
   const callerText   = _pairCallerText(turns, agentTurn);
   const qaEntries    = _pairQaEntries(turns, agentTurn);
@@ -703,41 +698,45 @@ function _renderInlineUapSummary(agentTurn, turns) {
   const llm      = qaEntries.find(q => q && q.type === 'KC_LLM_FALLBACK');
   const gapAns   = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP_ANSWERED');
 
-  // Shared styles — large, dark, readable
-  const ROW  = 'display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid #e5e7eb;';
-  const LBL  = 'min-width:90px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;flex-shrink:0;';
-  const VAL  = 'font-size:14px;color:#111;line-height:1.5;flex:1;';
-  const BADGE = (bg, fg) => `display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;background:${bg};color:${fg};margin-right:6px;vertical-align:middle;`;
+  // Every "section" helper: heading on its own line, then body lines below it.
+  // Zero flex, zero grid — pure block stacking.
+  const S_HDR  = 'display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#999;margin-bottom:4px;';
+  const S_BODY = 'display:block;font-size:15px;color:#111;line-height:1.6;';
+  const S_SUB  = 'display:block;font-size:13px;color:#555;line-height:1.5;margin-top:3px;';
+  const S_DIV  = 'border-bottom:1px solid #e5e7eb;padding:12px 0;';
+  const BADGE  = (bg, fg) =>
+    `display:inline-block;padding:3px 9px;border-radius:4px;font-size:13px;font-weight:700;background:${bg};color:${fg};margin-right:8px;vertical-align:middle;`;
 
-  // ── ROW 1: CALLER ────────────────────────────────────────────────────────
-  const row1 = callerText
-    ? `<div style="${ROW}">
-        <span style="${LBL}">Caller</span>
-        <span style="${VAL}font-style:italic;">"${esc(callerText.slice(0, 300))}${callerText.length > 300 ? '\u2026' : ''}"</span>
-       </div>`
-    : '';
+  const sections = [];
 
-  // ── ROW 2: UAP cueFrame — vertical label→value list ─────────────────────
-  const CUE_FIELDS = [
-    ['Request',    'requestCue',    'can you · could you · would you'],
-    ['Permission', 'permissionCue', 'do i have to · am i allowed · can i'],
-    ['Info',       'infoCue',       'what is · how much · when does'],
-    ['Directive',  'directiveCue',  'just · please · i need to'],
-    ['Action',     'actionCore',    'pay · schedule · transfer · book'],
-    ['Urgency',    'urgencyCore',   'today · now · asap · emergency'],
-    ['Modifier',   'modifierCore',  'for a service call · with plan'],
-    ['Trade',      'tradeMatches',  'HVAC · plumbing · trade vocab']
-  ];
+  // ── 1: CALLER ──────────────────────────────────────────────────────────
+  if (callerText) {
+    sections.push(`<div style="${S_DIV}">
+      <span style="${S_HDR}">Caller</span>
+      <span style="${S_BODY}font-style:italic;">"${esc(callerText.slice(0, 300))}${callerText.length > 300 ? '\u2026' : ''}"</span>
+    </div>`);
+  }
 
-  let row2 = '';
+  // ── 2: UAP SIGNAL — each of the 8 cueFrame fields on its own line ──────
   if (cf) {
-    const topicCount = Array.isArray(cf.topicWords) ? cf.topicWords.length : 0;
+    const topicCount = Array.isArray(cf.topicWords)  ? cf.topicWords.length  : 0;
     const tradeTotal = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
-    const drift = topicCount === 0 && tradeTotal > 5
-      ? `<span style="${BADGE('#fef2f2','#991b1b')}border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`
+    const driftBadge = (topicCount === 0 && tradeTotal > 5)
+      ? `<span style="${BADGE('#fef2f2','#c0392b')}border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`
       : '';
 
-    const fieldRows = CUE_FIELDS.map(([label, key, hint]) => {
+    const CUE_FIELDS = [
+      ['Request',    'requestCue',    'can you · could you · would you'],
+      ['Permission', 'permissionCue', 'do i have to · am i allowed · can i'],
+      ['Info',       'infoCue',       'what is · how much · when does'],
+      ['Directive',  'directiveCue',  'just · please · i need to'],
+      ['Action',     'actionCore',    'pay · schedule · transfer · book'],
+      ['Urgency',    'urgencyCore',   'today · now · asap · emergency'],
+      ['Modifier',   'modifierCore',  'for a service call · with plan'],
+      ['Trade',      'tradeMatches',  'HVAC · plumbing · trade vocab']
+    ];
+
+    const fieldLines = CUE_FIELDS.map(([label, key, hint]) => {
       let val = '';
       if (key === 'tradeMatches') {
         const tm = Array.isArray(cf.tradeMatches) ? cf.tradeMatches : [];
@@ -748,143 +747,109 @@ function _renderInlineUapSummary(agentTurn, turns) {
       } else {
         val = cf[key] || '';
       }
-      const matched = !!val && String(val).trim();
-      const valueHtml = matched
-        ? `<strong style="color:#111;">${esc(String(val).slice(0, 80))}</strong>`
-        : `<span style="color:#bbb;font-style:italic;">${esc(hint)}</span>`;
-      const labelColor = matched ? '#111' : '#bbb';
-      return `<div style="display:flex;align-items:baseline;gap:10px;padding:3px 0;">
-        <span style="min-width:90px;font-size:13px;font-weight:${matched ? '700' : '400'};color:${labelColor};flex-shrink:0;">${label}</span>
-        <span style="font-size:14px;line-height:1.4;">${valueHtml}</span>
+      const matched = val && String(val).trim();
+      if (matched) {
+        // Matched: field name + colon + value — both bold, black, on one line
+        return `<div style="display:block;font-size:15px;color:#111;line-height:1.7;font-weight:700;">
+          ${esc(label)}: ${esc(String(val).slice(0, 80))}
+        </div>`;
+      }
+      // Not matched: field name + hint in gray — still 1 line
+      return `<div style="display:block;font-size:14px;color:#bbb;line-height:1.7;">
+        ${esc(label)}: <em>${esc(hint)}</em>
       </div>`;
     }).join('');
 
-    row2 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:0;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="${LBL}">UAP Signal</span>${drift}
-      </div>
-      <div style="padding-left:102px;">${fieldRows}</div>
-    </div>`;
+    sections.push(`<div style="${S_DIV}">
+      <span style="${S_HDR}">UAP Signal ${driftBadge}</span>
+      ${fieldLines}
+    </div>`);
   }
 
-  // ── ROW 3: ANCHORS ───────────────────────────────────────────────────────
-  let row3 = '';
+  // ── 3: ANCHORS ─────────────────────────────────────────────────────────
   if (layer1 && layer1.anchorGate) {
-    const ag = layer1.anchorGate;
-    const req = Array.isArray(ag.required) ? ag.required : [];
-    const ratioS = typeof ag.ratio === 'number' ? `${(ag.ratio * 100).toFixed(0)}%` : '';
+    const ag    = layer1.anchorGate;
+    const req   = Array.isArray(ag.required) ? ag.required : [];
+    const ratio = typeof ag.ratio === 'number' ? `${(ag.ratio * 100).toFixed(0)}%` : '';
     const badge = ag.passed
       ? `<span style="${BADGE('#dcfce7','#166534')}">PASS</span>`
       : `<span style="${BADGE('#fee2e2','#991b1b')}">FAIL</span>`;
-    const wordList = req.length
-      ? req.slice(0, 12).map(w => `<code style="background:#f1f5f9;border-radius:3px;padding:1px 5px;font-size:13px;color:#111;">${esc(w)}</code>`).join(' ')
-        + (req.length > 12 ? `<span style="color:#888;font-size:13px;"> +${req.length - 12} more</span>` : '')
-      : '<span style="color:#bbb;font-style:italic;">none</span>';
-    row3 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Anchors</span>
-        ${badge}
-        <span style="font-size:14px;color:#111;font-weight:600;">${ag.hits || 0}/${req.length}</span>
-        ${ratioS ? `<span style="font-size:13px;color:#555;">(${ratioS} — need 90%)</span>` : ''}
-      </div>
-      <div style="padding-left:102px;margin-top:2px;">${wordList}</div>
-    </div>`;
+    const chips = req.length
+      ? req.slice(0, 14).map(w =>
+          `<code style="display:inline-block;background:#f1f5f9;border-radius:3px;padding:2px 6px;font-size:13px;color:#111;margin:2px 3px 2px 0;">${esc(w)}</code>`
+        ).join('') + (req.length > 14 ? `<span style="font-size:13px;color:#888;">+${req.length - 14} more</span>` : '')
+      : '<span style="color:#bbb;font-style:italic;">none required</span>';
+
+    sections.push(`<div style="${S_DIV}">
+      <span style="${S_HDR}">Anchors</span>
+      <span style="${S_BODY}">${badge} <strong>${ag.hits || 0} of ${req.length}</strong>${ratio ? ` &nbsp;(${ratio} — need 90%)` : ''}</span>
+      <span style="display:block;margin-top:6px;">${chips}</span>
+    </div>`);
   } else if (layer1?.noCandidate) {
-    row3 = `<div style="${ROW}">
-      <span style="${LBL}">Anchors</span>
-      <span style="${VAL}color:#888;font-style:italic;">No candidate phrase — ${esc(layer1.reason || 'NO_CANDIDATE')}</span>
-    </div>`;
+    sections.push(`<div style="${S_DIV}">
+      <span style="${S_HDR}">Anchors</span>
+      <span style="${S_BODY}color:#888;font-style:italic;">No candidate phrase reached anchor gate — ${esc(layer1.reason || 'NO_CANDIDATE')}</span>
+    </div>`);
   }
 
-  // ── ROW 4: PHRASE MATCH ──────────────────────────────────────────────────
-  let row4 = '';
+  // ── 4: PHRASE MATCH ────────────────────────────────────────────────────
+  let phraseBlock = '';
   if (layer1?.hit) {
-    const conf = layer1.confidence != null ? `${(layer1.confidence * 100).toFixed(0)}%` : '';
-    const mt = esc(layer1.matchType || 'match');
-    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Phrase</span>
-        <span style="${BADGE('#dcfce7','#166534')}">HIT</span>
-        <span style="font-size:14px;color:#111;font-weight:600;">${mt}</span>
-        ${conf ? `<span style="font-size:13px;color:#555;">@ ${conf}</span>` : ''}
-      </div>
-      ${layer1.phrase ? `<div style="padding-left:102px;font-size:13px;color:#555;font-style:italic;">"${esc((layer1.phrase||'').slice(0,180))}"</div>` : ''}
-    </div>`;
+    const conf = layer1.confidence != null ? ` @ ${(layer1.confidence * 100).toFixed(0)}%` : '';
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE('#dcfce7','#166534')}">HIT</span>`}<strong>${esc(layer1.matchType || 'match')}</strong>${conf}</span>
+      ${layer1.phrase ? `<span style="${S_SUB}font-style:italic;">"${esc((layer1.phrase||'').slice(0,200))}"</span>` : ''}`;
   } else if (direct || groq) {
-    const w = direct || groq;
+    const w   = direct || groq;
     const lbl = direct ? 'KC DIRECT' : 'KC + GROQ';
     const bg  = direct ? '#dcfce7' : '#ede9fe';
     const fg  = direct ? '#166534' : '#5b21b6';
-    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Phrase</span>
-        <span style="${BADGE(bg,fg)}">${lbl}</span>
-        <span style="font-size:14px;color:#111;font-weight:600;">${esc(w.containerTitle||'')}</span>
-        ${w.sectionLabel ? `<span style="font-size:13px;color:#555;">· ${esc(w.sectionLabel)}</span>` : ''}
-      </div>
-    </div>`;
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE(bg,fg)}">${lbl}</span>`}<strong>${esc(w.containerTitle||'')}</strong>${w.sectionLabel ? ` · ${esc(w.sectionLabel)}` : ''}</span>`;
   } else if (gap || gapAns) {
-    const g = gap || gapAns;
-    const top = Array.isArray(g?.gapTopSections) ? g.gapTopSections.slice(0,4) : [];
-    const topStr = top.length
-      ? top.map(s => `<span style="font-size:13px;color:#111;font-weight:600;">${esc(s.label||'')}</span> <span style="font-size:12px;color:#888;">(${(s.score||0).toFixed(0)})</span>`).join('<span style="color:#ccc;"> &nbsp;·&nbsp; </span>')
-      : '<span style="color:#bbb;font-style:italic;">no alternates</span>';
-    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:6px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Phrase</span>
-        <span style="${BADGE('#fed7aa','#9a3412')}">SECTION GAP</span>
-        <span style="font-size:14px;color:#111;font-weight:600;">${esc(g?.containerTitle||'')}</span>
-        <span style="font-size:13px;color:#555;">— container matched, no section crossed threshold</span>
-      </div>
-      <div style="padding-left:102px;">
-        <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.04em;">Top sections: </span>${topStr}
-      </div>
-    </div>`;
+    const g   = gap || gapAns;
+    const top = Array.isArray(g?.gapTopSections) ? g.gapTopSections.slice(0, 4) : [];
+    const topLines = top.map(s =>
+      `<div style="display:block;font-size:14px;color:#111;line-height:1.6;padding-left:0;">
+        <strong>${esc(s.label||'')}</strong> <span style="color:#888;">(score ${(s.score||0).toFixed(0)})</span>
+      </div>`
+    ).join('');
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE('#fed7aa','#9a3412')}">SECTION GAP</span>`}<strong>${esc(g?.containerTitle||'')}</strong> — container matched, no section crossed threshold</span>
+      ${top.length ? `<span style="${S_SUB}">Top sections:</span>${topLines}` : ''}`;
   } else if (layer1?.belowThreshold) {
     const conf = layer1.confidence != null ? `${(layer1.confidence * 100).toFixed(0)}%` : '';
-    const thr  = layer1.threshold   != null ? `(threshold ${(layer1.threshold * 100).toFixed(0)}%)` : '';
-    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Phrase</span>
-        <span style="${BADGE('#fef3c7','#92400e')}">BELOW THRESHOLD</span>
-        <span style="font-size:14px;color:#111;">closest ${conf}</span>
-        ${thr ? `<span style="font-size:13px;color:#888;">${thr}</span>` : ''}
-        ${layer1.fuzzyRecovery ? `<span style="font-size:13px;color:#b45309;font-weight:600;">fuzzy</span>` : ''}
-      </div>
-      ${layer1.phrase ? `<div style="padding-left:102px;font-size:13px;color:#555;font-style:italic;">"${esc((layer1.phrase||'').slice(0,180))}"</div>` : ''}
-    </div>`;
+    const thr  = layer1.threshold   != null ? ` (threshold ${(layer1.threshold * 100).toFixed(0)}%)` : '';
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE('#fef3c7','#92400e')}">BELOW THRESHOLD</span>`}closest ${conf}${thr}${layer1.fuzzyRecovery ? ' · <strong style="color:#b45309;">fuzzy match</strong>' : ''}</span>
+      ${layer1.phrase ? `<span style="${S_SUB}font-style:italic;">"${esc((layer1.phrase||'').slice(0,200))}"</span>` : ''}`;
   } else if (semantic) {
     const sim = semantic.similarity ?? semantic.bestBelowThreshold?.similarity;
     const bb  = semantic.bestBelowThreshold || {};
-    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="${LBL}">Phrase</span>
-        <span style="${BADGE('#fef3c7','#92400e')}">SEMANTIC MISS</span>
-        <span style="font-size:14px;color:#111;">closest ${(sim||0).toFixed(2)}</span>
-        ${bb.containerTitle ? `<span style="font-size:13px;color:#555;">→ ${esc(bb.containerTitle)}${bb.sectionLabel ? ' · '+esc(bb.sectionLabel) : ''}</span>` : ''}
-      </div>
-    </div>`;
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE('#fef3c7','#92400e')}">SEMANTIC MISS</span>`}closest ${(sim||0).toFixed(3)}${bb.containerTitle ? ` → <strong>${esc(bb.containerTitle)}</strong>${bb.sectionLabel ? ' · '+esc(bb.sectionLabel) : ''}` : ''}</span>`;
   } else if (llm) {
-    row4 = `<div style="${ROW}">
-      <span style="${LBL}">Phrase</span>
-      <span style="${BADGE('#fee2e2','#991b1b')}">LLM FALLBACK</span>
-      <span style="${VAL}">No KC match — Claude answered from caller context</span>
-    </div>`;
+    phraseBlock = `
+      <span style="${S_BODY}">${`<span style="${BADGE('#fee2e2','#991b1b')}">LLM FALLBACK</span>`}No KC match — Claude answered from caller context</span>`;
+  }
+  if (phraseBlock) {
+    sections.push(`<div style="${S_DIV}">
+      <span style="${S_HDR}">Phrase</span>
+      ${phraseBlock}
+    </div>`);
   }
 
-  // ── ROW 5: RESPONSE ──────────────────────────────────────────────────────
-  const row5 = responseText
-    ? `<div style="${ROW}border-bottom:none;">
-        <span style="${LBL}">Response</span>
-        <span style="${VAL}">${esc(responseText.slice(0, 320))}${responseText.length > 320 ? '\u2026' : ''}</span>
-       </div>`
-    : '';
+  // ── 5: RESPONSE ────────────────────────────────────────────────────────
+  if (responseText) {
+    sections.push(`<div style="${S_DIV}border-bottom:none;">
+      <span style="${S_HDR}">Response</span>
+      <span style="${S_BODY}">${esc(responseText.slice(0, 400))}${responseText.length > 400 ? '\u2026' : ''}</span>
+    </div>`);
+  }
 
-  const body = [row1, row2, row3, row4, row5].filter(Boolean).join('');
-  if (!body) return '';
-
-  return `<div style="margin-top:8px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:0 16px;">
-    ${body}
+  if (!sections.length) return '';
+  return `<div style="margin-top:8px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:0 18px;">
+    ${sections.join('')}
   </div>`;
 }
 
