@@ -173,11 +173,17 @@ function _getSpeechDetection(company) {
 /**
  * Returns the company's speechTimeout as a string for Twilio Gather.
  * opts.pendingFollowUp = true → returns '2' (longer wait when agent asked a question)
+ *
+ * FALLBACK = 'auto' (Twilio's native VAD, ~1.5s adaptive). A hardcoded '1' was
+ * cutting callers off mid-sentence ("Um, [breath]...") when the canonical DB
+ * path had no saved value. 'auto' respects natural speech cadence while
+ * companies that save an explicit speechTimeout still get their chosen value.
+ * Ref: Apr 22 2026 investigation — CAeea4b4dc.../CA9271b532... speech cutoff.
  */
 function _speechTimeout(company, opts) {
   if (opts?.pendingFollowUp) return '2';
   const sd = _getSpeechDetection(company);
-  return sd.speechTimeout ? sd.speechTimeout.toString() : '1';
+  return sd.speechTimeout ? sd.speechTimeout.toString() : 'auto';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7182,13 +7188,34 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // 'immediate' = 0s, 'brief' = thinkingTime, 'thoughtful' = thinkingTime
         // Only fires on non-bridge paths (bridge already has natural delay).
         // Read from agent2.personalitySystem (PATCH endpoint saves here) → fallback to top-level schema path.
-        const _convPatterns = company?.aiAgentSettings?.agent2?.personalitySystem?.conversationPatterns
-          || company?.aiAgentSettings?.personalitySystem?.conversationPatterns
-          || {};
+        const _convPatternsAgent2 = company?.aiAgentSettings?.agent2?.personalitySystem?.conversationPatterns;
+        const _convPatternsTop    = company?.aiAgentSettings?.personalitySystem?.conversationPatterns;
+        const _convPatterns       = _convPatternsAgent2 || _convPatternsTop || {};
+        const _convPatternsPath   = _convPatternsAgent2
+          ? 'aiAgentSettings.agent2.personalitySystem.conversationPatterns'
+          : (_convPatternsTop ? 'aiAgentSettings.personalitySystem.conversationPatterns' : 'NONE');
         const _responseDelay = _convPatterns.responseDelay || 'brief';
         const _thinkingTime = Math.min(3, Math.max(0, Number(_convPatterns.thinkingTime) || 0));
-        if (_responseDelay !== 'immediate' && _thinkingTime > 0) {
+        const _pauseFired   = (_responseDelay !== 'immediate' && _thinkingTime > 0);
+        if (_pauseFired) {
           gather.pause({ length: _thinkingTime });
+        }
+
+        // ── FORENSICS: log resolved conversation-patterns so silent mis-config surfaces in audits
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid, companyId: companyID,
+            type: 'CONV_PATTERNS_RESOLVED',
+            turn: turnNumber,
+            data: {
+              resolvedPath:    _convPatternsPath,
+              responseDelay:   _responseDelay,
+              thinkingTime:    _thinkingTime,
+              pauseFired:      _pauseFired,
+              rawThinkingTime: _convPatterns.thinkingTime ?? null,
+              rawResponseDelay:_convPatterns.responseDelay ?? null
+            }
+          }).catch(() => {});
         }
 
         if (audioUrl) gather.play(audioUrl);
