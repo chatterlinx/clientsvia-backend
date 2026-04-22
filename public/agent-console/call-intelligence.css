@@ -40,9 +40,10 @@
   --r-xl:  16px;
   --shadow-sm:  0 1px 2px rgba(0,0,0,0.05);
   --shadow-md:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
-  --nav-w:      220px;
+  --nav-w:      220px;  /* kept for compat — no longer used for sidebar */
   --header-h:   56px;
   --ribbon-h:   40px;
+  --topnav-h:   50px;
 }
 
 /* ── Reset & Base ────────────────────────────────────────── */
@@ -279,61 +280,77 @@ button { cursor: pointer; font-family: inherit; }
 .empty-state h3 { font-size: 15px; color: var(--tx-secondary); margin-bottom: 6px; }
 .empty-state p { font-size: 13px; color: var(--tx-muted); }
 
-/* ── Report View ─────────────────────────────────────────── */
-.report-view { flex: 1; display: flex; overflow: hidden; }
+/* ── Report View ─────────────────────────────────────────────
+   Apr 22, 2026 — sidebar removed. Nav moves to a sticky top bar.
+   report-view is now a single column; report-content fills 100%.
+   ─────────────────────────────────────────────────────────── */
+.report-view {
+  flex: 1; display: flex;
+  flex-direction: column;   /* ← was row (sidebar) — now top-nav + content */
+  overflow: hidden;
+}
 
-.report-nav {
-  width: var(--nav-w); flex-shrink: 0;
-  padding: 16px 0;
-  border-right: 1px solid var(--border);
+/* Sticky horizontal section nav — replaces the 220px left sidebar */
+.report-topnav {
+  flex-shrink: 0;
+  height: var(--topnav-h);
   background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 4px;
+  overflow-x: auto;
   position: sticky;
   top: calc(var(--header-h) + var(--ribbon-h));
-  height: calc(100vh - var(--header-h) - var(--ribbon-h));
-  overflow-y: auto;
+  z-index: 50;
+  scrollbar-width: none;   /* Firefox */
 }
-.nav-heading {
-  padding: 0 16px 10px;
-  font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--tx-muted);
-}
+.report-topnav::-webkit-scrollbar { display: none; }
+.nav-heading { display: none; }   /* label hidden — pills are self-explanatory */
+
 .nav-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 8px 16px; font-size: 13px;
-  color: var(--tx-secondary); cursor: pointer;
-  border-left: 2px solid transparent;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-size: 12px; font-weight: 500;
+  color: var(--tx-secondary);
+  cursor: pointer; white-space: nowrap;
   transition: all 0.12s; user-select: none;
+  flex-shrink: 0;
 }
-.nav-item:hover { background: var(--surface-2); color: var(--tx-primary); }
+.nav-item:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--tx-primary);
+}
 .nav-item.active {
-  color: var(--c-info); border-left-color: var(--c-info);
-  background: var(--c-info-bg); font-weight: 500;
+  background: var(--c-info-bg);
+  border-color: var(--c-info-border);
+  color: var(--c-info);
+  font-weight: 600;
 }
 .nav-num {
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 18px; height: 18px; border-radius: 50%;
   background: var(--border); color: var(--tx-muted);
-  font-size: 10px; font-weight: 700;
+  font-size: 9px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .nav-item.active .nav-num { background: var(--c-info); color: #fff; }
 
-/* Apr 22, 2026 — widened from 960px so the inline UAP forensics panel
-   (5-line layout per Scripts row: STT / cueFrame 8-grid / anchors /
-   phrase match / response) has room to breathe. Keeps a sensible
-   readable-line cap on very wide monitors via clamp. */
+/* Full-width content — no side margins stolen by a sidebar */
 .report-content {
   flex: 1; overflow-y: auto;
-  padding: 20px 28px;
-  max-width: min(100%, 1680px);
-  margin: 0 auto;
+  padding: 24px 32px;
+  width: 100%;
 }
 
 /* ── Section Cards ────────────────────────────────────────── */
 .section {
-  margin-bottom: 16px;
-  scroll-margin-top: calc(var(--header-h) + var(--ribbon-h) + 12px);
+  margin-bottom: 20px;
+  scroll-margin-top: 12px;   /* topnav is outside scroll container — no offset needed */
 }
 .card {
   background: var(--surface); border: 1px solid var(--border);

@@ -2220,7 +2220,7 @@ function attachTurnToggles() {
   });
 }
 
-// ─── Scroll spy for left nav ──────────────────────────────────────────────────
+// ─── Scroll spy for top nav pills ────────────────────────────────────────────
 
 function attachScrollSpy() {
   const content = $('report-content');
