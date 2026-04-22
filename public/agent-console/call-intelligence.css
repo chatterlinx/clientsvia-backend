@@ -64,7 +64,10 @@ button { cursor: pointer; font-family: inherit; }
 
 /* ── App Shell ────────────────────────────────────────────── */
 #app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-.view { display: none; flex: 1; flex-direction: column; }
+/* min-height:0 lets the flex child shrink below its content size so the
+   inner .report-content (overflow-y:auto) can actually scroll instead of
+   pushing the whole column past the viewport. */
+.view { display: none; flex: 1; flex-direction: column; min-height: 0; }
 .view.active { display: flex; }
 
 /* ── Page Header ─────────────────────────────────────────── */
@@ -288,9 +291,15 @@ button { cursor: pointer; font-family: inherit; }
   flex: 1; display: flex;
   flex-direction: column;   /* ← was row (sidebar) — now top-nav + content */
   overflow: hidden;
+  min-height: 0;            /* allow .report-content to shrink + scroll */
 }
 
-/* Sticky horizontal section nav — replaces the 220px left sidebar */
+/* Horizontal section nav — replaces the 220px left sidebar.
+   NOTE: #app is locked to 100vh with overflow:hidden, so the topnav is
+   already a fixed flex child above the scrolling .report-content.
+   Sticky + top offset were removed because sticky has no scrolling
+   ancestor here — the offset was incorrectly pushing the nav down by 96px
+   and overlapping the content. */
 .report-topnav {
   flex-shrink: 0;
   height: var(--topnav-h);
@@ -301,8 +310,6 @@ button { cursor: pointer; font-family: inherit; }
   padding: 0 20px;
   gap: 4px;
   overflow-x: auto;
-  position: sticky;
-  top: calc(var(--header-h) + var(--ribbon-h));
   z-index: 50;
   scrollbar-width: none;   /* Firefox */
 }
