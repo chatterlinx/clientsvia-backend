@@ -497,44 +497,12 @@ const FLOW_STEPS = {
 // If a company hasn't configured a message, we return null and the caller
 // sees silence rather than unapproved speech. The caller-facing handler
 // should check for null and decide whether to skip or transfer.
+//
+// Extracted to utils/recoveryMessage.js (Stage 14, Y94) so engine modules
+// (KCDiscoveryRunner, etc.) can emit UI-owned recovery copy without importing
+// this full voice route. v2twilio.js re-exports nothing — just uses the shared.
 // ============================================================================
-async function getRecoveryMessage(company, type = 'audioUnclear') {
-  const companyId = company?._id || company?.companyId || 'unknown';
-
-  // Load from LLMSettings via LLM0ControlsLoader (Redis-cached)
-  const recoveryConfig = await LLM0ControlsLoader.loadRecoveryMessages(String(companyId));
-
-  // Handle legacy key aliases
-  if (type === 'choppyConnection') type = 'audioUnclear';
-  if (type === 'noSpeech') type = 'silenceRecovery';
-
-  let variants = recoveryConfig[type];
-
-  // Legacy compat: choppyConnection alias
-  if (!variants && type === 'audioUnclear') {
-    variants = recoveryConfig.choppyConnection;
-  }
-
-  // Legacy compat: noSpeech alias
-  if (!variants && type === 'silenceRecovery') {
-    variants = recoveryConfig.noSpeech;
-  }
-
-  // String → array (legacy single-value format)
-  if (typeof variants === 'string') {
-    variants = variants.trim() ? [variants.trim()] : [];
-  }
-
-  // No configured message — log warning, return null (not unapproved speech)
-  if (!Array.isArray(variants) || variants.length === 0) {
-    logger.warn(`[RecoveryMsg] No UI-configured message for type="${type}" companyId=${companyId}. Configure in LLM Settings → Call Handling.`);
-    return null;
-  }
-
-  // Random selection for natural sound
-  const message = variants[Math.floor(Math.random() * variants.length)];
-  return message || null;
-}
+const { getRecoveryMessage } = require('../utils/recoveryMessage');
 const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('../utils/textUtils');
 const { sanitizeForSpeech, SAFE_FALLBACK } = require('../utils/sanitizeForSpeech');
 // Legacy personality system removed - using modern AI Agent Logic responseCategories

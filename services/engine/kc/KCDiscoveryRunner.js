@@ -63,10 +63,18 @@ const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesServ
 const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
 const { buildSectionId }      = require('../../../utils/kcHelpers');
+const { stem }                = require('../../../utils/stem');
+const { getRecoveryMessage }  = require('../../../utils/recoveryMessage');
 
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
 const CueExtractorService     = require('../../cueExtractor/CueExtractorService');
+
+// ── Upsell reask ceiling (Stage 14, Y95) ──────────────────────────────────────
+// Mirrors prequal's single-reask behaviour. If caller gives an ambiguous answer
+// (neither yes nor no) more times than this, we record DECLINED and route to
+// booking rather than loop the caller forever.
+const MAX_UPSELL_REASKS       = 1;
 
 // UAP confidence threshold — phrase match must reach this before Logic 2 runs
 const UAP_CONFIDENCE_THRESHOLD = 0.80;
@@ -2322,10 +2330,12 @@ async function _handlePrequalResponse({
   try {
     _pqState = JSON.parse(pendingPrequal);
   } catch (_) {
-    // Corrupt Redis state — clear and fall through gracefully
+    // Corrupt Redis state — clear and fall through gracefully (Y94: UI-owned copy)
     await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+    const _rcv = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+              || "I'm sorry, let me start over. What can I help you with today?";
     return {
-      response:    "I'm sorry, let me start over. What can I help you with today?",
+      response:    _rcv,
       matchSource: 'KC_ENGINE',
       state:       nextState,
       kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_PARSE_ERROR', latencyMs: Date.now() - startMs }),
@@ -2334,15 +2344,17 @@ async function _handlePrequalResponse({
 
   const { containerId, sectionId = null } = _pqState;
 
-  // Load the container — fall through gracefully if not found
+  // Load the container — fall through gracefully if not found (Y94: UI-owned copy)
   const containers = await KCS.getActiveForCompany(companyId).catch(() => []);
   const container  = containers.find(c => String(c._id || c.title) === containerId);
 
   if (!container) {
     logger.warn('[KC_ENGINE] Pre-qualify: container not found — clearing state', { companyId, callSid, containerId });
     await redis.del(`kc-prequal:${companyId}:${callSid}`).catch(() => {});
+    const _rcv = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+              || "I'm sorry, let me start over. What can I help you with today?";
     return {
-      response:    "I'm sorry, let me start over. What can I help you with today?",
+      response:    _rcv,
       matchSource: 'KC_ENGINE',
       state:       nextState,
       kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { intent: 'PREQUAL_CONTAINER_MISSING', latencyMs: Date.now() - startMs }),
@@ -2364,11 +2376,21 @@ async function _handlePrequalResponse({
   const fieldKey = pq.fieldKey || 'preQualifyAnswer';
   const _answeredKey = sectionId || containerId;
 
-  // ── Match caller input against option keywords ────────────────────────────
+  // ── Match caller input against option keywords (Y97: stem-harmonized) ─────
+  // Uses utils/stem.js so prequal matching stays consistent with the rest of
+  // the pipeline (anchor gate, cue extractor). Multi-word keywords keep
+  // substring semantics; single-word keywords match on stemmed token-set.
+  const _inputTokens = input.split(/\s+/).filter(Boolean);
+  const _inputStems  = new Set(_inputTokens.map(stem).filter(Boolean));
   let matchedOption = null;
   for (const opt of options) {
     const keywords = (opt.keywords || []).map(k => k.trim().toLowerCase()).filter(Boolean);
-    if (keywords.length && keywords.some(kw => input.includes(kw))) {
+    const hit = keywords.some(kw => {
+      if (kw.includes(' ')) return input.includes(kw);         // phrase keyword — verbatim
+      const s = stem(kw);                                       // single-word keyword — stemmed
+      return s && _inputStems.has(s);
+    });
+    if (keywords.length && hit) {
       matchedOption = opt;
       break;
     }
@@ -2421,8 +2443,11 @@ async function _handlePrequalResponse({
       };
     }
 
+    // Y94: UI-owned copy with safety-net fallback
+    const _escFb = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+                || "Of course — let me know what else I can help you with.";
     return {
-      response:    "Of course — let me know what else I can help you with.",
+      response:    _escFb,
       matchSource: 'KC_ENGINE',
       state:       nextState,
       kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_ESCAPE_FALLBACK', latencyMs: Date.now() - startMs }),
@@ -2480,8 +2505,11 @@ async function _handlePrequalResponse({
   }
 
   if (!kcResult?.response) {
+    // Y94: UI-owned copy with safety-net fallback
+    const _gErr = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+               || "I'm sorry, I wasn't able to get that answer. Let me connect you with someone who can help.";
     return {
-      response:    "I'm sorry, I wasn't able to get that answer. Let me connect you with someone who can help.",
+      response:    _gErr,
       matchSource: 'KC_ENGINE',
       state:       nextState,
       kcTrace:     _buildKcTrace(PATH.KC_GRACEFUL_ACK, { containerId, intent: 'PREQUAL_GROQ_ERROR', latencyMs: Date.now() - startMs }),
@@ -2974,22 +3002,71 @@ async function _handleUpsellResponse({
     _upState = JSON.parse(pendingUpsell);
   } catch (_) {
     await redis.del(`kc-upsell:${companyId}:${callSid}`).catch(() => {});
-    return _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs });
+    return await _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, company });
   }
 
   const { containerId, sectionId = null, idx, currentUpsell } = _upState;
   const isYes = _YES_RE.test(userInput);
   const isNo  = _NO_RE.test(userInput) && !isYes;
 
-  // Ambiguous (no clear signal) → re-ask with a gentle nudge
+  // ── Ambiguous (no clear signal) → re-ask OR force-decline & move on ───────
+  // Y95: mirror prequal's reask ceiling. Without this, a caller who keeps
+  // answering off-topic could pin the pipeline in UPSELL_PENDING forever.
+  // When MAX_UPSELL_REASKS is exceeded we treat it as DECLINED (conservative:
+  // better to under-upsell than to loop a human caller), record the outcome,
+  // and route to booking.
   if (!isYes && !isNo) {
-    emit('KC_UPSELL_REASKED', { containerId, idx, turn });
-    return {
-      response:    `Just to confirm — ${currentUpsell?.offerScript ? 'would you like to add that?' : 'is that a yes or no?'}`,
-      matchSource: 'KC_ENGINE',
-      state:       nextState,
-      kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_REASKED', idx, latencyMs: Date.now() - startMs }),
-    };
+    const reaskCount = _upState.reaskCount || 0;
+
+    if (reaskCount < MAX_UPSELL_REASKS) {
+      await redis.setex(
+        `kc-upsell:${companyId}:${callSid}`, 4 * 3600,
+        JSON.stringify({ containerId, sectionId: sectionId || null, idx, status: 'PENDING', currentUpsell, reaskCount: reaskCount + 1 })
+      ).catch(() => {});
+      emit('KC_UPSELL_REASKED', { containerId, idx, turn, reaskCount: reaskCount + 1 });
+
+      // Y94: prefer UI-owned reask copy; safety net as last resort
+      const _reaskFb = (await getRecoveryMessage(company, 'generalError').catch(() => null))
+                    || `Just to confirm — ${currentUpsell?.offerScript ? 'would you like to add that?' : 'is that a yes or no?'}`;
+      return {
+        response:    _reaskFb,
+        matchSource: 'KC_ENGINE',
+        state:       nextState,
+        kcTrace:     _buildKcTrace(PATH.KC_UPSELL_PENDING, { containerId, intent: 'UPSELL_REASKED', idx, latencyMs: Date.now() - startMs }),
+      };
+    }
+
+    // Max re-asks exceeded — record DECLINED + move on to booking
+    logger.info('[KC_ENGINE] 💰 Upsell: max re-asks exceeded — recording DECLINED & routing to booking', { companyId, callSid, containerId, idx });
+    DiscoveryNotesService.load(companyId, callSid)
+      .then(existing => {
+        const offers = existing?.temp?.upsellOffers || [];
+        return DiscoveryNotesService.update(companyId, callSid, {
+          temp: {
+            upsellOffers: [...offers, {
+              itemKey:   currentUpsell?.itemKey || null,
+              price:     currentUpsell?.price   ?? null,
+              accepted:  false,
+              reason:    'MAX_REASKS_EXCEEDED',
+              containerId,
+              timestamp: new Date().toISOString(),
+            }],
+            offeredItems: [{
+              type:       'UPSELL',
+              itemKey:    currentUpsell?.itemKey || `upsell_${containerId}_${idx}`,
+              item:       currentUpsell?.itemKey || null,
+              price:      currentUpsell?.price   ?? null,
+              outcome:    'DECLINED',
+              reason:     'MAX_REASKS_EXCEEDED',
+              resolvedAt: new Date().toISOString(),
+            }],
+          },
+        });
+      })
+      .catch(() => {});
+    emit('KC_UPSELL_OUTCOME', { containerId, idx, accepted: false, reason: 'MAX_REASKS_EXCEEDED', itemKey: currentUpsell?.itemKey || null, turn });
+    await redis.del(`kc-upsell:${companyId}:${callSid}`).catch(() => {});
+    return await _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, company });
   }
 
   // ── Write outcome to discoveryNotes.temp.upsellOffers[] ──────────────────
@@ -3074,13 +3151,18 @@ async function _handleUpsellResponse({
   await redis.del(`kc-upsell:${companyId}:${callSid}`).catch(() => {});
   logger.info('[KC_ENGINE] 💰 Upsell chain complete — routing to booking', { companyId, callSid, containerId });
 
-  return _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine });
+  return await _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine, company });
 }
 
 /**
  * _upsellRouteToBooking — shared helper: flip to BOOKING lane after upsell chain ends.
+ *
+ * Y94: now async and accepts `company` so the transition response can be loaded
+ * from the UI-owned recovery copy. If the admin supplied a script line in the
+ * upsell config, that wins. Otherwise we prefer a UI-configured 'generalError'
+ * message; last-resort safety-net string only if nothing is configured.
  */
-function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine = '' }) {
+async function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, startMs, scriptLine = '', company = null }) {
   emit('KC_BOOKING_INTENT_FIRED', { companyId, callSid, turn, path: PATH.KC_BOOKING_INTENT, source: 'upsell_chain_done' });
   nextState.lane                                          = 'BOOKING';
   nextState.sessionMode                                   = 'BOOKING';
@@ -3089,8 +3171,14 @@ function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid, star
   nextState.agent2.discovery.pendingBookingFromKC         = true;
   nextState.agent2.discovery.lastPath                     = PATH.KC_BOOKING_INTENT;
 
+  let _response = scriptLine;
+  if (!_response && company) {
+    _response = (await getRecoveryMessage(company, 'generalError').catch(() => null)) || '';
+  }
+  if (!_response) _response = "Perfect — let me get you scheduled right away!";
+
   return {
-    response:    scriptLine || "Perfect — let me get you scheduled right away!",
+    response:    _response,
     matchSource: 'KC_ENGINE',
     state:       nextState,
     kcTrace:     _buildKcTrace(PATH.KC_BOOKING_INTENT, { intent: 'UPSELL_CHAIN_DONE', latencyMs: Date.now() - startMs }),
