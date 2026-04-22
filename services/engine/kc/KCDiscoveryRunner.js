@@ -58,7 +58,7 @@
 const KCBookingIntentDetector = require('./KCBookingIntentDetector');
 const KCTransferIntentDetector = require('./KCTransferIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
-const { callLLMAgentForFollowUp } = require('../agent2/Agent2DiscoveryRunner');
+const { callLLMAgentForFollowUp } = require('../llm/LLMFollowUpService');
 const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
 const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');

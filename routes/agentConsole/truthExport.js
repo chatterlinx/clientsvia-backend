@@ -861,7 +861,7 @@ async function checkUiCoverage(company) {
       issue: 'Discovery handoff consent question is blank',
       uiPath: 'MISSING',
       expectedUiLocation: 'agent2.html → Discovery handoff consent question field',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
       impact: 'Booking consent prompt may fallback to non-UI speech'
     });
   }
@@ -876,7 +876,7 @@ async function checkUiCoverage(company) {
       issue: 'Follow-up Consent Gate has no YES phrases configured',
       uiPath: 'triggers.html → Follow-up Consent Cards → YES',
       expectedUiLocation: 'triggers.html → Follow-up Consent Cards section',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
       impact: 'Trigger follow-up questions will not detect YES responses for booking handoff'
     });
   }
@@ -890,7 +890,7 @@ async function checkUiCoverage(company) {
       issue: 'Discovery fallback.noMatchAnswer is blank',
       uiPath: 'MISSING',
       expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
       impact: 'No-match handling may require non-UI emergency fallback'
     });
   }
@@ -903,7 +903,7 @@ async function checkUiCoverage(company) {
       issue: 'Discovery fallback.noMatchWhenReasonCaptured is blank',
       uiPath: 'MISSING',
       expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
       impact: 'Reason-captured flows may degrade response quality'
     });
   }
@@ -916,7 +916,7 @@ async function checkUiCoverage(company) {
       issue: 'Discovery fallback.noMatchClarifierQuestion is blank',
       uiPath: 'MISSING',
       expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
       impact: 'Clarifier follow-up may degrade to emergency fallback'
     });
   }

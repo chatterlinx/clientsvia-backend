@@ -331,7 +331,7 @@
       fires:    'Turn 1 only. Blocking (~30ms). Runs BEFORE response generation. Falls through to single-call path on error.',
       writesTo: 'entityResult → injected into Phase 2 system prompt + early discoveryNotes.update() fire-and-forget',
       wiredIn:  [
-        'services/engine/agent2/Agent2DiscoveryRunner.js — _extractIntakeEntities()',
+        'services/engine/kc/KCDiscoveryRunner.js — _extractIntakeEntities()',
         'config/llmAgentDefaults.js — composeIntakeExtractionPrompt()',
         'services/streaming/adapters/GroqStreamAdapter.js — streamFull()',
       ],
@@ -374,7 +374,7 @@
       fires:    'Turn 1. Starts streaming ~30ms after Phase 1 completes. onSentence fires on first token boundary.',
       writesTo: 'responseResult.response → Redis bridge result key (plain text, no JSON parse needed)',
       wiredIn:  [
-        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForIntake() split block',
+        'services/engine/kc/KCDiscoveryRunner.js — callLLMAgentForIntake() split block',
         'config/llmAgentDefaults.js — composeIntakeResponsePrompt()',
         'services/streaming/SentenceStreamingService.js — streamWithSentences()',
       ],
@@ -454,7 +454,7 @@
       fires:    'Turn 2+ (no-match path), inside callLLMAgentForNoMatch, BEFORE T1.5 Groq fast lane',
       writesTo: 'Early return with KC answer on TIER 1 hit. Emits A2_STAGE11_DETECT + A2_STAGE11_KC_HIT.',
       wiredIn:  [
-        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForNoMatch, before T1.5',
+        'services/engine/kc/KCDiscoveryRunner.js — callLLMAgentForNoMatch, before T1.5',
         'services/engine/agent2/KnowledgeContainerService.js — detectTier(), TIER1_SIGNALS, TIER2_SIGNALS',
       ],
       configIn:  'Knowledge Containers — Knowledge Base tab',
@@ -865,7 +865,7 @@
       writesTo: null,
       wiredIn:  [
         'services/engine/kc/KCDiscoveryRunner.js — _handleLLMFallback() (receives ehConfig + behaviorBlock)',
-        'services/engine/agent2/Agent2DiscoveryRunner.js — callLLMAgentForFollowUp()',
+        'services/engine/kc/KCDiscoveryRunner.js — callLLMAgentForFollowUp()',
         'services/engine/EngineHubRuntime.js — shouldFallbackToLLM() (knowledgeEngine.onNoKcMatch setting)',
       ],
       configIn:  'LLM Settings',
