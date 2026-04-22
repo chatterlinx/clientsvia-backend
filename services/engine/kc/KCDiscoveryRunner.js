@@ -1392,8 +1392,22 @@ class KCDiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────
     let uapDiagnostic = null;
 
-    // Only fire UAP if CueExtractor (GATE 2.4) didn't already resolve a match
-    if (!match) try {
+    // ── SHADOW MODE (Apr 22, 2026) ────────────────────────────────────────────
+    // Always run UAP Layer 1 — even when an earlier gate (2.4b trade, booking,
+    // transfer, etc.) already resolved the routing. When `prevMatch` is
+    // truthy, UAP runs purely for forensics: we capture the phrase candidate,
+    // anchor gate result, and core embedding score, but we NEVER overwrite
+    // the routing decision.
+    //
+    // Why: on divergence (UAP would have picked Container X, but 2.4b routed
+    // to Container Y) you get a calibration target — either trade vocab is
+    // too greedy, or UAP's phrase corpus has a gap. Without shadow mode, the
+    // Call Intelligence dashboard has a blank anchor section on every turn
+    // that short-circuits before 2.5.
+    const prevMatch = match;
+    const shadowMode = !!prevMatch;
+
+    try {
       uapResult = await UtteranceActParser.parse(companyId, userInput);
 
       // ── UAP diagnostic snapshot (zero-heuristic, populated as sub-gates run) ──
@@ -1633,7 +1647,7 @@ class KCDiscoveryRunner {
             }
           }
 
-          if (anchorGatePassed) {
+          if (anchorGatePassed && !shadowMode) {
             match = {
               container:        fullContainer,
               score:            Math.round(uapResult.confidence * 100),
@@ -1650,12 +1664,30 @@ class KCDiscoveryRunner {
               confidence:     uapResult.confidence,
               anchorGate:     anchorWords.length ? 'L1+L2 passed' : 'n/a',
             });
+          } else if (anchorGatePassed && shadowMode) {
+            // Shadow mode — UAP would have routed, but an earlier gate won.
+            // Log the divergence so calibration can compare the two decisions.
+            logger.info('[KC_ENGINE] UAP SHADOW — anchor gate passed, earlier gate already routed', {
+              companyId, callSid, turn,
+              uapContainerTitle:  fullContainer.title,
+              uapSectionLabel:    targetSection?.label || '(all)',
+              uapConfidence:      uapResult.confidence,
+              actualMatchSource:  prevMatch?.matchSource || 'unknown',
+              actualContainerId:  String(prevMatch?.container?._id || ''),
+              divergence:         String(prevMatch?.container?._id || '') !== uapResult.containerId,
+            });
           }
         }
 
         // Log to discoveryNotes qaLog (diagnostic, fire-and-forget)
         // Enriched with uapDiagnostic so the Gap page can render anchor/core
         // gate details when hit=false (the "why UAP missed" answer).
+        //
+        // Shadow-mode semantics:
+        //   hit         = UAP actually became the routing decision
+        //   shadowHit   = UAP would have routed if it had authority (anchor gate passed)
+        //   shadowMode  = true when an earlier gate already won (UAP ran forensic-only)
+        //   divergence  = shadow case where UAP disagrees with the actual route
         _writeDiscoveryNotes(companyId, callSid, {
           qaLog: [{
             type:       'UAP_LAYER1',
@@ -1666,7 +1698,20 @@ class KCDiscoveryRunner {
             confidence:  uapResult.confidence,
             matchType:   uapResult.matchType,
             phrase:      uapResult.matchedPhrase,
-            hit:         !!match,
+            hit:         !!match && match !== prevMatch,
+            // shadowHit = UAP would have routed if it had authority.
+            // Anchor gate is authoritative when it ran; null → no anchor words
+            // configured (backward-compat pass-through). coreGate failing flips
+            // anchorGatePassed internally but uapDiagnostic.coreGate.passed
+            // reflects it. Treat either gate failing as "wouldn't have routed".
+            shadowHit:   shadowMode
+                           && (!uapDiagnostic?.anchorGate || uapDiagnostic.anchorGate.passed === true)
+                           && (!uapDiagnostic?.coreGate   || uapDiagnostic.coreGate.passed   !== false),
+            shadowMode,
+            divergence:  shadowMode && prevMatch
+                           ? String(prevMatch?.container?._id || '') !== uapResult.containerId
+                           : false,
+            actualMatchSource: shadowMode ? (prevMatch?.matchSource || null) : null,
             turn:        turn ?? 0,
             question:    userInput,
             anchorGate:  uapDiagnostic?.anchorGate || null,
@@ -1716,6 +1761,7 @@ class KCDiscoveryRunner {
               matchType:     uapResult.matchType,
               phrase:        uapResult.matchedPhrase,
               hit:           false,
+              shadowMode,
               fuzzyRecovery: true,
               turn:          turn ?? 0,
               question:      userInput,
@@ -1752,6 +1798,7 @@ class KCDiscoveryRunner {
           qaLog: [{
             type:       'UAP_LAYER1',
             hit:        false,
+            shadowMode,
             turn:       turn ?? 0,
             question:   userInput,
             noCandidate: true,
