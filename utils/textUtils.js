@@ -72,16 +72,27 @@ function cleanTextForTTS(text) {
   // Problem: UI config sometimes has variant IDs appended to questions:
   //   "What's your name 3?" ← The "3" is a config artifact, NOT intentional
   //   "Did I get that right 1?" ← Same issue
-  // 
-  // Fix: Strip trailing single digits that follow a space before punctuation
-  // Pattern: " [0-9]?" or " [0-9]!" or " [0-9]" at end of sentence
+  //
+  // Y106 (Apr 2026) — Previous version's third regex was too aggressive:
+  //   text.replace(/(\w)\s+\d([?!.,])/g, '$1$2')
+  // stripped legitimate numeric content: "option 3?", "suite 4,", "on the 7?"
+  // all lost their digit. Voice callers hearing "option? is available" is worse
+  // than leaving a rare config artifact in place.
+  //
+  // Fix: Constrain the variant-ID stripper to an explicit wordlist — only
+  // prompt-keywords commonly followed by a UI variant ID. Generic word+digit
+  // patterns (addresses, menu options, dates) are left intact.
   // ════════════════════════════════════════════════════════════════════════════
   text = text.replace(/\s+\d+([?!.]?)$/g, '$1');  // End of text: " 3?" → "?"
   text = text.replace(/\s+\d+([?!.])(\s)/g, '$1$2');  // Mid-text: " 3? " → "? "
-  
-  // Also catch patterns like "name 3?" in the middle of longer text
-  // But ONLY if it looks like a variant ID (single digit after word, before punctuation)
-  text = text.replace(/(\w)\s+\d([?!.,])/g, '$1$2');  // "name 3?" → "name?"
+
+  // Y106: mid-text variant-ID stripper — only fires after known prompt keywords
+  // (where a trailing digit is almost always a config artifact, never speech).
+  // Keep in lowercase since we already replaced whitespace above; regex is /i.
+  text = text.replace(
+    /\b(name|phone|email|address|zip|number|question|confirm|right|correct)\s+\d([?!.,])/gi,
+    '$1$2'
+  );
   
   // Format phone numbers and addresses for natural pronunciation
   text = formatForTTS(text);

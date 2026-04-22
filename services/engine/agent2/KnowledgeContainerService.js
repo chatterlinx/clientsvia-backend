@@ -75,6 +75,15 @@ const TEMPERATURE = 0.15;
 /** Built-in booking offer when company bookingOfferPhrase is blank and mode is fixed */
 const BUILT_IN_BOOKING_OFFER = 'Would you like to schedule that today?';
 
+/**
+ * Y102: Built-in "price-unknown" fallback phrase Groq is told to speak when a
+ * specific price/fee is not written verbatim in the container. Company-owned
+ * override: kbSettings.missingPricingFallback. Safety net for multi-tenant
+ * compliance — no hardcoded English in the Groq prompt unless admin left the
+ * field blank.
+ */
+const BUILT_IN_MISSING_PRICING_FALLBACK = "I'd need to confirm that exact pricing for you";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SIGNAL TABLE
 // Broad set of informational signals used by detect() as the initial gate.
@@ -223,8 +232,39 @@ function _embeddingCacheKey(companyId) {
 // any variable defined there is automatically available in KC section content.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Per-process lazy cache — same pattern as triggerVariablesCache in Agent2DiscoveryRunner */
-const _kcVarCache = new Map();
+/**
+ * Y105: Per-process LRU cache — bounded (max 100 companies, 15min TTL) to
+ * prevent unbounded growth on the multi-tenant platform. Prior version was an
+ * unbounded Map — on a platform with thousands of companies that's a slow
+ * memory leak. Eviction policy: oldest entry by lastAccess when size exceeds
+ * max, or when entry age exceeds TTL. Admin save still calls
+ * invalidateKCVariablesCache() for instant freshness on the modified company.
+ */
+const KC_VAR_CACHE_MAX = 100;
+const KC_VAR_CACHE_TTL_MS = 15 * 60 * 1000;  // 15 minutes
+const _kcVarCache = new Map();                // companyId → { vars, cachedAt }
+
+function _kcVarCacheGet(companyId) {
+  const entry = _kcVarCache.get(companyId);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > KC_VAR_CACHE_TTL_MS) {
+    _kcVarCache.delete(companyId);
+    return null;
+  }
+  // LRU touch: move to end (most recently used)
+  _kcVarCache.delete(companyId);
+  _kcVarCache.set(companyId, entry);
+  return entry.vars;
+}
+
+function _kcVarCacheSet(companyId, vars) {
+  _kcVarCache.set(companyId, { vars, cachedAt: Date.now() });
+  // Evict oldest if over cap (Map iteration order = insertion / touch order)
+  if (_kcVarCache.size > KC_VAR_CACHE_MAX) {
+    const oldestKey = _kcVarCache.keys().next().value;
+    if (oldestKey) _kcVarCache.delete(oldestKey);
+  }
+}
 
 /**
  * _resolveKCVariables — Substitute {placeholders} in KC section content
@@ -241,13 +281,14 @@ const _kcVarCache = new Map();
 async function _resolveKCVariables(companyId, text) {
   if (!text || !companyId || !text.includes('{')) return text;
   try {
-    let vars = _kcVarCache.get(companyId);
+    // Y105: LRU get + TTL check
+    let vars = _kcVarCacheGet(companyId);
     if (!vars) {
       const settings = await CompanyTriggerSettings.findOne({ companyId }).lean();
       vars = settings?.companyVariables instanceof Map
         ? Object.fromEntries(settings.companyVariables)
         : (settings?.companyVariables || {});
-      _kcVarCache.set(companyId, vars);
+      _kcVarCacheSet(companyId, vars);
     }
     let result = text;
     for (const [k, v] of Object.entries(vars)) {
@@ -438,6 +479,7 @@ function _buildSystemPrompt({
   priorVisit,
   behaviorBlock = '',           // Engine Hub Behavior Card block — injected when a BC is configured for this KC category
   preQualifyContext = '',       // Injected when caller answered a pre-qualify question for this container
+  missingPricingFallback = BUILT_IN_MISSING_PRICING_FALLBACK, // Y102: UI-owned price-unknown phrase
   suppressOpeningGreeting = false, // true on turn 1 — Turn1Engine already greeted the caller
 }) {
   // Booking instruction block
@@ -522,7 +564,7 @@ function _buildSystemPrompt({
 This is a live phone call. Answer the caller's question from the KNOWLEDGE CONTAINER below.
 ${callContextBlock}${preQualBlock}${sampleBlock}${personalizationBlock}${behaviorBlockStr}
 CRITICAL RULES — FOLLOW EXACTLY:
-${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. If a specific price, fee, or rate is NOT written verbatim in the container content below, say "I'd need to confirm that exact pricing for you" — NEVER estimate or invent a number.
+${noGreetingRule}1. Answer ONLY using facts from the KNOWLEDGE CONTAINER. If a specific price, fee, or rate is NOT written verbatim in the container content below, say "${missingPricingFallback}" — NEVER estimate or invent a number.
 2. ${wordCapRule}
 3. Be natural and conversational — sound human, never robotic or scripted. Tone: ${toneDescriptor}.
 4. If the caller signals readiness to book or schedule, set intent to "BOOKING_READY".
@@ -1107,6 +1149,11 @@ async function answer(opts) {
     priorVisit:               priorVisit                             || false,
     behaviorBlock:            behaviorBlock                          || '',
     preQualifyContext:        preQualifyContext                      || '',
+    // Y102: UI-owned "price-unknown" fallback phrase injected into Groq's rule #1
+    // so the multi-tenant rule holds even for fallback speech. Safety net kept
+    // as English default if admin hasn't configured one.
+    missingPricingFallback:   kbSettings.missingPricingFallback?.trim()
+                              || BUILT_IN_MISSING_PRICING_FALLBACK,
     // Turn 1: Turn1Engine already greeted the caller — suppress Groq's opening greeting
     suppressOpeningGreeting:  turn === 1,
   });
