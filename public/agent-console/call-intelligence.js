@@ -667,6 +667,126 @@ function _pairCallerText(turns, agentTurn) {
   return paired?.text || '';
 }
 
+// Pair qaLog entries for the same turnNumber. The backend sends qaEntries on
+// both the caller and agent row for a given turn (filtered by q.turn), but on
+// older call docs the agent row may be empty — fall back to the caller row.
+function _pairQaEntries(turns, agentTurn) {
+  if (Array.isArray(agentTurn.qaEntries) && agentTurn.qaEntries.length) {
+    return agentTurn.qaEntries;
+  }
+  const paired = turns.find(t =>
+    t.turnNumber === agentTurn.turnNumber && t.speaker === 'caller');
+  return paired?.qaEntries || [];
+}
+
+// Compact inline UAP summary — rendered directly under every Scripts row so
+// Marc can see what UAP did to produce each agent reply WITHOUT clicking into
+// an expand. Returns HTML (may be empty string when there's nothing to show).
+//
+// Apr 22, 2026 — the full UAP Decision panel still lives in the turn expand
+// drawer for deep forensics; this is the at-a-glance version.
+function _renderInlineUapSummary(agentTurn, turns) {
+  const callerText = _pairCallerText(turns, agentTurn);
+  const qaEntries  = _pairQaEntries(turns, agentTurn);
+  if (!callerText && !qaEntries.length) return '';
+
+  // Find the decision-carrying entries
+  const cueEntry  = qaEntries.find(q => q && q.cueFrame);
+  const cf        = cueEntry?.cueFrame || null;
+  const layer1    = qaEntries.find(q => q && q.type === 'UAP_LAYER1');
+  const semantic  = qaEntries.find(q => q && q.type === 'UAP_SEMANTIC_MISS');
+  const gap       = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP');
+  const direct    = qaEntries.find(q => q && q.type === 'KC_DIRECT_ANSWER');
+  const groq      = qaEntries.find(q => q && q.type === 'KC_GROQ_ANSWERED');
+  const llm       = qaEntries.find(q => q && q.type === 'KC_LLM_FALLBACK');
+  const gapAns    = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP_ANSWERED');
+
+  // ── One-line verdict — the most important signal ───────────────────────
+  let verdictBadge = '';
+  const badgeS = 'display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;margin-right:6px;vertical-align:middle;';
+
+  if (layer1?.hit) {
+    const conf = layer1.confidence != null ? ` @ ${(layer1.confidence * 100).toFixed(0)}%` : '';
+    verdictBadge = `<span style="${badgeS}background:#dcfce7;color:#166534;">UAP HIT</span>
+      <span style="color:#374151;">${esc(layer1.matchType || 'match')}${conf}</span>
+      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 80))}"</em>` : ''}`;
+  } else if (direct || groq) {
+    const winner = direct || groq;
+    const label  = direct ? 'KC DIRECT' : 'KC + GROQ';
+    const bg     = direct ? '#dcfce7' : '#ede9fe';
+    const fg     = direct ? '#166534' : '#5b21b6';
+    verdictBadge = `<span style="${badgeS}background:${bg};color:${fg};">${label}</span>
+      <span style="color:#374151;">${esc(winner.containerTitle || '')}${winner.sectionLabel ? ' · ' + esc(winner.sectionLabel) : ''}</span>`;
+  } else if (gap || gapAns) {
+    const g = gap || gapAns;
+    const top = Array.isArray(g?.gapTopSections) && g.gapTopSections.length
+      ? ` &mdash; top: <strong>${esc(g.gapTopSections[0].label || '')}</strong> (${(g.gapTopSections[0].score || 0).toFixed(0)})`
+      : '';
+    verdictBadge = `<span style="${badgeS}background:#fed7aa;color:#9a3412;">SECTION GAP</span>
+      <span style="color:#374151;">container <strong>${esc(g?.containerTitle || '')}</strong> matched but no section${top}</span>`;
+  } else if (llm) {
+    verdictBadge = `<span style="${badgeS}background:#fee2e2;color:#991b1b;">LLM FALLBACK</span>
+      <span style="color:#374151;">no KC match &mdash; Claude answered</span>`;
+  } else if (layer1?.belowThreshold) {
+    const conf = layer1.confidence != null ? ` ${(layer1.confidence * 100).toFixed(0)}%` : '';
+    verdictBadge = `<span style="${badgeS}background:#fef3c7;color:#92400e;">BELOW THRESHOLD</span>
+      <span style="color:#374151;">closest${conf}</span>
+      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 70))}"</em>` : ''}`;
+  } else if (semantic) {
+    const sim = semantic.similarity ?? semantic.bestBelowThreshold?.similarity;
+    verdictBadge = `<span style="${badgeS}background:#fef3c7;color:#92400e;">SEMANTIC MISS</span>
+      <span style="color:#374151;">closest ${(sim || 0).toFixed(2)}</span>`;
+  }
+
+  // ── cueFrame one-liner (the 8-field snapshot) ──────────────────────────
+  let cueLine = '';
+  if (cf) {
+    const parts = [];
+    if (cf.permissionCue) parts.push(`perm:<strong>${esc(cf.permissionCue)}</strong>`);
+    if (cf.actionCore)    parts.push(`act:<strong>${esc(cf.actionCore)}</strong>`);
+    if (cf.modifierCore)  parts.push(`mod:<strong>${esc(cf.modifierCore)}</strong>`);
+    if (cf.urgencyCore)   parts.push(`urg:<strong>${esc(cf.urgencyCore)}</strong>`);
+    if (cf.directiveCue)  parts.push(`dir:<strong>${esc(cf.directiveCue)}</strong>`);
+    if (cf.requestCue)    parts.push(`req:<strong>${esc(cf.requestCue)}</strong>`);
+    if (cf.infoCue)       parts.push(`info:<strong>${esc(cf.infoCue)}</strong>`);
+    const topicWords = Array.isArray(cf.topicWords) ? cf.topicWords : [];
+    const tradeCount = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
+    if (topicWords.length) parts.push(`topics:<strong>${topicWords.slice(0, 3).map(esc).join(', ')}</strong>`);
+    if (tradeCount)        parts.push(`trade:<strong>${tradeCount}</strong>`);
+
+    // Topic-drift warning — same rule as the full panel
+    const isDrift = topicWords.length === 0 && tradeCount > 5;
+    const driftChip = isDrift
+      ? ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`
+      : '';
+
+    if (parts.length || isDrift) {
+      cueLine = `<div style="margin-top:3px;font-size:11px;color:#6b7280;line-height:1.4;">
+        <span style="color:#9ca3af;">cueFrame:</span> ${parts.join(' &middot; ') || '<em>no cues fired</em>'}${driftChip}
+      </div>`;
+    }
+  }
+
+  // ── Caller line + verdict assembly ────────────────────────────────────
+  const callerLine = callerText
+    ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.4;">
+         <span style="color:#9ca3af;">\ud83d\udc64 caller:</span> <em style="color:#4b5563;">"${esc(callerText.slice(0, 180))}${callerText.length > 180 ? '\u2026' : ''}"</em>
+       </div>`
+    : '';
+
+  const uapLine = verdictBadge
+    ? `<div style="margin-top:3px;font-size:11px;color:#374151;line-height:1.4;">
+         <span style="color:#9ca3af;">\ud83e\udded UAP:</span> ${verdictBadge}
+       </div>`
+    : '';
+
+  if (!callerLine && !uapLine && !cueLine) return '';
+
+  return `<div style="margin-top:6px;padding:6px 10px;background:#f9fafb;border-left:2px solid #e5e7eb;border-radius:3px;">
+    ${callerLine}${uapLine}${cueLine}
+  </div>`;
+}
+
 // Collapse runs of 2+ consecutive script rows into one range row
 function _collapseScriptRuns(items) {
   const out = [];
@@ -841,6 +961,7 @@ function renderSectionTurnCoverage(turns, companyId) {
       const subRows = entry.items.map(it => {
         const t = it.turn;
         const preview = (t.text || '').substring(0, 100);
+        const uapSummary = _renderInlineUapSummary(t, turns);
         return `<tr class="tc-row tc-row-script tc-sub-row">
           <td class="tc-col-num">${t.turnNumber}</td>
           <td class="tc-col-src">
@@ -850,7 +971,10 @@ function renderSectionTurnCoverage(turns, companyId) {
               <div class="tc-src-sub">${it.cls.srcSub}</div>
             </div>
           </td>
-          <td class="tc-col-content"><span class="tc-content-muted">${esc(preview)}${t.text?.length > 100 ? '…' : ''}</span></td>
+          <td class="tc-col-content">
+            <div><span class="tc-content-muted">${esc(preview)}${t.text?.length > 100 ? '…' : ''}</span></div>
+            ${uapSummary}
+          </td>
           <td class="tc-col-fix">${it.cls.fixHtml}</td>
         </tr>`;
       }).join('');
@@ -889,6 +1013,11 @@ function renderSectionTurnCoverage(turns, companyId) {
       }
     }
 
+    // Apr 22, 2026 — inline UAP summary rendered directly under the row so
+    // Marc can see caller text + gate verdict + cueFrame at a glance without
+    // digging into the turn expand.
+    const uapSummary = _renderInlineUapSummary(t, turns);
+
     return `<tr class="${rowCls}">
       <td class="tc-col-num">${t.turnNumber}</td>
       <td class="tc-col-src">
@@ -898,7 +1027,10 @@ function renderSectionTurnCoverage(turns, companyId) {
           <div class="tc-src-sub">${entry.cls.srcSub}</div>
         </div>
       </td>
-      <td class="tc-col-content">${esc(preview)}${t.text?.length > 110 ? '…' : ''}</td>
+      <td class="tc-col-content">
+        <div>${esc(preview)}${t.text?.length > 110 ? '…' : ''}</div>
+        ${uapSummary}
+      </td>
       <td class="tc-col-fix">${fixHtml}</td>
     </tr>`;
   }).join('');
