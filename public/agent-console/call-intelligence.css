@@ -319,9 +319,15 @@ button { cursor: pointer; font-family: inherit; }
 }
 .nav-item.active .nav-num { background: var(--c-info); color: #fff; }
 
+/* Apr 22, 2026 — widened from 960px so the inline UAP forensics panel
+   (5-line layout per Scripts row: STT / cueFrame 8-grid / anchors /
+   phrase match / response) has room to breathe. Keeps a sensible
+   readable-line cap on very wide monitors via clamp. */
 .report-content {
   flex: 1; overflow-y: auto;
-  padding: 20px 24px; max-width: 960px;
+  padding: 20px 28px;
+  max-width: min(100%, 1680px);
+  margin: 0 auto;
 }
 
 /* ── Section Cards ────────────────────────────────────────── */

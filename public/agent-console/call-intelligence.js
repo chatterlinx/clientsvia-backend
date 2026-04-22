@@ -679,18 +679,23 @@ function _pairQaEntries(turns, agentTurn) {
   return paired?.qaEntries || [];
 }
 
-// Compact inline UAP summary — rendered directly under every Scripts row so
-// Marc can see what UAP did to produce each agent reply WITHOUT clicking into
-// an expand. Returns HTML (may be empty string when there's nothing to show).
+// Rich 5-line inline UAP summary — rendered directly under every Scripts row.
+// Marc's explicit layout (Apr 22, 2026):
+//   1) STT       — verbatim caller turn
+//   2) UAP grid  — the 8-field cueFrame as a 4x2 visual (matched vs hint)
+//   3) Anchors   — required anchor words, match ratio, pass/fail
+//   4) Phrase    — winning or closest phrase + confidence + why
+//   5) Response  — the agent reply
 //
-// Apr 22, 2026 — the full UAP Decision panel still lives in the turn expand
-// drawer for deep forensics; this is the at-a-glance version.
+// The full deep-forensics UAP Decision panel still lives in the turn expand.
+// Returns HTML (may be empty when there's nothing to show).
 function _renderInlineUapSummary(agentTurn, turns) {
   const callerText = _pairCallerText(turns, agentTurn);
   const qaEntries  = _pairQaEntries(turns, agentTurn);
-  if (!callerText && !qaEntries.length) return '';
+  const responseText = agentTurn.text || '';
+  if (!callerText && !qaEntries.length && !responseText) return '';
 
-  // Find the decision-carrying entries
+  // Decision-carrying entries
   const cueEntry  = qaEntries.find(q => q && q.cueFrame);
   const cf        = cueEntry?.cueFrame || null;
   const layer1    = qaEntries.find(q => q && q.type === 'UAP_LAYER1');
@@ -701,89 +706,167 @@ function _renderInlineUapSummary(agentTurn, turns) {
   const llm       = qaEntries.find(q => q && q.type === 'KC_LLM_FALLBACK');
   const gapAns    = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP_ANSWERED');
 
-  // ── One-line verdict — the most important signal ───────────────────────
-  let verdictBadge = '';
-  const badgeS = 'display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;margin-right:6px;vertical-align:middle;';
+  // ── LINE 1 — STT (verbatim caller) ─────────────────────────────────────
+  const sttLine = callerText
+    ? `<div style="margin-top:2px;font-size:11px;color:#374151;line-height:1.45;">
+         <span style="color:#9ca3af;font-weight:600;">\ud83d\udc64 STT:</span>
+         <em style="color:#1f2937;">"${esc(callerText.slice(0, 260))}${callerText.length > 260 ? '\u2026' : ''}"</em>
+       </div>`
+    : '';
 
+  // ── LINE 2 — UAP 8-container cueFrame grid ─────────────────────────────
+  // 4-column × 2-row visual. Matched cells highlight green with value.
+  // Empty cells show dimmed example hints so the pattern is self-teaching.
+  const CUE_FIELDS = [
+    ['REQUEST',    'requestCue',    'can you, could you, would you'],
+    ['PERMISSION', 'permissionCue', 'do i have to, am i allowed, can i'],
+    ['INFO',       'infoCue',       'what is, how much, when does'],
+    ['DIRECTIVE',  'directiveCue',  'just, please, i need to'],
+    ['ACTION',     'actionCore',    'pay, schedule, transfer, book'],
+    ['URGENCY',    'urgencyCore',   'today, now, asap, emergency'],
+    ['MODIFIER',   'modifierCore',  'for a service call, with plan'],
+    ['TRADE',      'tradeMatches',  'HVAC / plumbing / trade vocab']
+  ];
+
+  let gridLine = '';
+  let driftChip = '';
+  if (cf) {
+    const cellBase = 'padding:4px 6px;border-radius:4px;font-size:10px;line-height:1.3;min-height:38px;display:flex;flex-direction:column;justify-content:center;';
+    const cells = CUE_FIELDS.map(([label, key, hint]) => {
+      let val = '';
+      if (key === 'tradeMatches') {
+        const tm = Array.isArray(cf.tradeMatches) ? cf.tradeMatches : [];
+        if (tm.length) {
+          const terms = [...new Set(tm.map(t => t && t.term).filter(Boolean))];
+          val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
+        }
+      } else {
+        val = cf[key] || '';
+      }
+      const matched = !!val && String(val).trim();
+      if (matched) {
+        return `<div style="${cellBase}background:#dcfce7;border:1px solid #86efac;">
+          <div style="font-weight:700;color:#15803d;font-size:9px;letter-spacing:0.4px;">${label}</div>
+          <div style="color:#166534;font-weight:600;margin-top:2px;">${esc(String(val).slice(0, 48))}</div>
+        </div>`;
+      }
+      return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
+        <div style="font-weight:700;color:#9ca3af;font-size:9px;letter-spacing:0.4px;">${label}</div>
+        <div style="color:#cbd5e1;font-style:italic;margin-top:2px;">${esc(hint)}</div>
+      </div>`;
+    }).join('');
+
+    // Topic-drift chip — surfaced in grid header
+    const topicCount = Array.isArray(cf.topicWords) ? cf.topicWords.length : 0;
+    const tradeCount = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
+    if (topicCount === 0 && tradeCount > 5) {
+      driftChip = ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`;
+    }
+
+    gridLine = `<div style="margin-top:5px;">
+      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame${driftChip}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+    </div>`;
+  }
+
+  // ── LINE 3 — Anchors (required match words + ratio) ────────────────────
+  let anchorsLine = '';
+  if (layer1 && layer1.anchorGate) {
+    const ag = layer1.anchorGate;
+    const req = Array.isArray(ag.required) ? ag.required : [];
+    const hits = ag.hits || 0;
+    const total = req.length;
+    const ratioS = typeof ag.ratio === 'number' ? `${(ag.ratio * 100).toFixed(0)}%` : '';
+    const badge = ag.passed
+      ? '<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#dcfce7;color:#166534;">PASS</span>'
+      : '<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fee2e2;color:#991b1b;">FAIL</span>';
+    const reqList = req.length
+      ? req.slice(0, 10).map(w => `<span style="font-family:monospace;color:#374151;">${esc(w)}</span>`).join(', ') + (req.length > 10 ? ` +${req.length - 10}` : '')
+      : '<em style="color:#9ca3af;">none</em>';
+    anchorsLine = `<div style="margin-top:5px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\u2693 anchors:</span>
+      ${badge} <strong>${hits}/${total}</strong>${ratioS ? ` <span style="color:#6b7280;">(${ratioS})</span>` : ''} &mdash; ${reqList}
+    </div>`;
+  } else if (layer1?.noCandidate) {
+    anchorsLine = `<div style="margin-top:5px;font-size:11px;color:#6b7280;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\u2693 anchors:</span>
+      <em>no candidate phrase reached anchor check (${esc(layer1.reason || 'NO_CANDIDATE')})</em>
+    </div>`;
+  }
+
+  // ── LINE 4 — Phrase match (winning or closest + why) ───────────────────
+  const bS = 'display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px;vertical-align:middle;';
+  let phraseLine = '';
   if (layer1?.hit) {
     const conf = layer1.confidence != null ? ` @ ${(layer1.confidence * 100).toFixed(0)}%` : '';
-    verdictBadge = `<span style="${badgeS}background:#dcfce7;color:#166534;">UAP HIT</span>
-      <span style="color:#374151;">${esc(layer1.matchType || 'match')}${conf}</span>
-      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 80))}"</em>` : ''}`;
+    const mt = esc(layer1.matchType || 'match');
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:#dcfce7;color:#166534;">HIT</span>
+      <strong>${mt}</strong>${conf}
+      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 140))}"</em>` : ''}
+    </div>`;
   } else if (direct || groq) {
-    const winner = direct || groq;
-    const label  = direct ? 'KC DIRECT' : 'KC + GROQ';
-    const bg     = direct ? '#dcfce7' : '#ede9fe';
-    const fg     = direct ? '#166534' : '#5b21b6';
-    verdictBadge = `<span style="${badgeS}background:${bg};color:${fg};">${label}</span>
-      <span style="color:#374151;">${esc(winner.containerTitle || '')}${winner.sectionLabel ? ' · ' + esc(winner.sectionLabel) : ''}</span>`;
+    const w = direct || groq;
+    const label = direct ? 'KC DIRECT' : 'KC + GROQ';
+    const bg = direct ? '#dcfce7' : '#ede9fe';
+    const fg = direct ? '#166534' : '#5b21b6';
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:${bg};color:${fg};">${label}</span>
+      <strong>${esc(w.containerTitle || '')}</strong>${w.sectionLabel ? ` <span style="color:#6b7280;">· ${esc(w.sectionLabel)}</span>` : ''}
+    </div>`;
   } else if (gap || gapAns) {
     const g = gap || gapAns;
-    const top = Array.isArray(g?.gapTopSections) && g.gapTopSections.length
-      ? ` &mdash; top: <strong>${esc(g.gapTopSections[0].label || '')}</strong> (${(g.gapTopSections[0].score || 0).toFixed(0)})`
-      : '';
-    verdictBadge = `<span style="${badgeS}background:#fed7aa;color:#9a3412;">SECTION GAP</span>
-      <span style="color:#374151;">container <strong>${esc(g?.containerTitle || '')}</strong> matched but no section${top}</span>`;
-  } else if (llm) {
-    verdictBadge = `<span style="${badgeS}background:#fee2e2;color:#991b1b;">LLM FALLBACK</span>
-      <span style="color:#374151;">no KC match &mdash; Claude answered</span>`;
+    const top = Array.isArray(g?.gapTopSections) ? g.gapTopSections.slice(0, 3) : [];
+    const topStr = top.length
+      ? top.map(s => `<strong>${esc(s.label || '')}</strong> <span style="color:#9ca3af;">(${(s.score || 0).toFixed(0)})</span>`).join(' · ')
+      : '<em style="color:#9ca3af;">no alternates</em>';
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:#fed7aa;color:#9a3412;">SECTION GAP</span>
+      ${g?.containerTitle ? `container <strong>${esc(g.containerTitle)}</strong> matched, but no section crossed threshold` : 'no section match'}
+      <div style="margin-top:2px;color:#6b7280;padding-left:14px;">top sections: ${topStr}</div>
+    </div>`;
   } else if (layer1?.belowThreshold) {
     const conf = layer1.confidence != null ? ` ${(layer1.confidence * 100).toFixed(0)}%` : '';
-    verdictBadge = `<span style="${badgeS}background:#fef3c7;color:#92400e;">BELOW THRESHOLD</span>
-      <span style="color:#374151;">closest${conf}</span>
-      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 70))}"</em>` : ''}`;
+    const thr = layer1.threshold != null ? ` (threshold ${(layer1.threshold * 100).toFixed(0)}%)` : '';
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:#fef3c7;color:#92400e;">BELOW THRESHOLD</span>
+      closest${conf}${thr}
+      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 120))}"</em>` : ''}
+      ${layer1.fuzzyRecovery ? ` · <span style="color:#b45309;font-weight:600;">fuzzy</span>` : ''}
+    </div>`;
   } else if (semantic) {
     const sim = semantic.similarity ?? semantic.bestBelowThreshold?.similarity;
-    verdictBadge = `<span style="${badgeS}background:#fef3c7;color:#92400e;">SEMANTIC MISS</span>
-      <span style="color:#374151;">closest ${(sim || 0).toFixed(2)}</span>`;
+    const bb = semantic.bestBelowThreshold || {};
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:#fef3c7;color:#92400e;">SEMANTIC MISS</span>
+      closest ${(sim || 0).toFixed(2)}
+      ${bb.containerTitle ? ` &mdash; <strong>${esc(bb.containerTitle)}</strong>${bb.sectionLabel ? ` · ${esc(bb.sectionLabel)}` : ''}` : ''}
+    </div>`;
+  } else if (llm) {
+    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
+      <span style="${bS}background:#fee2e2;color:#991b1b;">LLM FALLBACK</span>
+      no KC match &mdash; Claude answered from caller context
+    </div>`;
   }
 
-  // ── cueFrame one-liner (the 8-field snapshot) ──────────────────────────
-  let cueLine = '';
-  if (cf) {
-    const parts = [];
-    if (cf.permissionCue) parts.push(`perm:<strong>${esc(cf.permissionCue)}</strong>`);
-    if (cf.actionCore)    parts.push(`act:<strong>${esc(cf.actionCore)}</strong>`);
-    if (cf.modifierCore)  parts.push(`mod:<strong>${esc(cf.modifierCore)}</strong>`);
-    if (cf.urgencyCore)   parts.push(`urg:<strong>${esc(cf.urgencyCore)}</strong>`);
-    if (cf.directiveCue)  parts.push(`dir:<strong>${esc(cf.directiveCue)}</strong>`);
-    if (cf.requestCue)    parts.push(`req:<strong>${esc(cf.requestCue)}</strong>`);
-    if (cf.infoCue)       parts.push(`info:<strong>${esc(cf.infoCue)}</strong>`);
-    const topicWords = Array.isArray(cf.topicWords) ? cf.topicWords : [];
-    const tradeCount = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
-    if (topicWords.length) parts.push(`topics:<strong>${topicWords.slice(0, 3).map(esc).join(', ')}</strong>`);
-    if (tradeCount)        parts.push(`trade:<strong>${tradeCount}</strong>`);
-
-    // Topic-drift warning — same rule as the full panel
-    const isDrift = topicWords.length === 0 && tradeCount > 5;
-    const driftChip = isDrift
-      ? ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`
-      : '';
-
-    if (parts.length || isDrift) {
-      cueLine = `<div style="margin-top:3px;font-size:11px;color:#6b7280;line-height:1.4;">
-        <span style="color:#9ca3af;">cueFrame:</span> ${parts.join(' &middot; ') || '<em>no cues fired</em>'}${driftChip}
-      </div>`;
-    }
-  }
-
-  // ── Caller line + verdict assembly ────────────────────────────────────
-  const callerLine = callerText
-    ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.4;">
-         <span style="color:#9ca3af;">\ud83d\udc64 caller:</span> <em style="color:#4b5563;">"${esc(callerText.slice(0, 180))}${callerText.length > 180 ? '\u2026' : ''}"</em>
+  // ── LINE 5 — Response (agent reply) ────────────────────────────────────
+  const responseLine = responseText
+    ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
+         <span style="color:#9ca3af;font-weight:600;">\ud83d\udde3 response:</span>
+         <span style="color:#1f2937;">${esc(responseText.slice(0, 260))}${responseText.length > 260 ? '\u2026' : ''}</span>
        </div>`
     : '';
 
-  const uapLine = verdictBadge
-    ? `<div style="margin-top:3px;font-size:11px;color:#374151;line-height:1.4;">
-         <span style="color:#9ca3af;">\ud83e\udded UAP:</span> ${verdictBadge}
-       </div>`
-    : '';
+  if (!sttLine && !gridLine && !anchorsLine && !phraseLine && !responseLine) return '';
 
-  if (!callerLine && !uapLine && !cueLine) return '';
-
-  return `<div style="margin-top:6px;padding:6px 10px;background:#f9fafb;border-left:2px solid #e5e7eb;border-radius:3px;">
-    ${callerLine}${uapLine}${cueLine}
+  return `<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border-left:2px solid #6366f1;border-radius:3px;">
+    ${sttLine}${gridLine}${anchorsLine}${phraseLine}${responseLine}
   </div>`;
 }
 
