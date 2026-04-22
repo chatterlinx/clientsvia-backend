@@ -416,6 +416,18 @@ function _sanitiseBody(body) {
           section.contentCore = s.contentCore.trim();
         }
 
+        // Round-trip phraseScoreHash so benign saves (isPromotion, isActive,
+        // audio, prequal, upsell edits) don't wipe the clean marker and force
+        // a pointless bulk Re-score. The UI sets this to null when edits that
+        // DO affect scoring happen (phrase add/remove, content/groqContent
+        // change). The phrase-score route writes it atomically via dot-notation
+        // on successful scoring.
+        if (typeof s.phraseScoreHash === 'string' && s.phraseScoreHash.trim()) {
+          section.phraseScoreHash = s.phraseScoreHash.trim();
+        } else if (s.phraseScoreHash === null) {
+          section.phraseScoreHash = null;
+        }
+
         // Per-section daSubTypeKey (UAP sub-type routing link)
         if (typeof s.daSubTypeKey === 'string' && s.daSubTypeKey.trim()) {
           section.daSubTypeKey = s.daSubTypeKey.trim();
@@ -2546,6 +2558,26 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       };
     }
 
+    // ── Clean marker — computed synchronously so the response includes it ──
+    // Hash of (sorted phrases || content || groqContent). Presence alone is
+    // the signal; the actual value is just a debuggable token.
+    // Bulk Re-score orchestrator skips sections where this is truthy.
+    // Cleared by the UI when edits invalidate scoring (phrase add/remove,
+    // content/groqContent change) — round-tripped via _sanitiseBody so
+    // benign saves don't wipe it.
+    let _phraseScoreHash = null;
+    try {
+      const crypto = require('crypto');
+      const hashInput = [
+        [...cleanPhrases].sort().join('|'),
+        (targetSection.content || ''),
+        (targetSection.groqContent || ''),
+      ].join('||');
+      _phraseScoreHash = crypto.createHash('md5').update(hashInput).digest('hex').slice(0, 16);
+    } catch (hashErr) {
+      logger.warn('[companyKnowledge] phraseScoreHash compute failed (non-fatal)', { error: hashErr.message });
+    }
+
     // ── Persist scores + cores + phraseCoreEmbedding (fire-and-forget) ──
     (async () => {
       try {
@@ -2568,6 +2600,13 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         }
         if (phraseCoreEmb?.length) {
           setOps[`sections.${sectionIndex}.phraseCoreEmbedding`] = phraseCoreEmb;
+        }
+
+        // ── Clean marker — stamp this section as up-to-date ─────────────
+        // Hash was computed synchronously above (see _phraseScoreHash).
+        // Written via dot-notation so it never races with full-array saves.
+        if (_phraseScoreHash) {
+          setOps[`sections.${sectionIndex}.phraseScoreHash`] = _phraseScoreHash;
         }
 
         // ── AUTO_ANCHOR_WORDS_FILLED (server-side parity with per-section
@@ -2714,7 +2753,7 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
       coreAlignment = ccWords.length ? Math.round((caHits / ccWords.length) * 100) : null;
     }
 
-    return res.json({ success: true, scores, phraseCore, contentCore, coreAlignment });
+    return res.json({ success: true, scores, phraseCore, contentCore, coreAlignment, phraseScoreHash: _phraseScoreHash });
   } catch (err) {
     logger.error('[companyKnowledge] phrase-score error', { companyId, error: err.message });
     return res.status(500).json({ success: false, error: 'Phrase scoring failed' });

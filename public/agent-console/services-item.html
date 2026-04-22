@@ -2329,6 +2329,11 @@ function addSection(label = '', content = '', sectionMeta = null) {
     phraseScores:     sectionMeta?.phraseScores  || {},  // { phrase → { t1, t2, t3, tc, status } }
     phraseCore:       sectionMeta?.phraseCore   || null, // run summary of all phrases — Logic 2 target
     contentCore:      sectionMeta?.contentCore  || null, // reduced topic core of section content
+    // Dirty marker for bulk Re-score. Truthy = clean (rescore skips it).
+    // Cleared by _kcInvalidatePhraseScore() when edits affect scoring.
+    // Round-tripped on save so benign edits (isPromotion, isActive, audio,
+    // prequal, upsell) don't force a pointless rescore.
+    phraseScoreHash:  sectionMeta?.phraseScoreHash || null,
     pq: {
       enabled:  pqEnabled,
       text:     pq.text     || '',
@@ -2410,7 +2415,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
         <textarea class="form-textarea tall${_gd.isOver ? ' content-over' : (_gd.isShort || _gd.isWarn) ? ' content-short' : ''}" id="sec-groq-${id}"
           placeholder="Write detailed knowledge here — Groq reads this to give the caller a genuine, complete answer. Leave empty to use the response text below."
           maxlength="4000" rows="5"
-          oninput="charCount(this, 4000, null); S.sectionData.get(${id}).groqContent=this.value; _updateGroqDensity(${id})"
+          oninput="charCount(this, 4000, null); S.sectionData.get(${id}).groqContent=this.value; _updateGroqDensity(${id}); _kcInvalidatePhraseScore(${id})"
         >${_esc(groqContent)}</textarea>
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
           <span style="font-size:11px;display:flex;gap:8px;align-items:center;">
@@ -2732,6 +2737,7 @@ function cpKeydown(e, sid) {
       }
     }
     if (added) {
+      _kcInvalidatePhraseScore(sid);   // clean marker → dirty
       _renderCallerPhrases(sid);
       _debouncedAutoSave();          // persist phrases to DB
     }
@@ -2749,6 +2755,7 @@ function removeCallerPhrase(sid, idx) {
     delete data.phraseScores?.[removedPhrase];
   }
   data.callerPhrases.splice(idx, 1);
+  _kcInvalidatePhraseScore(sid);     // clean marker → dirty
   _renderCallerPhrases(sid);
   _debouncedAutoSave();              // persist phrases to DB
 }
@@ -3262,6 +3269,10 @@ function _getSections() {
         // Round-trip computed cores so save never wipes them — only Re-score updates them
         phraseCore:         data.phraseCore   || undefined,
         contentCore:        data.contentCore  || undefined,
+        // Round-trip the clean marker. Truthy = clean (bulk Re-score skips).
+        // null = dirty (set by _kcInvalidatePhraseScore on scoring-affecting edits).
+        // The backend sanitiseBody accepts both a string (clean) and null (dirty).
+        phraseScoreHash:    data.phraseScoreHash === null ? null : (data.phraseScoreHash || undefined),
         negativeKeywords:   data.negativeKeywords || [],
         tradeTerms:         data.tradeTerms || [],
         useFixedResponse:   !!data.useFixedResponse,
@@ -3851,6 +3862,7 @@ function _applyImportJSON(json) {
           }
           data.phraseScores = newScores;
           data.phraseAnchorWords = newAnchors;
+          _kcInvalidatePhraseScore(sid);    // phrases changed → mark dirty
           // Re-render phrase chips + score table + count badge
           _renderCallerPhrases(sid);
           stats.phrases++;
@@ -4550,6 +4562,29 @@ function _restoreKcAudioState(sid, key, url, generatedText) {
   });
 }
 
+/**
+ * _kcInvalidatePhraseScore — clear the clean marker so bulk Re-score picks
+ * this section up next time.
+ *
+ * Called when an edit invalidates phrase scoring:
+ *   - phrase added / removed / edited
+ *   - content textarea changed
+ *   - groqContent textarea changed
+ *   - new section added (initialized with null already)
+ *
+ * The marker round-trips via the save payload (phraseScoreHash field).
+ * Backend sanitiseBody accepts null to force a dirty state.
+ *
+ * Safe to call repeatedly — no-op if already null.
+ */
+function _kcInvalidatePhraseScore(sid) {
+  const data = S.sectionData.get(sid);
+  if (!data) return;
+  if (data.phraseScoreHash !== null) {
+    data.phraseScoreHash = null;
+  }
+}
+
 // Mark audio stale when source text changes.
 // Called from each text field's oninput.
 // Company-level variables ({reg_diagnostic_fee}, etc.) are resolved server-side
@@ -4588,6 +4623,9 @@ function _kcMarkStale(sid, key, currentText) {
   }
   // Eval buttons stale when section content changes
   if (key === 'content') _markEvalStale(sid);
+  // Content changes invalidate phrase-score clean marker — bulk Re-score
+  // will pick this section up next pass (pq/upsell edits do NOT invalidate).
+  if (key === 'content') _kcInvalidatePhraseScore(sid);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5039,6 +5077,11 @@ async function _reScorePhrases(sid, { bulk = false } = {}) {
     data.phraseScores = result.scores      || {};
     data.phraseCore   = result.phraseCore  || null;
     data.contentCore  = result.contentCore || null;
+    // Stamp the clean marker so bulk Re-score will skip this section
+    // until the next scoring-affecting edit invalidates it.
+    if (result.phraseScoreHash) {
+      data.phraseScoreHash = result.phraseScoreHash;
+    }
 
     // ── Auto-populate anchor words from CORE column + intent tokens ──
     // Each phrase's core words + intent normalizer tokens become its
@@ -5328,6 +5371,7 @@ function _addSuggestionByIndex(sid, idx) {
     _toast('Phrase already added', 'error'); return;
   }
   data.callerPhrases.push(clean);
+  _kcInvalidatePhraseScore(sid);       // phrases changed → mark dirty
   _renderCallerPhrases(sid);
   // Update the suggestion row in place — swap button for "✓ Added" label
   const row = document.getElementById(`sugg-item-${sid}-${idx}`);

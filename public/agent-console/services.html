@@ -3237,6 +3237,7 @@ async function loadContainers() {
     applyFilters();
     extractAndRenderKCVariables();  // scan sections for {placeholders} and show table
     renderLivePromotions();         // scan sections for isPromotion and show promo card
+    _bulkRescoreUpdateBadge();      // refresh "N pending" badge on Re-score ALL button
   } catch (err) {
     console.error('[services.html] loadContainers error:', err);
     document.getElementById('cardsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div class="empty-title">Failed to load</div><div class="empty-desc">Could not load knowledge containers. Check your connection and try again.</div></div>';
@@ -4084,10 +4085,16 @@ function _bulkRescoreAllContainers() {
     return;
   }
 
-  // Build work plan from the currently loaded containers
+  // Build work plan from the currently loaded containers.
+  // SKIP sections where phraseScoreHash is truthy (clean marker from last
+  // successful Re-score). User edits (phrase add/remove, content/groqContent
+  // change) clear the marker on save → section becomes dirty → included here.
+  // Benign edits (isPromotion, isActive, audio, prequal, upsell) preserve it.
   const plan = [];
   const containerSet = new Set();
-  let totalPhrases = 0;
+  let totalPhrases  = 0;
+  let skippedClean  = 0;
+  let skippedEmpty  = 0;
   for (const c of S.containers) {
     if (c.isActive === false) continue;
     const sections = c.sections || [];
@@ -4098,7 +4105,13 @@ function _bulkRescoreAllContainers() {
         .map(p => (typeof p === 'string' ? p : (p?.text || '')))
         .map(t => `${t}`.trim())
         .filter(Boolean);
-      if (!phrases.length) continue;                 // skip empty phrase sections
+      if (!phrases.length) { skippedEmpty++; continue; }   // skip empty phrase sections
+      // Skip clean sections — marker is a non-empty string set by the
+      // phrase-score route. null/undefined/empty = dirty, needs rescore.
+      if (typeof s.phraseScoreHash === 'string' && s.phraseScoreHash.length > 0) {
+        skippedClean++;
+        continue;
+      }
       plan.push({
         containerId:    c._id,
         containerTitle: c.title || '(untitled)',
@@ -4112,23 +4125,85 @@ function _bulkRescoreAllContainers() {
   }
 
   if (!plan.length) {
-    _toast('No active sections with phrases found to re-score.', 'info');
+    const msg = skippedClean > 0
+      ? `All ${skippedClean} section${skippedClean !== 1 ? 's' : ''} already up-to-date — nothing to re-score.`
+      : 'No active sections with phrases found to re-score.';
+    _toast(msg, 'info');
     return;
   }
 
   _BRS.plan         = plan;
   _BRS.containerSet = containerSet;
+  _BRS.skippedClean = skippedClean;
 
   // Populate confirm pane
   const summary = document.getElementById('brsPlanSummary');
   if (summary) {
+    const skipNote = skippedClean > 0
+      ? ` <span style="color:#64748b;">· <strong>${skippedClean}</strong> already up-to-date (skipping)</span>`
+      : '';
     summary.innerHTML =
       `You are about to re-score <strong>${plan.length}</strong> section${plan.length !== 1 ? 's' : ''} ` +
       `across <strong>${containerSet.size}</strong> container${containerSet.size !== 1 ? 's' : ''} ` +
-      `(<strong>${totalPhrases.toLocaleString()}</strong> phrase${totalPhrases !== 1 ? 's' : ''} total).`;
+      `(<strong>${totalPhrases.toLocaleString()}</strong> phrase${totalPhrases !== 1 ? 's' : ''} total).${skipNote}`;
   }
   _brsShowPane('confirm');
   _brsShow();
+}
+
+/**
+ * _bulkRescoreCountPending — count sections across all loaded containers
+ * that currently need re-scoring. Used by the toolbar button to show a
+ * "(N pending)" badge so admins know the cost of Re-score ALL at a glance.
+ *
+ * Criteria match the plan-build in _bulkRescoreAllContainers:
+ *   - container isActive !== false
+ *   - section isActive !== false
+ *   - section has at least one non-empty caller phrase
+ *   - section.phraseScoreHash is falsy (missing, null, or empty)
+ */
+function _bulkRescoreCountPending() {
+  if (!S.containers?.length) return 0;
+  let pending = 0;
+  for (const c of S.containers) {
+    if (c.isActive === false) continue;
+    for (const s of (c.sections || [])) {
+      if (s.isActive === false) continue;
+      const hasPhrase = (s.callerPhrases || []).some(p => {
+        const t = typeof p === 'string' ? p : (p?.text || '');
+        return `${t}`.trim().length > 0;
+      });
+      if (!hasPhrase) continue;
+      if (typeof s.phraseScoreHash === 'string' && s.phraseScoreHash.length > 0) continue;
+      pending++;
+    }
+  }
+  return pending;
+}
+
+/**
+ * _bulkRescoreUpdateBadge — refresh the pending count on the toolbar button.
+ * Call after containers load and after any save that changes phraseScoreHash.
+ */
+function _bulkRescoreUpdateBadge() {
+  const btn = document.getElementById('btnBulkRescoreAll');
+  if (!btn) return;
+  const n = _bulkRescoreCountPending();
+  const icon = btn.querySelector('.tb-icon');
+  let badge = btn.querySelector('.tb-rescore-badge');
+  if (n === 0) {
+    if (badge) badge.remove();
+    btn.title = 'No sections need re-scoring — everything is up-to-date.';
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'tb-rescore-badge';
+    badge.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#f59e0b;color:#fff;font-size:10px;font-weight:700;min-width:18px;text-align:center;line-height:1.4;';
+    btn.appendChild(badge);
+  }
+  badge.textContent = n;
+  btn.title = `Re-score ALL — ${n} section${n !== 1 ? 's' : ''} pending (clean sections will be skipped).`;
 }
 
 function _brsShow() {
@@ -4271,6 +4346,14 @@ async function _brsStart() {
       if (resp && resp.success) {
         _BRS.scored++;
         _BRS.consecutiveFails = 0;
+        // Stamp the clean marker on the in-memory container so the badge
+        // count stays accurate mid-run and a re-click on Re-score ALL
+        // correctly skips this section without waiting for loadContainers().
+        if (resp.phraseScoreHash) {
+          const c = (S.containers || []).find(x => x._id === task.containerId);
+          const sec = c?.sections?.[task.sectionIndex];
+          if (sec) sec.phraseScoreHash = resp.phraseScoreHash;
+        }
         _brsLogLine(`  ✓ ${task.sectionLabel} — ${task.phrases.length} phrase${task.phrases.length !== 1 ? 's' : ''} scored`, 'ok');
       } else {
         _BRS.failed++;

@@ -317,6 +317,19 @@ const sectionSchema = new mongoose.Schema(
       comment: 'Timestamp of last phraseCore computation.'
     },
 
+    // ── Phrase Score Clean Marker (dirty-flag for bulk Re-score) ──────────
+    // Set to a hash after a successful Re-score; cleared (null) when edits
+    // invalidate scoring (phrase add/remove, content/groqContent change).
+    // Truthy = this section's scores are up-to-date — bulk Re-score skips it.
+    // Falsy  = this section needs re-scoring — bulk Re-score processes it.
+    // Round-tripped through the UI save path so benign saves (isPromotion,
+    // isActive, audio, prequal) don't force a wasted rescore.
+    phraseScoreHash: {
+      type:    String,
+      default: null,
+      comment: 'Dirty marker for bulk Re-score. Truthy = clean. Null = needs rescore. Set by phrase-score route; cleared by UI on edits that affect scoring.'
+    },
+
     // ── Pre-qualify question (optional) ───────────────────────────────────
     // Agent asks this BEFORE answering this section's content.
     // Caller's answer is matched to options[].keywords → responseContext injected into Groq.
