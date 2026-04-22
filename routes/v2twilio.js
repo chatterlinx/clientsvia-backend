@@ -3569,33 +3569,24 @@ router.post('/handle-speech', async (req, res) => {
   }
 });
 
-// Partial speech results for faster response (experimental)
+// 🚨 DEPRECATED — Partial speech results for the legacy /handle-speech pipeline.
+// This endpoint ONLY serves the V2-agent-init-failure disaster fallback at ~L2608.
+// The active V2 pipeline uses /v2-agent-partial/:companyId (L8262) instead.
+// 🧹 STAGE 4 (R13): Leave in place until /handle-speech itself is retired, then delete
+//                   together in a single cleanup pass.
 router.post('/partial-speech', async (req, res) => {
   logger.debug(`[PARTIAL SPEECH] Received at: ${new Date().toISOString()}`);
   logger.debug(`[PARTIAL SPEECH] Partial result: "${req.body.SpeechResult}" (Stability: ${req.body.Stability})`);
-  
+
   // Just acknowledge - we'll process the final result
   res.status(200).send('OK');
 });
 
-// Diagnostic endpoint to measure exact Twilio speech timing
-router.post('/speech-timing-test', async (req, res) => {
-  const receiveTime = Date.now();
-  logger.info(`[DIAGNOSTIC] Speech timing test received at: ${new Date().toISOString()}`);
-  logger.info(`[DIAGNOSTIC] Twilio body:`, req.body);
-  
-  const twiml = new twilio.twiml.VoiceResponse();
-  
-  // Immediate response with timing info
-  twiml.say(`Speech received at ${new Date().toLocaleTimeString()}. Processing took ${Date.now() - receiveTime} milliseconds.`);
-  
-  const respondTime = Date.now();
-  logger.debug(`[DIAGNOSTIC] Responding at: ${new Date().toISOString()}`);
-  logger.debug(`[DIAGNOSTIC] Total processing: ${respondTime - receiveTime}ms`);
-  
-  res.type('text/xml');
-  res.send(twiml.toString());
-});
+// 🧹 STAGE 4 (R15): Deleted `/speech-timing-test` diagnostic endpoint.
+//                   Contained hardcoded English "Speech received at X..." (multi-tenant
+//                   violation). Only referenced in admin UI (public/js/company-profile-modern.js)
+//                   as a display-only webhook URL string, never actually invoked as a Twilio
+//                   callback. Removed the admin UI reference in the same commit.
 
 // Polling endpoint removed - now processing synchronously
 
@@ -8238,23 +8229,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   }
 });
 
-// Legacy disabled route physically removed in Phase 3 purge.
-// AI Agent Logic partial results handler (for real-time processing)
-router.post('/ai-agent-partial/:companyID', async (req, res) => {
-  try {
-    const { companyID } = req.params;
-    const { PartialSpeechResult, CallSid } = req.body;
-    
-    logger.info(`[AI AGENT PARTIAL] Company: ${companyID}, CallSid: ${CallSid}, Partial: "${PartialSpeechResult}"`);
-    
-    // For now, just acknowledge - could be used for real-time intent detection
-    res.json({ success: true });
-    
-  } catch (error) {
-    logger.error('[ERROR] AI Agent Partial error:', error);
-    res.json({ success: false });
-  }
-});
+// 🧹 STAGE 4 (R14): Deleted `/ai-agent-partial/:companyID` — 100% dead route.
+//                   Grep confirmed zero references across the codebase as
+//                   `partialResultCallback` or otherwise. It only logged and returned
+//                   `{ success: true }` — no functional behavior. The active V2 pipeline
+//                   uses `/v2-agent-partial/:companyId` below.
 
 // 🎯 V2 AGENT PARTIAL SPEECH CALLBACK (for real-time speech streaming)
 // This is called by Twilio during speech recognition for partial results
@@ -9555,7 +9534,23 @@ router.post('/status-callback', async (req, res) => {
   try {
     // Only process completed calls
     if (['completed', 'busy', 'no-answer', 'canceled', 'failed'].includes(CallStatus)) {
-      
+
+      // 🧹 STAGE 4 (R16): Memory leak fix — clean up in-process speculative tracking Maps.
+      //                   `_uapPartialMatch` and `_speculativeDebounce` are cleared on
+      //                   /v2-agent-respond, but if a call dies mid-partial (caller hangup,
+      //                   network drop, timeout before final SpeechResult), /v2-agent-respond
+      //                   may never fire → entries leak forever. Status-callback is the one
+      //                   guaranteed terminal signal, so clean up here too.
+      if (CallSid) {
+        try {
+          if (_speculativeDebounce.has(CallSid)) {
+            clearTimeout(_speculativeDebounce.get(CallSid));
+            _speculativeDebounce.delete(CallSid);
+          }
+          _uapPartialMatch.delete(CallSid);
+        } catch (_) { /* never block call teardown on cleanup */ }
+      }
+
       // ────────────────────────────────────────────────────────────────
       // CALL CENTER V2: End the call and update CallSummary
       // ────────────────────────────────────────────────────────────────
@@ -9748,6 +9743,20 @@ router.post('/status-callback/:companyId', async (req, res) => {
 
   try {
     if (CallSummaryService && ['completed', 'busy', 'no-answer', 'canceled', 'failed'].includes(CallStatus)) {
+      // 🧹 STAGE 4 (R16): Memory leak fix — clean up speculative tracking Maps.
+      //                   Mirrors the cleanup in the global /status-callback handler above.
+      //                   Either callback can be the terminal signal depending on how Twilio
+      //                   is configured, so both must clean up.
+      if (CallSid) {
+        try {
+          if (_speculativeDebounce.has(CallSid)) {
+            clearTimeout(_speculativeDebounce.get(CallSid));
+            _speculativeDebounce.delete(CallSid);
+          }
+          _uapPartialMatch.delete(CallSid);
+        } catch (_) { /* never block call teardown on cleanup */ }
+      }
+
       const CallSummary = require('../models/CallSummary');
 
       // ── PRIMARY LOOKUP: CallSid only (globally unique) ──────────────────

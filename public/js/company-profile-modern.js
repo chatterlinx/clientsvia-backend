@@ -3561,18 +3561,11 @@ class CompanyProfileManager {
                 primary: false,
                 internal: true
             },
-            {
-                url: `${baseUrl}/api/twilio/partial-speech?companyId=${this.companyId}`,
-                description: 'For real-time speech processing',
-                primary: false,
-                internal: true
-            },
-            {
-                url: `${baseUrl}/api/twilio/speech-timing-test?companyId=${this.companyId}`,
-                description: 'For performance testing and optimization',
-                primary: false,
-                internal: true
-            }
+            // 🧹 STAGE 4 (R14/R15): Removed admin-panel display entries for dead routes
+            //                       /speech-timing-test (deleted server-side) and the
+            //                       deprecated /partial-speech (only serves the V2-init-
+            //                       failure disaster fallback, not a user-facing endpoint).
+            //                       These were display-only reference URLs, never live calls.
         ];
 
         webhookPanel.innerHTML = `

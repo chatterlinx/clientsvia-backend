@@ -99,6 +99,12 @@ async function runSpeculativeLLM(callSid, companyId, partialText) {
         onSentence:    null,   // no streaming — we store the full response text
         bridgeToken:   null,   // no bridge in speculative path
         redis,
+        // 🧹 STAGE 4 (Y9) TODO: Currently aspirational — no downstream code reads this flag
+        //                       yet. Intended future use: suppress side effects (CallLogger
+        //                       writes, Mongo persistence, transcript appends) so speculative
+        //                       never pollutes observability when its result is discarded.
+        //                       Today, the event buffer is dropped on the floor when the main
+        //                       handler doesn't adopt the speculative result.
         _isSpeculative: true,  // informational flag for future use
       }
     );
