@@ -1047,34 +1047,42 @@ function renderSectionTurnCoverage(turns, companyId) {
         const uapSummary = _renderInlineUapSummary(t, turns);
         return `<tr class="tc-row tc-row-script tc-sub-row">
           <td class="tc-col-num">${t.turnNumber}</td>
-          <td class="tc-col-src">
-            <span class="tc-icon">${it.cls.icon}</span>
-            <div class="tc-src">
-              <div class="tc-src-lbl">${esc(it.cls.srcLabel)}</div>
-              <div class="tc-src-sub">${it.cls.srcSub}</div>
+          <td class="tc-col-body">
+            <div class="tc-body-source" style="display:flex;align-items:flex-start;gap:8px;padding-bottom:6px;border-bottom:1px dashed #e5e7eb;margin-bottom:8px;">
+              <span class="tc-icon">${it.cls.icon}</span>
+              <div class="tc-src" style="flex:1;">
+                <div class="tc-src-lbl" style="font-weight:600;">${esc(it.cls.srcLabel)}</div>
+                <div class="tc-src-sub" style="font-size:11px;color:#64748b;">${it.cls.srcSub}</div>
+              </div>
+            </div>
+            <div class="tc-body-content" style="margin-bottom:8px;">
+              <div><span class="tc-content-muted">${esc(preview)}${t.text?.length > 100 ? '…' : ''}</span></div>
+              ${uapSummary}
+            </div>
+            <div class="tc-body-fix" style="padding-top:6px;border-top:1px dashed #e5e7eb;font-size:12px;">
+              <span style="font-size:10px;color:#9ca3af;font-weight:600;margin-right:6px;">FIX</span>${it.cls.fixHtml}
             </div>
           </td>
-          <td class="tc-col-content">
-            <div><span class="tc-content-muted">${esc(preview)}${t.text?.length > 100 ? '…' : ''}</span></div>
-            ${uapSummary}
-          </td>
-          <td class="tc-col-fix">${it.cls.fixHtml}</td>
         </tr>`;
       }).join('');
       const rangeId = `tc-range-${entryIdx}`;
       return `<tr class="tc-row tc-row-range" data-range="${rangeId}" onclick="toggleTcRange('${rangeId}', this)">
         <td class="tc-col-num">${entry.start}-${entry.end}</td>
-        <td class="tc-col-src">
-          <span class="tc-icon">⚙️</span>
-          <div class="tc-src">
-            <div class="tc-src-lbl">Booking flow · ${entry.items.length} turns</div>
-            <div class="tc-src-sub tc-range-hint">Click to expand individual turns ▸</div>
+        <td class="tc-col-body">
+          <div class="tc-body-source" style="display:flex;align-items:flex-start;gap:8px;padding-bottom:6px;border-bottom:1px dashed #e5e7eb;margin-bottom:8px;">
+            <span class="tc-icon">⚙️</span>
+            <div class="tc-src" style="flex:1;">
+              <div class="tc-src-lbl" style="font-weight:600;">Booking flow · ${entry.items.length} turns</div>
+              <div class="tc-src-sub tc-range-hint" style="font-size:11px;color:#64748b;">Click to expand individual turns ▸</div>
+            </div>
+          </div>
+          <div class="tc-body-content" style="margin-bottom:8px;"><span class="tc-content-muted">Name / address / confirmation steps…</span></div>
+          <div class="tc-body-fix" style="padding-top:6px;border-top:1px dashed #e5e7eb;font-size:12px;">
+            <span style="font-size:10px;color:#9ca3af;font-weight:600;margin-right:6px;">FIX</span><span class="tc-fix-dash">—</span>
           </div>
         </td>
-        <td class="tc-col-content"><span class="tc-content-muted">Name / address / confirmation steps…</span></td>
-        <td class="tc-col-fix"><span class="tc-fix-dash">—</span></td>
       </tr>
-      <tr class="tc-range-expand" data-range-body="${rangeId}" style="display:none;"><td colspan="4" style="padding:0;">
+      <tr class="tc-range-expand" data-range-body="${rangeId}" style="display:none;"><td colspan="2" style="padding:0;">
         <table class="tc-subtable"><tbody>${subRows}</tbody></table>
       </td></tr>`;
     }
@@ -1103,18 +1111,22 @@ function renderSectionTurnCoverage(turns, companyId) {
 
     return `<tr class="${rowCls}">
       <td class="tc-col-num">${t.turnNumber}</td>
-      <td class="tc-col-src">
-        <span class="tc-icon">${entry.cls.icon}</span>
-        <div class="tc-src">
-          <div class="tc-src-lbl">${esc(entry.cls.srcLabel)}</div>
-          <div class="tc-src-sub">${entry.cls.srcSub}</div>
+      <td class="tc-col-body">
+        <div class="tc-body-source" style="display:flex;align-items:flex-start;gap:8px;padding-bottom:6px;border-bottom:1px dashed #e5e7eb;margin-bottom:8px;">
+          <span class="tc-icon">${entry.cls.icon}</span>
+          <div class="tc-src" style="flex:1;">
+            <div class="tc-src-lbl" style="font-weight:600;">${esc(entry.cls.srcLabel)}</div>
+            <div class="tc-src-sub" style="font-size:11px;color:#64748b;">${entry.cls.srcSub}</div>
+          </div>
+        </div>
+        <div class="tc-body-content" style="margin-bottom:8px;">
+          <div>${esc(preview)}${t.text?.length > 110 ? '…' : ''}</div>
+          ${uapSummary}
+        </div>
+        <div class="tc-body-fix" style="padding-top:6px;border-top:1px dashed #e5e7eb;font-size:12px;">
+          <span style="font-size:10px;color:#9ca3af;font-weight:600;margin-right:6px;">FIX</span>${fixHtml}
         </div>
       </td>
-      <td class="tc-col-content">
-        <div>${esc(preview)}${t.text?.length > 110 ? '…' : ''}</div>
-        ${uapSummary}
-      </td>
-      <td class="tc-col-fix">${fixHtml}</td>
     </tr>`;
   }).join('');
 
@@ -1218,7 +1230,7 @@ function renderSectionTurnCoverage(turns, companyId) {
     ${costDrawerHtml}
     <table class="tc-table">
       <thead>
-        <tr><th style="width:60px;">#</th><th style="width:260px;">Source</th><th>Content</th><th style="width:240px;">Fix</th></tr>
+        <tr><th style="width:60px;">#</th><th>Turn</th></tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
     </table>
