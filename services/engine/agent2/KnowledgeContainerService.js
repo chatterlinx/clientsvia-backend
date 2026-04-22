@@ -684,6 +684,15 @@ async function invalidateCache(companyId) {
  * _scorePhrase — Score a single keyword/phrase against normalised input.
  * Reused for title scoring, section contentKeywords, and negativeKeywords.
  *
+ * SCORING NOTE (Y86 — Stage 13 audit, April 2026):
+ *   The multi-word substring path returns `phrase.length * 2`, so scores are
+ *   length-proportional, not intent-proportional. A 26-char keyword like
+ *   "diagnostic fee for repair" scores 52, which swamps MIN_THRESHOLD=8 and
+ *   ANCHOR_FLOOR=24 on its own. Authors should prefer short, intent-dense
+ *   contentKeywords (2-4 words) over long descriptive phrases — the auto-
+ *   extractor already tends to produce these. Long phrases still work, they
+ *   just out-score shorter siblings when they substring-match.
+ *
  * @param {string} phrase   — normalised keyword phrase
  * @param {string} norm     — normalised caller utterance
  * @param {Set<string>} inputWords — pre-split set of input words
@@ -732,8 +741,13 @@ function _scorePhrase(phrase, norm, inputWords) {
 function findContainer(containers, input, context = null) {
   if (!containers?.length || !input) return null;
 
-  const norm       = input.toLowerCase().replace(/[^a-z\s]/g, ' ');
-  const inputWords = new Set(norm.split(/\s+/));
+  // Y85+Y88 FIX (Stage 13 audit, April 2026): keep digits (admins may author
+  // numeric negKws like "24" for "24/7"), and filter empty tokens from the
+  // split so `inputWords.has('')` never produces false positives on keywords
+  // that contain extra whitespace. Matches KCDiscoveryRunner GATE 2.9's
+  // normalisation so the two stages agree on what's present in the utterance.
+  const norm       = input.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const inputWords = new Set(norm.split(/\s+/).filter(Boolean));
 
   // ── NEGATIVE KEYWORD EXCLUSION (section-level) ───────────────────────
   // Single words → whole-word match (Set lookup).
@@ -843,6 +857,13 @@ function findContainer(containers, input, context = null) {
   // (e.g., Diagnostic Fee scoring 15 for "service call charge" would lose to
   // anchor No Cooling at score 24 despite zero relevance). Now only fires when
   // competitors scored below MIN_THRESHOLD — real matches always win.
+  //
+  // Y90 NOTE (Stage 13 audit, April 2026): ANCHOR_FLOOR (24) is intentionally
+  // hardcoded while MIN_THRESHOLD (env KC_KEYWORD_THRESHOLD) is tunable. If an
+  // operator raises KC_KEYWORD_THRESHOLD above 24, the floor still fires because
+  // `!bestMatch.anchorFloor` at L900 (below) lets the floor pass the threshold
+  // gate via its flag. Verified safe — but tying the floor to MAX(MIN_THRESHOLD,
+  // 24) would be clearer if the threshold env ever gets aggressive tuning.
   const ANCHOR_FLOOR = 24;
   if (_anchorContainer && _anchorRawScore === 0 && bestScore < MIN_THRESHOLD) {
     bestMatch = { container: _anchorContainer, score: ANCHOR_FLOOR, anchorFloor: true };
@@ -852,8 +873,9 @@ function findContainer(containers, input, context = null) {
   // ── CONTEXT FALLBACK ───────────────────────────────────────────────────
   if (!bestMatch && context?.callReason) {
     const augmented  = `${context.callReason} ${input}`;
-    const augNorm    = augmented.toLowerCase().replace(/[^a-z\s]/g, ' ');
-    const augWords   = new Set(augNorm.split(/\s+/));
+    // Y85+Y88 (Stage 13 audit) — same regex + empty-filter as primary path.
+    const augNorm    = augmented.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+    const augWords   = new Set(augNorm.split(/\s+/).filter(Boolean));
 
     for (const container of containers) {
       // Score against section contentKeywords with augmented input

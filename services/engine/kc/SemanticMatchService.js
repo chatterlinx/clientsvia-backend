@@ -173,6 +173,11 @@ function cosineSimilarity(a, b) {
  *
  * Returns null if no match exceeds MIN_SIMILARITY or OPENAI_API_KEY not set.
  *
+ * CALLED FROM (Stage 13 audit):
+ *   - routes/admin/companyKnowledge.js (admin verify/test-match tool)
+ *   - services/kcVerify/GapReplayService.js (offline gap replay)
+ *   KCDiscoveryRunner GATE 2.8 uses the Diagnostic variant — keep both.
+ *
  * @param {string}   companyId   — for logging only
  * @param {string}   utterance   — raw caller utterance
  * @param {Object[]} containers  — lean KC containers with sections (must include embeddings via +select)

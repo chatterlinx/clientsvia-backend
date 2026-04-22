@@ -1704,9 +1704,19 @@ class KCDiscoveryRunner {
         const SemanticMatchService = require('./SemanticMatchService');
         // Load containers with embeddings for semantic comparison
         const ContainerModel = require('../../../models/CompanyKnowledgeContainer');
+        // Y82 FIX (Stage 13 audit, April 2026): narrow projection to fields
+        // GATE 2.8 actually reads. Previous query defaulted to full documents
+        // (content, groqContent, contentKeywords, negativeKeywords, upsellChain,
+        // anchorWords, etc.) plus the embeddings — ~6× the bytes needed for a
+        // pure cosine-similarity sweep. Accepted-match hydration pulls the full
+        // container from scorableContainers via _id, so this lean payload is
+        // safe for routing.
         const embContainers = await ContainerModel
           .find({ companyId, isActive: true })
-          .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
+          .select('_id kcId title sections.label sections.isActive ' +
+                  'sections.callerPhrases.text ' +
+                  '+sections.callerPhrases.embedding ' +
+                  '+sections.contentEmbedding')
           .lean();
 
         // Filter to scorable containers only
@@ -1728,12 +1738,16 @@ class KCDiscoveryRunner {
           ran:       true,
           threshold: semanticDiag.threshold,
           accepted:  semanticResult ? {
-            containerId:  String(semanticResult.container._id),
-            kcId:         semanticResult.container.kcId || null,
-            sectionIdx:   semanticResult.sectionIdx,
-            sectionLabel: semanticResult.section?.label || null,
-            similarity:   Math.round(semanticResult.similarity * 1000) / 1000,
-            matchSource:  semanticResult.matchSource,
+            containerId:   String(semanticResult.container._id),
+            kcId:          semanticResult.container.kcId || null,
+            sectionIdx:    semanticResult.sectionIdx,
+            sectionLabel:  semanticResult.section?.label || null,
+            similarity:    Math.round(semanticResult.similarity * 1000) / 1000,
+            matchSource:   semanticResult.matchSource,
+            // Y84 FIX (Stage 13 audit): propagate matchedPhrase so downstream
+            // qaLog / admin traces show which callerPhrase triggered a semantic
+            // hit (null when matchSource === 'CONTENT_EMBEDDING').
+            matchedPhrase: semanticResult.matchedPhrase || null,
           } : null,
           bestBelow: semanticDiag.bestBelowThreshold ? {
             containerId:   String(semanticDiag.bestBelowThreshold.container._id),
@@ -1754,6 +1768,11 @@ class KCDiscoveryRunner {
           );
 
           if (fullContainer) {
+            // Y91 NOTE (Stage 13 audit): semantic `score` is `similarity * 100`
+            // (e.g., 0.50 cosine → 50). Keyword `score` is length-based (typ.
+            // 8-30 via `_scorePhrase`). The two score spaces are intentionally
+            // different — semantic confidence beats keyword noise. Tools that
+            // compare scores across gates should normalise by matchSource.
             match = {
               container:        fullContainer,
               score:            Math.round(semanticResult.similarity * 100),
@@ -1768,6 +1787,7 @@ class KCDiscoveryRunner {
               sectionLabel:   semanticResult.section?.label || null,
               similarity:     semanticResult.similarity,
               matchSource:    semanticResult.matchSource,
+              matchedPhrase:  semanticResult.matchedPhrase || null,  // Y84
             });
 
             logger.info('[KC_ENGINE] Semantic match found', {
