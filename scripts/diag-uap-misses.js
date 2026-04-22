@@ -118,7 +118,7 @@ if (!COMPANY_ID) {
 
     if (!e.anchorGate && !e.phrase) {
       console.log('  🔴 NO CANDIDATE — UAP found ZERO matching phrases in the bridge');
-      console.log('     (caller\\'s words don\\'t overlap any indexed phrase after normalisation)');
+      console.log("     (caller's words don't overlap any indexed phrase after normalisation)");
     } else if (e.anchorGate) {
       const ag = e.anchorGate;
       console.log('  anchorGate (Logic 1 — Word Gate):');
@@ -167,7 +167,7 @@ if (!COMPANY_ID) {
   console.log('FIX GUIDANCE:');
   if (noCandidate > l1Fail && noCandidate > l1PassL2Fail) {
     console.log('  → Majority are phrase-lookup misses. Callers phrase things the');
-    console.log('    authored corpus doesn\\'t cover. Run Phrase Finder on the exact');
+    console.log("    authored corpus doesn't cover. Run Phrase Finder on the exact");
     console.log('    questions above and add missing variants.');
   } else if (l1Fail > 0) {
     console.log('  → Majority are Logic 1 Word Gate rejections. Anchor words on the');
