@@ -679,194 +679,212 @@ function _pairQaEntries(turns, agentTurn) {
   return paired?.qaEntries || [];
 }
 
-// Rich 5-line inline UAP summary — rendered directly under every Scripts row.
-// Marc's explicit layout (Apr 22, 2026):
-//   1) STT       — verbatim caller turn
-//   2) UAP grid  — the 8-field cueFrame as a 4x2 visual (matched vs hint)
-//   3) Anchors   — required anchor words, match ratio, pass/fail
-//   4) Phrase    — winning or closest phrase + confidence + why
-//   5) Response  — the agent reply
-//
-// The full deep-forensics UAP Decision panel still lives in the turn expand.
-// Returns HTML (may be empty when there's nothing to show).
+// UAP inline forensics panel — vertical single-column, large font, black on white.
+// Apr 22, 2026 — Marc: "line by line 1 column vertical, larger font black on white".
+// 5 rows stacked vertically, separated by thin dividers:
+//   1) CALLER   — verbatim STT
+//   2) UAP      — 8 cueFrame fields as a vertical label→value list
+//   3) ANCHORS  — required words + match ratio + PASS/FAIL
+//   4) PHRASE   — outcome badge + phrase / section / reason
+//   5) RESPONSE — agent reply
 function _renderInlineUapSummary(agentTurn, turns) {
-  const callerText = _pairCallerText(turns, agentTurn);
-  const qaEntries  = _pairQaEntries(turns, agentTurn);
+  const callerText   = _pairCallerText(turns, agentTurn);
+  const qaEntries    = _pairQaEntries(turns, agentTurn);
   const responseText = agentTurn.text || '';
   if (!callerText && !qaEntries.length && !responseText) return '';
 
-  // Decision-carrying entries
-  const cueEntry  = qaEntries.find(q => q && q.cueFrame);
-  const cf        = cueEntry?.cueFrame || null;
-  const layer1    = qaEntries.find(q => q && q.type === 'UAP_LAYER1');
-  const semantic  = qaEntries.find(q => q && q.type === 'UAP_SEMANTIC_MISS');
-  const gap       = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP');
-  const direct    = qaEntries.find(q => q && q.type === 'KC_DIRECT_ANSWER');
-  const groq      = qaEntries.find(q => q && q.type === 'KC_GROQ_ANSWERED');
-  const llm       = qaEntries.find(q => q && q.type === 'KC_LLM_FALLBACK');
-  const gapAns    = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP_ANSWERED');
+  const cueEntry = qaEntries.find(q => q && q.cueFrame);
+  const cf       = cueEntry?.cueFrame || null;
+  const layer1   = qaEntries.find(q => q && q.type === 'UAP_LAYER1');
+  const semantic = qaEntries.find(q => q && q.type === 'UAP_SEMANTIC_MISS');
+  const gap      = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP');
+  const direct   = qaEntries.find(q => q && q.type === 'KC_DIRECT_ANSWER');
+  const groq     = qaEntries.find(q => q && q.type === 'KC_GROQ_ANSWERED');
+  const llm      = qaEntries.find(q => q && q.type === 'KC_LLM_FALLBACK');
+  const gapAns   = qaEntries.find(q => q && q.type === 'KC_SECTION_GAP_ANSWERED');
 
-  // ── LINE 1 — STT (verbatim caller) ─────────────────────────────────────
-  const sttLine = callerText
-    ? `<div style="margin-top:2px;font-size:11px;color:#374151;line-height:1.45;">
-         <span style="color:#9ca3af;font-weight:600;">\ud83d\udc64 STT:</span>
-         <em style="color:#1f2937;">"${esc(callerText.slice(0, 260))}${callerText.length > 260 ? '\u2026' : ''}"</em>
+  // Shared styles — large, dark, readable
+  const ROW  = 'display:flex;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid #e5e7eb;';
+  const LBL  = 'min-width:90px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;flex-shrink:0;';
+  const VAL  = 'font-size:14px;color:#111;line-height:1.5;flex:1;';
+  const BADGE = (bg, fg) => `display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;background:${bg};color:${fg};margin-right:6px;vertical-align:middle;`;
+
+  // ── ROW 1: CALLER ────────────────────────────────────────────────────────
+  const row1 = callerText
+    ? `<div style="${ROW}">
+        <span style="${LBL}">Caller</span>
+        <span style="${VAL}font-style:italic;">"${esc(callerText.slice(0, 300))}${callerText.length > 300 ? '\u2026' : ''}"</span>
        </div>`
     : '';
 
-  // ── LINE 2 — UAP 8-container cueFrame grid ─────────────────────────────
-  // 4-column × 2-row visual. Matched cells highlight green with value.
-  // Empty cells show dimmed example hints so the pattern is self-teaching.
+  // ── ROW 2: UAP cueFrame — vertical label→value list ─────────────────────
   const CUE_FIELDS = [
-    ['REQUEST',    'requestCue',    'can you, could you, would you'],
-    ['PERMISSION', 'permissionCue', 'do i have to, am i allowed, can i'],
-    ['INFO',       'infoCue',       'what is, how much, when does'],
-    ['DIRECTIVE',  'directiveCue',  'just, please, i need to'],
-    ['ACTION',     'actionCore',    'pay, schedule, transfer, book'],
-    ['URGENCY',    'urgencyCore',   'today, now, asap, emergency'],
-    ['MODIFIER',   'modifierCore',  'for a service call, with plan'],
-    ['TRADE',      'tradeMatches',  'HVAC / plumbing / trade vocab']
+    ['Request',    'requestCue',    'can you · could you · would you'],
+    ['Permission', 'permissionCue', 'do i have to · am i allowed · can i'],
+    ['Info',       'infoCue',       'what is · how much · when does'],
+    ['Directive',  'directiveCue',  'just · please · i need to'],
+    ['Action',     'actionCore',    'pay · schedule · transfer · book'],
+    ['Urgency',    'urgencyCore',   'today · now · asap · emergency'],
+    ['Modifier',   'modifierCore',  'for a service call · with plan'],
+    ['Trade',      'tradeMatches',  'HVAC · plumbing · trade vocab']
   ];
 
-  let gridLine = '';
-  let driftChip = '';
+  let row2 = '';
   if (cf) {
-    const cellBase = 'padding:4px 6px;border-radius:4px;font-size:10px;line-height:1.3;min-height:38px;display:flex;flex-direction:column;justify-content:center;';
-    const cells = CUE_FIELDS.map(([label, key, hint]) => {
+    const topicCount = Array.isArray(cf.topicWords) ? cf.topicWords.length : 0;
+    const tradeTotal = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
+    const drift = topicCount === 0 && tradeTotal > 5
+      ? `<span style="${BADGE('#fef2f2','#991b1b')}border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`
+      : '';
+
+    const fieldRows = CUE_FIELDS.map(([label, key, hint]) => {
       let val = '';
       if (key === 'tradeMatches') {
         const tm = Array.isArray(cf.tradeMatches) ? cf.tradeMatches : [];
         if (tm.length) {
           const terms = [...new Set(tm.map(t => t && t.term).filter(Boolean))];
-          val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
+          val = terms.slice(0, 4).join(', ') + (tm.length > 4 ? `  +${tm.length - 4} more` : '');
         }
       } else {
         val = cf[key] || '';
       }
       const matched = !!val && String(val).trim();
-      if (matched) {
-        return `<div style="${cellBase}background:#dcfce7;border:1px solid #86efac;">
-          <div style="font-weight:700;color:#15803d;font-size:9px;letter-spacing:0.4px;">${label}</div>
-          <div style="color:#166534;font-weight:600;margin-top:2px;">${esc(String(val).slice(0, 48))}</div>
-        </div>`;
-      }
-      return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
-        <div style="font-weight:700;color:#9ca3af;font-size:9px;letter-spacing:0.4px;">${label}</div>
-        <div style="color:#cbd5e1;font-style:italic;margin-top:2px;">${esc(hint)}</div>
+      const valueHtml = matched
+        ? `<strong style="color:#111;">${esc(String(val).slice(0, 80))}</strong>`
+        : `<span style="color:#bbb;font-style:italic;">${esc(hint)}</span>`;
+      const labelColor = matched ? '#111' : '#bbb';
+      return `<div style="display:flex;align-items:baseline;gap:10px;padding:3px 0;">
+        <span style="min-width:90px;font-size:13px;font-weight:${matched ? '700' : '400'};color:${labelColor};flex-shrink:0;">${label}</span>
+        <span style="font-size:14px;line-height:1.4;">${valueHtml}</span>
       </div>`;
     }).join('');
 
-    // Topic-drift chip — surfaced in grid header
-    const topicCount = Array.isArray(cf.topicWords) ? cf.topicWords.length : 0;
-    const tradeCount = Array.isArray(cf.tradeMatches) ? cf.tradeMatches.length : 0;
-    if (topicCount === 0 && tradeCount > 5) {
-      driftChip = ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`;
-    }
-
-    gridLine = `<div style="margin-top:5px;">
-      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame${driftChip}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+    row2 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:0;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="${LBL}">UAP Signal</span>${drift}
+      </div>
+      <div style="padding-left:102px;">${fieldRows}</div>
     </div>`;
   }
 
-  // ── LINE 3 — Anchors (required match words + ratio) ────────────────────
-  let anchorsLine = '';
+  // ── ROW 3: ANCHORS ───────────────────────────────────────────────────────
+  let row3 = '';
   if (layer1 && layer1.anchorGate) {
     const ag = layer1.anchorGate;
     const req = Array.isArray(ag.required) ? ag.required : [];
-    const hits = ag.hits || 0;
-    const total = req.length;
     const ratioS = typeof ag.ratio === 'number' ? `${(ag.ratio * 100).toFixed(0)}%` : '';
     const badge = ag.passed
-      ? '<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#dcfce7;color:#166534;">PASS</span>'
-      : '<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fee2e2;color:#991b1b;">FAIL</span>';
-    const reqList = req.length
-      ? req.slice(0, 10).map(w => `<span style="font-family:monospace;color:#374151;">${esc(w)}</span>`).join(', ') + (req.length > 10 ? ` +${req.length - 10}` : '')
-      : '<em style="color:#9ca3af;">none</em>';
-    anchorsLine = `<div style="margin-top:5px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\u2693 anchors:</span>
-      ${badge} <strong>${hits}/${total}</strong>${ratioS ? ` <span style="color:#6b7280;">(${ratioS})</span>` : ''} &mdash; ${reqList}
+      ? `<span style="${BADGE('#dcfce7','#166534')}">PASS</span>`
+      : `<span style="${BADGE('#fee2e2','#991b1b')}">FAIL</span>`;
+    const wordList = req.length
+      ? req.slice(0, 12).map(w => `<code style="background:#f1f5f9;border-radius:3px;padding:1px 5px;font-size:13px;color:#111;">${esc(w)}</code>`).join(' ')
+        + (req.length > 12 ? `<span style="color:#888;font-size:13px;"> +${req.length - 12} more</span>` : '')
+      : '<span style="color:#bbb;font-style:italic;">none</span>';
+    row3 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Anchors</span>
+        ${badge}
+        <span style="font-size:14px;color:#111;font-weight:600;">${ag.hits || 0}/${req.length}</span>
+        ${ratioS ? `<span style="font-size:13px;color:#555;">(${ratioS} — need 90%)</span>` : ''}
+      </div>
+      <div style="padding-left:102px;margin-top:2px;">${wordList}</div>
     </div>`;
   } else if (layer1?.noCandidate) {
-    anchorsLine = `<div style="margin-top:5px;font-size:11px;color:#6b7280;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\u2693 anchors:</span>
-      <em>no candidate phrase reached anchor check (${esc(layer1.reason || 'NO_CANDIDATE')})</em>
+    row3 = `<div style="${ROW}">
+      <span style="${LBL}">Anchors</span>
+      <span style="${VAL}color:#888;font-style:italic;">No candidate phrase — ${esc(layer1.reason || 'NO_CANDIDATE')}</span>
     </div>`;
   }
 
-  // ── LINE 4 — Phrase match (winning or closest + why) ───────────────────
-  const bS = 'display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;margin-right:4px;vertical-align:middle;';
-  let phraseLine = '';
+  // ── ROW 4: PHRASE MATCH ──────────────────────────────────────────────────
+  let row4 = '';
   if (layer1?.hit) {
-    const conf = layer1.confidence != null ? ` @ ${(layer1.confidence * 100).toFixed(0)}%` : '';
+    const conf = layer1.confidence != null ? `${(layer1.confidence * 100).toFixed(0)}%` : '';
     const mt = esc(layer1.matchType || 'match');
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:#dcfce7;color:#166534;">HIT</span>
-      <strong>${mt}</strong>${conf}
-      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 140))}"</em>` : ''}
+    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Phrase</span>
+        <span style="${BADGE('#dcfce7','#166534')}">HIT</span>
+        <span style="font-size:14px;color:#111;font-weight:600;">${mt}</span>
+        ${conf ? `<span style="font-size:13px;color:#555;">@ ${conf}</span>` : ''}
+      </div>
+      ${layer1.phrase ? `<div style="padding-left:102px;font-size:13px;color:#555;font-style:italic;">"${esc((layer1.phrase||'').slice(0,180))}"</div>` : ''}
     </div>`;
   } else if (direct || groq) {
     const w = direct || groq;
-    const label = direct ? 'KC DIRECT' : 'KC + GROQ';
-    const bg = direct ? '#dcfce7' : '#ede9fe';
-    const fg = direct ? '#166534' : '#5b21b6';
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:${bg};color:${fg};">${label}</span>
-      <strong>${esc(w.containerTitle || '')}</strong>${w.sectionLabel ? ` <span style="color:#6b7280;">· ${esc(w.sectionLabel)}</span>` : ''}
+    const lbl = direct ? 'KC DIRECT' : 'KC + GROQ';
+    const bg  = direct ? '#dcfce7' : '#ede9fe';
+    const fg  = direct ? '#166534' : '#5b21b6';
+    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Phrase</span>
+        <span style="${BADGE(bg,fg)}">${lbl}</span>
+        <span style="font-size:14px;color:#111;font-weight:600;">${esc(w.containerTitle||'')}</span>
+        ${w.sectionLabel ? `<span style="font-size:13px;color:#555;">· ${esc(w.sectionLabel)}</span>` : ''}
+      </div>
     </div>`;
   } else if (gap || gapAns) {
     const g = gap || gapAns;
-    const top = Array.isArray(g?.gapTopSections) ? g.gapTopSections.slice(0, 3) : [];
+    const top = Array.isArray(g?.gapTopSections) ? g.gapTopSections.slice(0,4) : [];
     const topStr = top.length
-      ? top.map(s => `<strong>${esc(s.label || '')}</strong> <span style="color:#9ca3af;">(${(s.score || 0).toFixed(0)})</span>`).join(' · ')
-      : '<em style="color:#9ca3af;">no alternates</em>';
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:#fed7aa;color:#9a3412;">SECTION GAP</span>
-      ${g?.containerTitle ? `container <strong>${esc(g.containerTitle)}</strong> matched, but no section crossed threshold` : 'no section match'}
-      <div style="margin-top:2px;color:#6b7280;padding-left:14px;">top sections: ${topStr}</div>
+      ? top.map(s => `<span style="font-size:13px;color:#111;font-weight:600;">${esc(s.label||'')}</span> <span style="font-size:12px;color:#888;">(${(s.score||0).toFixed(0)})</span>`).join('<span style="color:#ccc;"> &nbsp;·&nbsp; </span>')
+      : '<span style="color:#bbb;font-style:italic;">no alternates</span>';
+    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Phrase</span>
+        <span style="${BADGE('#fed7aa','#9a3412')}">SECTION GAP</span>
+        <span style="font-size:14px;color:#111;font-weight:600;">${esc(g?.containerTitle||'')}</span>
+        <span style="font-size:13px;color:#555;">— container matched, no section crossed threshold</span>
+      </div>
+      <div style="padding-left:102px;">
+        <span style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.04em;">Top sections: </span>${topStr}
+      </div>
     </div>`;
   } else if (layer1?.belowThreshold) {
-    const conf = layer1.confidence != null ? ` ${(layer1.confidence * 100).toFixed(0)}%` : '';
-    const thr = layer1.threshold != null ? ` (threshold ${(layer1.threshold * 100).toFixed(0)}%)` : '';
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:#fef3c7;color:#92400e;">BELOW THRESHOLD</span>
-      closest${conf}${thr}
-      ${layer1.phrase ? ` &mdash; <em style="color:#6b7280;">"${esc((layer1.phrase || '').slice(0, 120))}"</em>` : ''}
-      ${layer1.fuzzyRecovery ? ` · <span style="color:#b45309;font-weight:600;">fuzzy</span>` : ''}
+    const conf = layer1.confidence != null ? `${(layer1.confidence * 100).toFixed(0)}%` : '';
+    const thr  = layer1.threshold   != null ? `(threshold ${(layer1.threshold * 100).toFixed(0)}%)` : '';
+    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Phrase</span>
+        <span style="${BADGE('#fef3c7','#92400e')}">BELOW THRESHOLD</span>
+        <span style="font-size:14px;color:#111;">closest ${conf}</span>
+        ${thr ? `<span style="font-size:13px;color:#888;">${thr}</span>` : ''}
+        ${layer1.fuzzyRecovery ? `<span style="font-size:13px;color:#b45309;font-weight:600;">fuzzy</span>` : ''}
+      </div>
+      ${layer1.phrase ? `<div style="padding-left:102px;font-size:13px;color:#555;font-style:italic;">"${esc((layer1.phrase||'').slice(0,180))}"</div>` : ''}
     </div>`;
   } else if (semantic) {
     const sim = semantic.similarity ?? semantic.bestBelowThreshold?.similarity;
-    const bb = semantic.bestBelowThreshold || {};
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:#fef3c7;color:#92400e;">SEMANTIC MISS</span>
-      closest ${(sim || 0).toFixed(2)}
-      ${bb.containerTitle ? ` &mdash; <strong>${esc(bb.containerTitle)}</strong>${bb.sectionLabel ? ` · ${esc(bb.sectionLabel)}` : ''}` : ''}
+    const bb  = semantic.bestBelowThreshold || {};
+    row4 = `<div style="${ROW}flex-direction:column;align-items:stretch;gap:4px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="${LBL}">Phrase</span>
+        <span style="${BADGE('#fef3c7','#92400e')}">SEMANTIC MISS</span>
+        <span style="font-size:14px;color:#111;">closest ${(sim||0).toFixed(2)}</span>
+        ${bb.containerTitle ? `<span style="font-size:13px;color:#555;">→ ${esc(bb.containerTitle)}${bb.sectionLabel ? ' · '+esc(bb.sectionLabel) : ''}</span>` : ''}
+      </div>
     </div>`;
   } else if (llm) {
-    phraseLine = `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-      <span style="color:#9ca3af;font-weight:600;">\ud83c\udfaf phrase:</span>
-      <span style="${bS}background:#fee2e2;color:#991b1b;">LLM FALLBACK</span>
-      no KC match &mdash; Claude answered from caller context
+    row4 = `<div style="${ROW}">
+      <span style="${LBL}">Phrase</span>
+      <span style="${BADGE('#fee2e2','#991b1b')}">LLM FALLBACK</span>
+      <span style="${VAL}">No KC match — Claude answered from caller context</span>
     </div>`;
   }
 
-  // ── LINE 5 — Response (agent reply) ────────────────────────────────────
-  const responseLine = responseText
-    ? `<div style="margin-top:4px;font-size:11px;color:#374151;line-height:1.45;">
-         <span style="color:#9ca3af;font-weight:600;">\ud83d\udde3 response:</span>
-         <span style="color:#1f2937;">${esc(responseText.slice(0, 260))}${responseText.length > 260 ? '\u2026' : ''}</span>
+  // ── ROW 5: RESPONSE ──────────────────────────────────────────────────────
+  const row5 = responseText
+    ? `<div style="${ROW}border-bottom:none;">
+        <span style="${LBL}">Response</span>
+        <span style="${VAL}">${esc(responseText.slice(0, 320))}${responseText.length > 320 ? '\u2026' : ''}</span>
        </div>`
     : '';
 
-  if (!sttLine && !gridLine && !anchorsLine && !phraseLine && !responseLine) return '';
+  const body = [row1, row2, row3, row4, row5].filter(Boolean).join('');
+  if (!body) return '';
 
-  return `<div style="margin-top:6px;padding:8px 10px;background:#f9fafb;border-left:2px solid #6366f1;border-radius:3px;">
-    ${sttLine}${gridLine}${anchorsLine}${phraseLine}${responseLine}
+  return `<div style="margin-top:8px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:0 16px;">
+    ${body}
   </div>`;
 }
 
