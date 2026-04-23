@@ -3004,7 +3004,11 @@ router.post('/handle-speech', async (req, res) => {
             const recordingUrl = req.body.RecordingUrl || null;
             
             if (recordingUrl) {
-              const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl);
+              // TODO(C4): Replace hardcoded model with ConfigResolver.resolveMediaStreamConfig(company).model
+              // Preserves legacy behaviour (was DG_DEFAULTS.model = 'nova-2-phonecall').
+              const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl, {
+                model: 'nova-2-phonecall'
+              });
               
               if (dgResult && dgResult.transcript) {
                 const dgAcceptThreshold = lcSettings.deepgramAcceptThreshold ?? 80;

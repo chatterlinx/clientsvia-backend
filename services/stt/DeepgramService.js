@@ -62,24 +62,29 @@ class DeepgramService {
         if (!await this.initialize()) {
             throw new Error('Deepgram not initialized');
         }
-        
+
+        if (!options.model) {
+            throw new Error('[DEEPGRAM] transcribeUrl requires explicit options.model (resolve via ConfigResolver)');
+        }
+
         const startTime = Date.now();
-        
+
         try {
+            const sdkOpts = {
+                model: options.model,
+                language: options.language || 'en-US',
+                smart_format: true,
+                punctuate: true,
+                diarize: options.diarize || false,
+                utterances: options.utterances || false,
+                keywords: options.keywords || []
+            };
+            if (options.tier) sdkOpts.tier = options.tier;
+            if (options.version) sdkOpts.version = options.version;
+
             const { result, error } = await deepgramClient.listen.prerecorded.transcribeUrl(
                 { url: audioUrl },
-                {
-                    model: options.model || 'nova-2',
-                    language: options.language || 'en-US',
-                    smart_format: true,
-                    punctuate: true,
-                    diarize: options.diarize || false,
-                    utterances: options.utterances || false,
-                    keywords: options.keywords || [],
-                    // Phone call optimizations
-                    tier: 'enhanced',
-                    version: 'latest'
-                }
+                sdkOpts
             );
             
             if (error) {
@@ -126,14 +131,18 @@ class DeepgramService {
         if (!await this.initialize()) {
             throw new Error('Deepgram not initialized');
         }
-        
+
+        if (!options.model) {
+            throw new Error('[DEEPGRAM] transcribeBuffer requires explicit options.model (resolve via ConfigResolver)');
+        }
+
         const startTime = Date.now();
-        
+
         try {
             const { result, error } = await deepgramClient.listen.prerecorded.transcribeFile(
                 audioBuffer,
                 {
-                    model: options.model || 'nova-2',
+                    model: options.model,
                     language: options.language || 'en-US',
                     smart_format: true,
                     punctuate: true,
@@ -168,8 +177,23 @@ class DeepgramService {
     
     /**
      * Get live transcription WebSocket connection config
-     * For use with Twilio Media Streams
+     * For use with Twilio Media Streams (and Test Console ASR).
+     *
+     * PLATFORM RULE: This function is vocabulary-agnostic and trade-agnostic.
+     * Callers MUST pass `opts.model` and (optionally) `opts.keywords` sourced
+     * from per-company settings + platform globals via VocabularyResolver /
+     * ConfigResolver. No hardcoded trade terms live here.
+     *
      * @param {Object} options - Connection options
+     * @param {string} options.model - REQUIRED. Deepgram model id (e.g. 'nova-3', 'nova-2', 'nova-2-phonecall').
+     * @param {string} [options.language='en-US']
+     * @param {string} [options.endpointing='800'] - ms
+     * @param {string} [options.encoding='mulaw']
+     * @param {string} [options.sample_rate='8000']
+     * @param {string} [options.channels='1']
+     * @param {string[]} [options.keywords=[]] - Deepgram keyword format 'phrase:boost' or plain phrases.
+     * @param {string} [options.version='latest']
+     * @param {string} [options.tier] - optional tier string if caller specifies.
      * @returns {Object} WebSocket configuration
      */
     static getLiveConnectionConfig(options = {}) {
@@ -177,56 +201,36 @@ class DeepgramService {
         if (!apiKey) {
             throw new Error('DEEPGRAM_API_KEY not configured');
         }
-        
+
+        if (!options.model) {
+            throw new Error('[DEEPGRAM] getLiveConnectionConfig requires explicit options.model (resolve via ConfigResolver)');
+        }
+
         // Build query params for Deepgram live endpoint
         const params = new URLSearchParams({
-            model: options.model || 'nova-2',
+            model: options.model,
             language: options.language || 'en-US',
             smart_format: 'true',
             punctuate: 'true',
             interim_results: 'true',
             endpointing: options.endpointing || '800',  // 800ms = natural conversation pauses
             vad_events: 'true',
-            // Phone call specific - CRITICAL for quality
+            // Phone call defaults (mulaw 8k mono) — callers may override
             encoding: options.encoding || 'mulaw',
             sample_rate: options.sample_rate || '8000',
             channels: options.channels || '1'
         });
-        
-        // Add HVAC vocabulary hints if no custom keywords provided
-        // Format: "phrase:boost_value" where boost is 0-4 (higher = stronger hint)
-        const hvacKeywords = [
-            'air conditioning:3',
-            'HVAC:3', 
-            'AC:3',
-            'heating:2',
-            'cooling:2',
-            'thermostat:2',
-            'furnace:2',
-            'air conditioner:3',
-            'AC unit:3',
-            'not working:2',
-            'broken:2',
-            'not cooling:3',
-            'not heating:3',
-            'repair:2',
-            'service:2',
-            'appointment:2',
-            'gas leak:3',
-            'gas smell:3',
-            'carbon monoxide:3',
-            'emergency:2'
-        ];
-        
-        // Use custom keywords if provided, otherwise use HVAC defaults
-        const keywordsToUse = options.keywords && options.keywords.length > 0 
-            ? options.keywords 
-            : hvacKeywords;
-            
-        keywordsToUse.forEach(kw => {
-            params.append('keywords', kw);
-        });
-        
+
+        if (options.version) params.set('version', options.version);
+        if (options.tier) params.set('tier', options.tier);
+
+        // Keywords are pass-through only. Caller resolves vocabulary from
+        // company.aiAgentSettings + AdminSettings.globalHub via VocabularyResolver.
+        const keywordsToUse = Array.isArray(options.keywords) ? options.keywords : [];
+        for (const kw of keywordsToUse) {
+            if (kw) params.append('keywords', String(kw));
+        }
+
         return {
             url: `wss://api.deepgram.com/v1/listen?${params.toString()}`,
             headers: {

@@ -50,15 +50,15 @@ const notificationRateLimit = {
     ERROR_THRESHOLD: 3,                 // Notify after 3 errors in cooldown period
 };
 
-// Deepgram configuration defaults
+// Deepgram REST defaults (model intentionally omitted — platform rule:
+// caller must pass model explicitly, resolved per-tenant via ConfigResolver).
 const DG_DEFAULTS = {
-    model: 'nova-2-phonecall',  // Optimized for phone calls
     language: 'en-US',
     smart_format: true,         // Smart formatting (numbers, dates)
     punctuate: true,            // Add punctuation
     diarize: false,             // No speaker separation needed (single caller)
     utterances: false,          // No utterance splitting
-    keywords: [],               // Can be enhanced with company vocabulary later
+    keywords: [],               // Caller injects per-tenant vocabulary
 };
 
 /**
@@ -70,14 +70,19 @@ const DG_DEFAULTS = {
  */
 async function transcribeWithDeepgram(recordingUrl, options = {}) {
     const startTime = Date.now();
-    
+
     if (!DG_API_KEY) {
         logger.warn('[DEEPGRAM] No API key configured - fallback disabled');
         return null;
     }
-    
+
     if (!recordingUrl) {
         logger.warn('[DEEPGRAM] No recording URL provided');
+        return null;
+    }
+
+    if (!options.model) {
+        logger.error('[DEEPGRAM] transcribeWithDeepgram requires options.model (resolve via ConfigResolver) — fallback skipped');
         return null;
     }
 

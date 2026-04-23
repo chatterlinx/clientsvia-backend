@@ -99,7 +99,12 @@ function attachTestConsoleASRServer(server) {
         const endpointingMs = await getEndpointingMs(companyId);
         try {
             // Reuse the SAME config as Twilio, only overriding encoding/sample_rate for browser PCM.
+            // Model is passed explicitly here; production Media Streams (C4) resolves via
+            // ConfigResolver from AdminSettings.globalHub.mediaStreams. For the Test Console
+            // we intentionally keep nova-2 to preserve parity with legacy Twilio Gather
+            // auto routing; production path defaults to nova-3 platform-wide.
             const liveConfig = DeepgramService.getLiveConnectionConfig({
+                model: 'nova-2',
                 encoding: 'linear16',
                 sample_rate: '16000',
                 channels: '1',

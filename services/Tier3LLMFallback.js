@@ -150,7 +150,11 @@ class Tier3LLMFallback {
         }
         
         try {
-          const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl);
+          // TODO(C4): Replace hardcoded model with ConfigResolver.resolveMediaStreamConfig(company).model
+          // Preserves legacy behaviour (was DG_DEFAULTS.model = 'nova-2-phonecall').
+          const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl, {
+            model: 'nova-2-phonecall'
+          });
           
           if (dgResult && dgResult.transcript && dgResult.confidencePercent >= 80) {
             effectiveCallerInput = dgResult.transcript;

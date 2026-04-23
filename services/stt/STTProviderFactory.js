@@ -64,19 +64,25 @@ class STTProviderFactory {
             logger.warn('[STT FACTORY] Deepgram requested but not configured, falling back to Twilio');
             return this.getTwilioProvider(sttProfile);
         }
-        
+
         const keywords = DeepgramService.buildKeywordsFromProfile(sttProfile);
-        
+        // Legacy factory path. Real Media Streams traffic (C4) resolves model via
+        // ConfigResolver. This path is only hit by STTProfile-driven test flows,
+        // so we fall back to the STT profile's model or a conservative default.
+        const resolvedModel = sttProfile?.provider?.model || 'nova-2';
+        const resolvedLanguage = sttProfile?.provider?.language || 'en-US';
+
         return {
             type: 'deepgram',
             service: DeepgramService,
             config: {
-                model: 'nova-2',
-                language: sttProfile?.provider?.language || 'en-US',
+                model: resolvedModel,
+                language: resolvedLanguage,
                 keywords: keywords,
                 // Live transcription config for Media Streams
                 liveConfig: DeepgramService.getLiveConnectionConfig({
-                    language: sttProfile?.provider?.language || 'en-US',
+                    model: resolvedModel,
+                    language: resolvedLanguage,
                     keywords: keywords
                 })
             },
