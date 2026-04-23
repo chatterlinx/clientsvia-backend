@@ -3300,8 +3300,10 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
         // needing extra client roundtrips.
         try {
           const StopWords = require('../../utils/stopWords');
+          const { expandAcronyms } = require('../../utils/anchorAcronyms');  // §24
           const ANCHOR_STOP = StopWords.getStopWords();
           let anchorFilledCount = 0;
+          let anchorExpandedCount = 0;
           for (const [phraseText, scoreData] of Object.entries(scores)) {
             if (!scoreData?.core) continue;                    // no core → nothing to derive from
             const idx = phraseIdxMap[phraseText];
@@ -3329,13 +3331,29 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
             const merged = [...new Set([...coreWords, ...intentTokens])];
             if (!merged.length) continue;                      // nothing meaningful derived
 
-            setOps[`sections.${sectionIndex}.callerPhrases.${idx}.anchorWords`] = merged;
+            // ── ACRONYM EXPANSION (UAP/v1.md §24) ──────────────────────
+            // Curated bidirectional expansion: "ac" adds "air conditioning",
+            // and an anchor list containing "air conditioning" adds "ac".
+            // Never contracts — only expands. Falls back to merged on error.
+            let finalAnchors = merged;
+            try {
+              const expanded = expandAcronyms(merged);
+              if (Array.isArray(expanded) && expanded.length >= merged.length) {
+                if (expanded.length > merged.length) anchorExpandedCount++;
+                finalAnchors = expanded;
+              }
+            } catch (_expErr) {
+              // Acronym expansion must never block the write.
+            }
+
+            setOps[`sections.${sectionIndex}.callerPhrases.${idx}.anchorWords`] = finalAnchors;
             anchorFilledCount++;
           }
           if (anchorFilledCount > 0) {
             logger.info('[companyKnowledge] AUTO_ANCHOR_WORDS_FILLED', {
               companyId, containerId, sectionIndex,
-              phrasesFilled: anchorFilledCount,
+              phrasesFilled:   anchorFilledCount,
+              phrasesExpanded: anchorExpandedCount,   // how many gained acronym pairs
             });
           }
         } catch (anchorErr) {
