@@ -3967,6 +3967,22 @@ const companySchema = new mongoose.Schema({
                     enabled:  { type: Boolean, default: true }
                 }]
             },
+            // ─────────────────────────────────────────────────────────────────
+            // MEDIA STREAMS — Direct Deepgram Nova-3 STT (C2+)
+            // UI: agent2.html > "Speech Pipeline" card (added in C4)
+            // Runtime: services/mediaStream/* — opt-in per tenant.
+            //   Off  → legacy Twilio <Gather> path (unchanged).
+            //   On   → Twilio <Connect><Stream> → Deepgram live → CallRuntime.
+            // Every field null-default → ConfigResolver picks up the platform
+            // default from AdminSettings.globalHub.mediaStreams.
+            // ─────────────────────────────────────────────────────────────────
+            mediaStreams: {
+                enabled:          { type: Boolean, default: false },
+                model:            { type: String,  default: null },
+                endpointingMs:    { type: Number,  default: null },
+                utteranceEndMs:   { type: Number,  default: null },
+                languageOverride: { type: String,  default: null }
+            },
             // V129: Real bridge (latency filler) settings
             // Two-phase TwiML: play a short bridge line, then Redirect to continue.
             bridge: {

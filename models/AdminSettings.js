@@ -1070,7 +1070,21 @@ const adminSettingsSchema = new mongoose.Schema({
             description: 'Phrase Intelligence — global English rules for phrase reduction (T3 scoring)'
         },
         phraseIntelligenceUpdatedAt: { type: Date,   default: null },
-        phraseIntelligenceUpdatedBy: { type: String, default: null }
+        phraseIntelligenceUpdatedBy: { type: String, default: null },
+
+        // ────────────────────────────────────────────────────────────────────
+        // MEDIA STREAMS — Platform defaults for direct Deepgram live STT (C2+)
+        // Consumed by services/mediaStream/ConfigResolver.js. Each tenant can
+        // override any field via company.aiAgentSettings.agent2.mediaStreams.
+        // ────────────────────────────────────────────────────────────────────
+        mediaStreams: {
+            defaultModel:          { type: String, default: 'nova-3' },
+            defaultEndpointingMs:  { type: Number, default: 300 },
+            defaultUtteranceEndMs: { type: Number, default: 1000 },
+            defaultLanguage:       { type: String, default: 'en-US' }
+        },
+        mediaStreamsUpdatedAt: { type: Date,   default: null },
+        mediaStreamsUpdatedBy: { type: String, default: null }
     },
     
     // Metadata
