@@ -2603,11 +2603,35 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       });
     });
 
-    if (Object.keys(embeddingSet).length > 0) {
+    // ─── BSON 16 MB safety: chunk the $set ───────────────────────────────────
+    // Big containers (e.g. No Cooling with 3,022 phrases × 512-dim floats)
+    // produce a single $set payload that overflows BSON's 17 MB serializer
+    // buffer, throwing:
+    //   RangeError [ERR_OUT_OF_RANGE]: The value of "offset" is out of range.
+    //   It must be >= 0 && <= 17825792
+    // The final *document* fits under 16 MB (512 × 8 B × ~3k ≈ 12 MB), but the
+    // update *operation* (dot-notation keys + embedding arrays + BSON overhead)
+    // roughly doubles. Fix: flush in chunks of ~500 phrases (~2 MB/chunk).
+    // Each chunk is its own updateOne — atomic per chunk, safe for concurrent
+    // readers, and no chunk ever approaches the BSON limit.
+    const CHUNK_SIZE = 500;
+    const entries = Object.entries(embeddingSet);
+    let written = 0;
+    for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+      const slice = entries.slice(i, i + CHUNK_SIZE);
+      const chunkSet = Object.fromEntries(slice);
       await CompanyKnowledgeContainer.updateOne(
         { _id: container._id, companyId },
-        { $set: embeddingSet },
+        { $set: chunkSet },
       );
+      written += slice.length;
+    }
+
+    if (entries.length > CHUNK_SIZE) {
+      logger.info('[companyKnowledge] embed-phrases: chunked save', {
+        companyId, containerId: String(container._id), title: container.title,
+        phrases: entries.length, chunks: Math.ceil(entries.length / CHUNK_SIZE),
+      });
     }
 
     // Invalidate per-container — cheaper than the full company sweep and keeps
