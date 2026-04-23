@@ -1950,9 +1950,15 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     //   5. $set the merged array — phrases with changed text lose their
     //      embedding correctly (fire-and-forget re-embed will refill)
     if (Array.isArray(updates.sections)) {
+      // NOTE: Mongoose select syntax — `+path` opts into a select:false field.
+      // Previously: `.select('sections +sections.phraseCoreEmbedding')` — this
+      // throws `Path collision at sections.phraseCoreEmbedding` because including
+      // the parent `sections` AND re-adding a child subpath via `+` collides.
+      // Correct form: just `+sections.phraseCoreEmbedding` — default projection
+      // returns every non-hidden field, and `+` opts in to the one select:false path.
       const existing = await CompanyKnowledgeContainer
         .findOne(_resolveContainerQuery(id, companyId))
-        .select('sections +sections.phraseCoreEmbedding')
+        .select('+sections.phraseCoreEmbedding')
         .lean();
 
       const existingSections = existing?.sections || [];
