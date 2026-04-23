@@ -1959,6 +1959,25 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════════
+     Inline Issues Panel — populated by _renderFoundationIssues() from the
+     same /knowledge/health payload that drives the strip above. Lists every
+     outstanding check so admins see the actual errors without clicking into
+     the Details page. Collapsible but expanded by default; auto-hides when
+     the report is fully clean.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div id="foundationIssues" class="fdn-issues" style="display:none;">
+  <div class="fdn-issues-header" id="fdnIssuesHeader" onclick="_toggleFoundationIssues()">
+    <span class="chev">▼</span>
+    <span class="fdn-issues-title">
+      <span>⚠️</span>
+      <span id="fdnIssuesTitleText">Outstanding issues</span>
+    </span>
+    <span class="fdn-issues-tallies" id="fdnIssuesTallies"></span>
+  </div>
+  <div class="fdn-issues-body" id="fdnIssuesBody"></div>
+</div>
+
 <!-- ── Improvement banner (populated by loadCardAnalytics) ────────────────── -->
 <div id="improvementBanner"></div>
 
@@ -2324,6 +2343,76 @@
   text-decoration: none; white-space: nowrap;
 }
 .fdn-strip-detail:hover { text-decoration: underline; }
+
+/* ── Inline issues panel — sits under the Foundation Strip and lists the
+   actual outstanding errors so admins don't have to click "Details". The
+   severity pill colors mirror .fdn-sev-* above so the header and the row
+   dots speak the same visual language. ─────────────────────────────────── */
+.fdn-issues {
+  margin: 0 24px 8px; border: 1px solid #e2e8f0; border-radius: 8px;
+  background: #fff; overflow: hidden;
+}
+.fdn-issues-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+  cursor: pointer; user-select: none;
+  font-size: 12px; font-weight: 600; color: #334155;
+}
+.fdn-issues-header .chev {
+  font-size: 10px; color: #64748b; transition: transform .15s ease;
+}
+.fdn-issues.collapsed .chev { transform: rotate(-90deg); }
+.fdn-issues.collapsed .fdn-issues-body { display: none; }
+.fdn-issues-title {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.fdn-issues-tallies {
+  display: inline-flex; gap: 6px; margin-left: auto;
+}
+.fdn-issues-body {
+  max-height: 260px; overflow-y: auto;
+}
+.fdn-issue-row {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: 10px; align-items: flex-start;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+}
+.fdn-issue-row:last-child { border-bottom: 0; }
+.fdn-issue-row:hover { background: #f8fafc; }
+.fdn-issue-sev {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px;
+  text-align: center; letter-spacing: .02em;
+  border: 1px solid transparent;
+}
+.fdn-issue-sev.CRITICAL { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+.fdn-issue-sev.HIGH     { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.fdn-issue-sev.MED      { background: #fefce8; color: #854d0e; border-color: #fde68a; }
+.fdn-issue-sev.LOW      { background: #f0f9ff; color: #075985; border-color: #bae6fd; }
+.fdn-issue-sev.INFO     { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.fdn-issue-body {
+  color: #334155; line-height: 1.4; min-width: 0;
+}
+.fdn-issue-ctx {
+  font-weight: 600; color: #0f172a; margin-right: 6px;
+}
+.fdn-issue-id {
+  font-size: 10px; color: #64748b; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin-left: 4px;
+}
+.fdn-issue-msg { display: inline; }
+.fdn-issue-jump {
+  font-size: 11px; color: #4f46e5; text-decoration: none;
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+}
+.fdn-issue-jump:hover { background: #eef2ff; text-decoration: underline; }
+.fdn-issues-empty {
+  padding: 14px 12px; font-size: 12px; color: #16a34a;
+  background: #f0fdf4;
+}
 
 /* Done-pane delta table (used after bulk Re-score) */
 .brs-delta {
@@ -4988,6 +5077,131 @@ function _renderFoundationStrip(rep) {
     if (!html) html = '<span class="fdn-sev-pill fdn-sev-zero">✓ all clear</span>';
     sevEl.innerHTML = html;
   }
+
+  // Inline issues panel — flatten every container.checks[] + platform.checks
+  // into a single sorted list so admins see the real outstanding errors
+  // right on the page, not hidden behind a "Details" link.
+  _renderFoundationIssues(rep);
+}
+
+// ── Issues panel helpers ─────────────────────────────────────────────────────
+// Severity ranking mirrors the backend so client-side sort matches server-side.
+const _FDN_SEV_RANK = { CRITICAL: 5, HIGH: 4, MED: 3, WARN: 3, LOW: 2, INFO: 1 };
+
+function _renderFoundationIssues(rep) {
+  const wrap       = document.getElementById('foundationIssues');
+  const bodyEl     = document.getElementById('fdnIssuesBody');
+  const talliesEl  = document.getElementById('fdnIssuesTallies');
+  const titleTxt   = document.getElementById('fdnIssuesTitleText');
+  if (!wrap || !bodyEl) return;
+
+  // Flatten container checks + platform checks into one list with context.
+  const issues = [];
+  for (const cr of (rep?.containers || [])) {
+    for (const chk of (cr.checks || [])) {
+      issues.push({
+        severity:     chk.severity || 'INFO',
+        id:           chk.id || '',
+        message:      chk.message || '',
+        containerId:  cr.kcId || null,
+        containerTitle: cr.title || '(untitled)',
+        sectionLabel: chk.sectionLabel || null,
+        isPlatform:   false,
+      });
+    }
+  }
+  for (const chk of (rep?.platform?.checks || [])) {
+    issues.push({
+      severity:       chk.severity || 'INFO',
+      id:             chk.id || '',
+      message:        chk.message || '',
+      containerId:    null,
+      containerTitle: 'Platform',
+      sectionLabel:   null,
+      isPlatform:     true,
+    });
+  }
+
+  // Clean report — show a compact green success line and keep the panel visible
+  // so the user knows the health system is actively monitoring.
+  if (!issues.length) {
+    wrap.style.display = '';
+    wrap.classList.remove('collapsed');
+    titleTxt.textContent = 'Configuration health';
+    talliesEl.innerHTML  = '<span class="fdn-sev-pill fdn-sev-zero">✓ all clear</span>';
+    bodyEl.innerHTML     = '<div class="fdn-issues-empty">No outstanding configuration issues. All checks pass.</div>';
+    return;
+  }
+
+  // Sort high→low severity, then alphabetical by container.
+  issues.sort((a, b) => {
+    const rA = _FDN_SEV_RANK[a.severity] || 0;
+    const rB = _FDN_SEV_RANK[b.severity] || 0;
+    if (rB !== rA) return rB - rA;
+    return (a.containerTitle || '').localeCompare(b.containerTitle || '');
+  });
+
+  // Tally per severity — shown in the header.
+  const tally = {};
+  for (const i of issues) tally[i.severity] = (tally[i.severity] || 0) + 1;
+  const tallyCls = {
+    CRITICAL: 'fdn-sev-crit', HIGH: 'fdn-sev-high', MED: 'fdn-sev-med',
+    WARN: 'fdn-sev-med', LOW: 'fdn-sev-low', INFO: 'fdn-sev-low',
+  };
+  const order = ['CRITICAL', 'HIGH', 'MED', 'WARN', 'LOW', 'INFO'];
+  talliesEl.innerHTML = order
+    .filter(k => tally[k])
+    .map(k => `<span class="fdn-sev-pill ${tallyCls[k]}">${k}: ${tally[k]}</span>`)
+    .join('');
+
+  titleTxt.textContent = `${issues.length} outstanding issue${issues.length !== 1 ? 's' : ''}`;
+
+  // Row rendering — one line per issue. Container title in bold, message after,
+  // right side has a "jump" link that opens the container's edit panel (via
+  // the existing expand-by-kcId path) so fixing is one click away.
+  const escape = (s) => String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  bodyEl.innerHTML = issues.map((i) => {
+    const sevLabel = i.severity === 'CRITICAL' ? 'CRIT' : i.severity;
+    const ctx = i.sectionLabel
+      ? `${escape(i.containerTitle)} › ${escape(i.sectionLabel)}`
+      : escape(i.containerTitle);
+    const jump = i.isPlatform
+      ? ''
+      : `<a class="fdn-issue-jump" href="#" onclick="_jumpToContainerByKcId('${escape(i.containerId || '')}'); return false;">Open →</a>`;
+    return `
+      <div class="fdn-issue-row">
+        <span class="fdn-issue-sev ${i.severity}">${sevLabel}</span>
+        <div class="fdn-issue-body">
+          <span class="fdn-issue-ctx">${ctx}</span>
+          <span class="fdn-issue-msg">${escape(i.message)}</span>
+          ${i.id ? `<span class="fdn-issue-id">${escape(i.id)}</span>` : ''}
+        </div>
+        ${jump}
+      </div>`;
+  }).join('');
+
+  wrap.style.display = '';
+}
+
+function _toggleFoundationIssues() {
+  const wrap = document.getElementById('foundationIssues');
+  if (!wrap) return;
+  wrap.classList.toggle('collapsed');
+}
+
+// Jump to a container card by its human-readable kcId (e.g. "c700c-01").
+// _onKcJump takes the mongo ObjectId, so we resolve kcId → _id first via
+// S.containers[], then defer to the shared highlight/scroll helper.
+function _jumpToContainerByKcId(kcId) {
+  if (!kcId) return;
+  const c = (S.containers || []).find(x => x.kcId === kcId);
+  if (!c || !c._id) {
+    _toast?.('Container not loaded on this page.', 'warn');
+    return;
+  }
+  _onKcJump(String(c._id));
 }
 
 // Coverage delta row — uses percentage points
