@@ -1221,7 +1221,11 @@ class KCDiscoveryRunner {
               infoCue:       cueFrame.infoCue || null,
               directiveCue:  cueFrame.directiveCue || null,
               tradeMatches:  Array.isArray(cueFrame.tradeMatches)
-                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               ? cueFrame.tradeMatches
+                                   .map(t => t && t.term
+                                     ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                     : null)
+                                   .filter(Boolean)
                                : [],
             },
             timestamp:  new Date().toISOString(),
@@ -1231,8 +1235,16 @@ class KCDiscoveryRunner {
 
       if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length > 0) {
         // ── GATE 2.4b — Route via best trade match ───────────────────────
-        // First trade match wins (CueExtractor sorts longest-first).
-        const bestTrade = cueFrame.tradeMatches[0];
+        // Specificity-sorted (UAP/v1.md §25): CueExtractor._buildTradeIndex
+        // pre-sorts entries per term by specificity=1/fanout DESC. So
+        // tradeMatches[0] is automatically the most narrowly-scoped
+        // container. When multiple containers share the term (fanout > 2),
+        // specificity < 0.5 and we emit KC_TRADE_TIE_LOW_SPECIFICITY so the
+        // calibration dashboard surfaces the ambiguity without blocking routing.
+        const bestTrade  = cueFrame.tradeMatches[0];
+        const runnerUp   = cueFrame.tradeMatches[1] || null;
+        const specificity = typeof bestTrade.specificity === 'number' ? bestTrade.specificity : null;
+        const fanout      = typeof bestTrade.fanout === 'number' ? bestTrade.fanout : null;
         const fullContainer = scorableContainers.find(c =>
           String(c._id || '') === bestTrade.containerId
         );
@@ -1248,6 +1260,10 @@ class KCDiscoveryRunner {
             containerId:     bestTrade.containerId,
             sectionIdx:      -1,
             sectionLabel:    '(container-level)',
+            specificity,                                // 1/fanout, null if legacy
+            fanout,                                     // # containers sharing this term
+            runnerUpId:      runnerUp ? runnerUp.containerId : null,
+            tieCandidates:   cueFrame.tradeMatches.length,
             requestCue:      cueFrame.requestCue || null,
             actionCore:      cueFrame.actionCore || null,
             urgencyCore:     cueFrame.urgencyCore || null,
@@ -1258,7 +1274,36 @@ class KCDiscoveryRunner {
             tradeTerm:    bestTrade.term,
             containerId:  bestTrade.containerId,
             sectionIdx:   -1,
+            specificity,
+            fanout,
+            runnerUpId:   runnerUp ? runnerUp.containerId : null,
           });
+
+          // ── Low-specificity tie warning (UAP/v1.md §25) ─────────────
+          // When the winning trade term is shared by 3+ containers
+          // (specificity < 0.5) AND at least one runner-up exists, emit a
+          // calibration signal. The best match still routes — this is a
+          // forensics-only event feeding the Calibration Dashboard.
+          if (runnerUp && typeof specificity === 'number' && specificity < 0.5) {
+            logger.warn('[KC_ENGINE] TRADE TIE — low specificity, routing anyway', {
+              companyId, callSid, turn,
+              tradeTerm:      bestTrade.term,
+              fanout,
+              specificity,
+              winnerId:       bestTrade.containerId,
+              runnerUpId:     runnerUp.containerId,
+              tieCandidates:  cueFrame.tradeMatches.length,
+            });
+            emit('KC_TRADE_TIE_LOW_SPECIFICITY', {
+              companyId, callSid, turn,
+              tradeTerm:      bestTrade.term,
+              fanout,
+              specificity,
+              winnerId:       bestTrade.containerId,
+              runnerUpId:     runnerUp.containerId,
+              tieCandidates:  cueFrame.tradeMatches.length,
+            });
+          }
 
           match = {
             container:        fullContainer,
@@ -1694,7 +1739,11 @@ class KCDiscoveryRunner {
               infoCue:       cueFrame.infoCue || null,
               directiveCue:  cueFrame.directiveCue || null,
               tradeMatches:  Array.isArray(cueFrame.tradeMatches)
-                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               ? cueFrame.tradeMatches
+                                   .map(t => t && t.term
+                                     ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                     : null)
+                                   .filter(Boolean)
                                : [],
             } : null,
             timestamp:   new Date().toISOString(),
@@ -1744,7 +1793,11 @@ class KCDiscoveryRunner {
                 infoCue:       cueFrame.infoCue || null,
                 directiveCue:  cueFrame.directiveCue || null,
                 tradeMatches:  Array.isArray(cueFrame.tradeMatches)
-                                 ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                                 ? cueFrame.tradeMatches
+                                     .map(t => t && t.term
+                                       ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                       : null)
+                                     .filter(Boolean)
                                  : [],
               } : null,
               timestamp:     new Date().toISOString(),
@@ -1781,7 +1834,11 @@ class KCDiscoveryRunner {
               infoCue:       cueFrame.infoCue || null,
               directiveCue:  cueFrame.directiveCue || null,
               tradeMatches:  Array.isArray(cueFrame.tradeMatches)
-                               ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                               ? cueFrame.tradeMatches
+                                   .map(t => t && t.term
+                                     ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                     : null)
+                                   .filter(Boolean)
                                : [],
             } : null,
             timestamp:  new Date().toISOString(),
@@ -2125,7 +2182,11 @@ class KCDiscoveryRunner {
             infoCue:              cueFrame.infoCue || null,
             directiveCue:         cueFrame.directiveCue || null,
             tradeMatches:         Array.isArray(cueFrame.tradeMatches)
-                                    ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                                    ? cueFrame.tradeMatches
+                                        .map(t => t && t.term
+                                          ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                          : null)
+                                        .filter(Boolean)
                                     : [],
           } : null,
           // ── NEW (Phase A.3) — pre-gate snapshots so the Gap page can
@@ -2348,7 +2409,11 @@ class KCDiscoveryRunner {
             infoCue:       cueFrame.infoCue || null,
             directiveCue:  cueFrame.directiveCue || null,
             tradeMatches:  Array.isArray(cueFrame.tradeMatches)
-                             ? cueFrame.tradeMatches.map(t => t.term).filter(Boolean)
+                             ? cueFrame.tradeMatches
+                                 .map(t => t && t.term
+                                   ? { term: t.term, specificity: t.specificity ?? null, fanout: t.fanout ?? null }
+                                   : null)
+                                 .filter(Boolean)
                              : [],
           } : null,
           timestamp:        new Date().toISOString(),

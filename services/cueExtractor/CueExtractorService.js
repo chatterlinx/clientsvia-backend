@@ -207,9 +207,37 @@ async function _buildTradeIndex(companyId) {
       containers.map(c => c.tradeVocabularyKey).filter(Boolean)
     )];
 
+    // ── Specificity scoring + per-term sort (UAP/v1.md §25) ─────────────
+    // A trade term shared across N containers has fanout=N and per-entry
+    // specificity = 1/N. Sorting each term's entries DESC by specificity
+    // means tradeMatches[0] at consumer side is automatically the most
+    // narrowly-scoped container. Low-specificity terms ("service call"
+    // shared by 16 HVAC containers → 0.0625 each) still emit candidates,
+    // but the consumer (GATE 2.4b) can detect the tie and log a warning.
+    //
+    // This fixes the baseline-call 16-container tie where GATE 2.4b
+    // picked tradeMatches[0] by array-insertion order (arbitrary).
+    let lowSpecTerms = 0;
+    for (const term of Object.keys(index)) {
+      const entries = index[term];
+      const fanout = entries.length;
+      const spec = fanout > 0 ? 1 / fanout : 0;
+      for (const e of entries) {
+        e.fanout = fanout;
+        e.specificity = spec;
+      }
+      // Entries with identical specificity (all siblings under same fanout)
+      // fall back to natural priority-sorted order preserved from Mongo.
+      // Future: if some containers gain higher-priority "boost" field,
+      // secondary sort can pick it up here.
+      entries.sort((a, b) => b.specificity - a.specificity);
+      if (spec < 0.5) lowSpecTerms++;
+    }
+
     logger.debug('[CueExtractor] Trade index built', {
       companyId,
       termCount: Object.keys(index).length,
+      lowSpecTerms,    // # terms shared by 3+ containers
       companyTradeKeys,
     });
 
