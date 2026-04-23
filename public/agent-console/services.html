@@ -163,8 +163,10 @@
       display: flex; align-items: center; gap: 10px;
     }
     .toolbar-row-1 { padding-bottom: 10px; }
+    /* toolbar-row-2 is now the only row in the toolbar — no more border-top
+       divider; the action buttons sit cleanly under the page title. */
     .toolbar-row-2 {
-      padding: 10px 0; border-top: 1px solid var(--border);
+      padding: 10px 0;
       gap: 6px;
     }
     .filter-btn {
@@ -1896,14 +1898,6 @@
 
 <!-- ── Toolbar ────────────────────────────────────────────────────────────── -->
 <div class="toolbar">
-  <div class="toolbar-row toolbar-row-1">
-    <button class="filter-btn active" id="filterAll"   onclick="setFilter('all')">All</button>
-    <button class="filter-btn"        id="filterActive" onclick="setFilter('active')">Active</button>
-    <select class="cat-select" id="catFilter" onchange="applyCatFilter(this.value)">
-      <option value="">All categories</option>
-    </select>
-    <div class="toolbar-spacer"></div>
-  </div>
   <div class="toolbar-row toolbar-row-2">
     <button class="tb-action" onclick="openPhraseFinder()" title="Find the best KC home for any caller phrase">
       <span class="tb-icon">🔍</span> Phrase Finder
@@ -2303,9 +2297,14 @@
 .brs-delta-foot a:hover { text-decoration: underline; }
 </style>
 
-<!-- ── KC Finder bar — search + jump-to-KC dropdown, sits right above the cards
-     so you're not scrolling to the toolbar every time you want to locate one. ── -->
+<!-- ── KC Finder bar — filters + search + jump-to-KC dropdown, sits right above
+     the cards so you're not scrolling to the toolbar every time. ── -->
 <div class="kc-finder-bar">
+  <button class="filter-btn active" id="filterAll"   onclick="setFilter('all')">All</button>
+  <button class="filter-btn"        id="filterActive" onclick="setFilter('active')">Active</button>
+  <select class="cat-select" id="catFilter" onchange="applyCatFilter(this.value)">
+    <option value="">All categories</option>
+  </select>
   <div class="search-wrap kc-finder-search">
     <span class="search-icon">🔍</span>
     <input type="text" class="search-input" id="searchInput"
