@@ -1911,9 +1911,26 @@ router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
   try {
+    // Object-projection form — explicit inclusion overrides the schema's
+    // `select: false` on embedding without needing `+path`. Matches the
+    // pattern KCHealthCheckService uses (known to work with .lean()).
+    // The string form `.select('+sections.callerPhrases.embedding')` with
+    // .lean() silently omits embedding on nested paths → every phrase
+    // looks "already embedded" → totalPending=0 and the sweep skips every
+    // container. This is the fix for the "Embed complete — 0 phrases
+    // embedded" bug despite 3,067 pending in the phraseVec bar.
     const containers = await CompanyKnowledgeContainer
-      .find({ companyId })
-      .select('_id title kcId priority +sections.callerPhrases.text +sections.callerPhrases.embedding')
+      .find(
+        { companyId },
+        {
+          _id:      1,
+          title:    1,
+          kcId:     1,
+          priority: 1,
+          'sections.callerPhrases.text':      1,
+          'sections.callerPhrases.embedding': 1,
+        }
+      )
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
