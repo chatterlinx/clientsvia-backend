@@ -27,6 +27,7 @@
 
 const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
 const AdminSettings             = require('../../models/AdminSettings');
+const PhraseEmbeddingService    = require('./PhraseEmbeddingService');
 const logger                    = require('../../utils/logger');
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -380,16 +381,17 @@ async function runHealthCheck(companyId) {
         'sections.phraseCoreScoredAt': 1,
         'sections.callerPhrases.text':        1,
         'sections.callerPhrases.anchorWords': 1,
-        // Phrase-level coverage metrics need these two fields. Explicit
-        // inclusion overrides the schema's `select: false` on embedding, so
-        // we don't have to use `+path` here. `score` is a small object; only
-        // `embedding` has real payload (~512 floats × 7,000 phrases ≈ 14 MB)
-        // and this scan runs on a 5-min cache so the load is amortised.
+        // Phrase-level coverage metrics. `embedding` now lives in the
+        // PhraseEmbedding sidecar collection — we hydrate after load.
+        'sections._id':                       1,
         'sections.callerPhrases.score':       1,
-        'sections.callerPhrases.embedding':   1,
       }
     )
     .lean();
+
+  // Hydrate phrase embeddings from the sidecar so `_checkSection` can count
+  // phrasesWithEmbedding just like before. Single $in query for all containers.
+  await PhraseEmbeddingService.hydrateMany(containers);
 
   // Per-container + per-section checks
   const containerReports = [];

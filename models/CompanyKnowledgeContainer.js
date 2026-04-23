@@ -97,7 +97,15 @@ const upsellItemSchema = new mongoose.Schema(
 const callerPhraseSchema = new mongoose.Schema(
   {
     text:      { type: String, required: true, trim: true, maxlength: 200, comment: 'Full caller sentence, e.g. "I want someone to come out"' },
-    embedding: { type: [Number], default: undefined, select: false, comment: '512-dim embedding from text-embedding-3-small. Auto-generated on save.' },
+    // DEPRECATED (April 2026): per-phrase embeddings moved to the PhraseEmbedding
+    // sidecar collection to escape the 16 MB per-document BSON ceiling (large
+    // containers like "No Cooling" with 3k+ phrases were crashing BSONObj size
+    // validation on save). New code MUST NOT read or write this field — use
+    // PhraseEmbeddingService.hydrate/hydrateMany on the way in and saveBatch on
+    // the way out. Left here only so Mongoose will silently strip legacy inline
+    // vectors from existing documents on the next save. Migration script:
+    // scripts/migrate-phrase-embeddings-to-sidecar.js
+    embedding: { type: [Number], default: undefined, select: false, comment: 'DEPRECATED — see PhraseEmbedding sidecar.' },
     addedAt:   { type: Date, default: Date.now, comment: 'When this phrase was added' },
     // ── Anchor words — admin-defined discriminating gate terms for this phrase ──
     // Admin double-clicks individual words inside this phrase to mark them as

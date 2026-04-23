@@ -117,6 +117,7 @@
 const Anthropic           = require('@anthropic-ai/sdk');
 const SemanticMatchService = require('../engine/kc/SemanticMatchService');
 const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+const PhraseEmbeddingService = require('../kc/PhraseEmbeddingService');
 const logger              = require('../../utils/logger');
 
 // ── Configuration ───────────────────────────────────────────────────────────
@@ -246,11 +247,14 @@ async function _runSimilaritySweep({ companyId, phrase }) {
       .select(
         'title kcId ' +
         '+sections.contentEmbedding ' +
-        '+sections.callerPhrases.embedding ' +
         '+sections.phraseCoreEmbedding ' +
-        'sections.label sections.callerPhrases.text'
+        'sections._id sections.label sections.callerPhrases.text'
       )
       .lean();
+
+    // callerPhrases[].embedding now lives in the PhraseEmbedding sidecar.
+    // Hydrate so `p.embedding` is present for the per-phrase sweep below.
+    await PhraseEmbeddingService.hydrateMany(docs);
 
     const hits = [];
     for (const c of docs) {

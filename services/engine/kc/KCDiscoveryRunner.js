@@ -74,6 +74,7 @@ const { sanitizeForSpeech, SAFE_FALLBACK } = require('../../../utils/sanitizeFor
 // ── UAP Layer 1 + Semantic Match ──────────────────────────────────────────────
 const UtteranceActParser      = require('./UtteranceActParser');
 const CueExtractorService     = require('../../cueExtractor/CueExtractorService');
+const PhraseEmbeddingService  = require('../../kc/PhraseEmbeddingService');
 
 // ── Upsell reask ceiling (Stage 14, Y95) ──────────────────────────────────────
 // Mirrors prequal's single-reask behaviour. If caller gives an ambiguous answer
@@ -1860,11 +1861,16 @@ class KCDiscoveryRunner {
         // safe for routing.
         const embContainers = await ContainerModel
           .find({ companyId, isActive: true })
-          .select('_id kcId title sections.label sections.isActive ' +
+          .select('_id kcId title sections._id sections.label sections.isActive ' +
                   'sections.callerPhrases.text ' +
-                  '+sections.callerPhrases.embedding ' +
                   '+sections.contentEmbedding')
           .lean();
+
+        // Hydrate per-phrase embeddings from the PhraseEmbedding sidecar
+        // collection. findBestSectionDiagnostic reads phrase.embedding at
+        // runtime — hydrateMany attaches them in memory in one query.
+        // Section-level contentEmbedding still lives inline on the container.
+        await PhraseEmbeddingService.hydrateMany(embContainers);
 
         // Filter to scorable containers only
         const scorableEmbContainers = rejectedContainerIds.size > 0

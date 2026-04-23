@@ -53,6 +53,7 @@ const CompanyTriggerSettings       = require('../../models/CompanyTriggerSetting
 const v2Company                    = require('../../models/v2Company');
 const GroqStreamAdapter            = require('../../services/streaming/adapters/GroqStreamAdapter');
 const KCKeywordHealthService       = require('../../services/kc/KCKeywordHealthService');
+const PhraseEmbeddingService       = require('../../services/kc/PhraseEmbeddingService');
 const BridgeService                = require('../../services/engine/kc/BridgeService');
 const CueExtractorService          = require('../../services/cueExtractor/CueExtractorService');
 const SemanticMatchService         = require('../../services/engine/kc/SemanticMatchService');
@@ -733,17 +734,56 @@ router.post('/:companyId/knowledge', async (req, res) => {
     BridgeService.invalidate(companyId).catch(() => {});
     CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
-    // Fire-and-forget: embed callerPhrases + section content via SemanticMatchService
+    // Fire-and-forget: embed callerPhrases + section content via SemanticMatchService.
+    // Phrase embeddings → PhraseEmbedding sidecar (avoids 16 MB BSON limit on
+    // large containers). contentEmbedding stays inline (~4 KB/section).
     setImmediate(async () => {
       try {
         const sections = container.sections || [];
         const phraseCount   = await SemanticMatchService.embedCallerPhrases(sections);
         const contentCount  = await SemanticMatchService.embedSectionContent(sections);
-        if (phraseCount > 0 || contentCount > 0) {
-          await CompanyKnowledgeContainer.updateOne(
-            { _id: container._id },
-            { $set: { sections } }
-          );
+
+        // Inline contentEmbedding only — never write per-phrase inline.
+        if (contentCount > 0) {
+          const embeddingSet = {};
+          sections.forEach((sec, sIdx) => {
+            if (sec.contentEmbedding?.length) {
+              embeddingSet[`sections.${sIdx}.contentEmbedding`]   = sec.contentEmbedding;
+              embeddingSet[`sections.${sIdx}.contentEmbeddingAt`] = sec.contentEmbeddingAt || new Date();
+            }
+          });
+          if (Object.keys(embeddingSet).length) {
+            await CompanyKnowledgeContainer.updateOne(
+              { _id: container._id },
+              { $set: embeddingSet },
+            );
+          }
+        }
+
+        // Sidecar: per-phrase embeddings.
+        if (phraseCount > 0) {
+          const entries = [];
+          const seen = new Set();
+          for (const sec of sections) {
+            for (const phrase of (sec.callerPhrases || [])) {
+              if (!phrase?.text?.trim() || !phrase.embedding?.length) continue;
+              const key = PhraseEmbeddingService._normalizeText(phrase.text);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              entries.push({
+                text:      phrase.text,
+                embedding: phrase.embedding,
+                sectionId: sec._id || null,
+              });
+            }
+          }
+          if (entries.length) {
+            await PhraseEmbeddingService.saveBatch({
+              companyId,
+              containerId: container._id,
+              entries,
+            });
+          }
         }
       } catch (_e) { /* non-fatal */ }
       KCKeywordHealthService.generateAndStoreEmbedding(container._id).catch(() => {});
@@ -1150,9 +1190,12 @@ router.post('/:companyId/knowledge/test-match', authenticateJWT, async (req, res
         for (const cId of containerIds) {
           const [embDoc] = await CompanyKnowledgeContainer
             .find({ _id: cId, isActive: true })
-            .select('+sections.callerPhrases.embedding +sections.contentEmbedding')
+            .select('+sections.contentEmbedding')
             .lean();
           if (!embDoc) continue;
+          // Hydrate per-phrase embeddings from the PhraseEmbedding sidecar.
+          // findBestSection walks phrase.embedding at runtime — hydrate fills it.
+          await PhraseEmbeddingService.hydrate(embDoc);
           const semResult = await SemanticMatchService.findBestSection(companyId, utterance, [embDoc], utteranceVec);
           if (semResult && (!bestSem || semResult.similarity > bestSem.similarity)) {
             bestSem = semResult;
@@ -1911,14 +1954,9 @@ router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
   const { companyId } = req.params;
   if (!_validateCompanyAccess(req, res, companyId)) return;
   try {
-    // Object-projection form — explicit inclusion overrides the schema's
-    // `select: false` on embedding without needing `+path`. Matches the
-    // pattern KCHealthCheckService uses (known to work with .lean()).
-    // The string form `.select('+sections.callerPhrases.embedding')` with
-    // .lean() silently omits embedding on nested paths → every phrase
-    // looks "already embedded" → totalPending=0 and the sweep skips every
-    // container. This is the fix for the "Embed complete — 0 phrases
-    // embedded" bug despite 3,067 pending in the phraseVec bar.
+    // Post-sidecar: we only need phrase text from the container. The set of
+    // already-embedded phrases comes from the PhraseEmbedding collection.
+    // No embedding fields selected → tiny payload, no 16 MB issue.
     const containers = await CompanyKnowledgeContainer
       .find(
         { companyId },
@@ -1927,23 +1965,45 @@ router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
           title:    1,
           kcId:     1,
           priority: 1,
-          'sections.callerPhrases.text':      1,
-          'sections.callerPhrases.embedding': 1,
+          'sections.callerPhrases.text': 1,
         }
       )
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
+    // One bulk query for all already-embedded phrase texts across all this
+    // company's containers. Keyed by containerId so we can diff per card.
+    const PhraseEmbedding = require('../../models/PhraseEmbedding');
+    const embedded = await PhraseEmbedding
+      .find({ companyId })
+      .select('containerId phraseText')
+      .lean();
+
+    const embeddedByContainer = new Map();   // containerId → Set<normalizedText>
+    for (const row of embedded) {
+      const cid = String(row.containerId);
+      if (!embeddedByContainer.has(cid)) embeddedByContainer.set(cid, new Set());
+      embeddedByContainer.get(cid).add(row.phraseText);
+    }
+
+    const norm = PhraseEmbeddingService._normalizeText;
     const plan = [];
     let totalPending = 0;
     for (const c of containers) {
+      const cidKey = String(c._id);
+      const done = embeddedByContainer.get(cidKey) || new Set();
       let pending = 0;
       let total   = 0;
+      // Dedup on normalized text — two phrases with same text share one row
+      const seenHere = new Set();
       for (const s of (c.sections || [])) {
         for (const p of (s.callerPhrases || [])) {
-          if (!p?.text?.trim()) continue;
+          const key = norm(p?.text);
+          if (!key) continue;
+          if (seenHere.has(key)) continue;
+          seenHere.add(key);
           total++;
-          if (!(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
+          if (!done.has(key)) pending++;
         }
       }
       if (pending > 0) {
@@ -2069,21 +2129,13 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
           newSec.contentCoreScoredAt = prev.contentCoreScoredAt || newSec.contentCoreScoredAt;
         }
 
-        // Preserve per-phrase embedding when the phrase TEXT is unchanged.
-        // Changed/new phrases get no embedding here — fire-and-forget re-embed
-        // below will fill them in.
-        if (Array.isArray(newSec.callerPhrases) && Array.isArray(prev.callerPhrases)) {
-          const prevPhraseByText = new Map();
-          prev.callerPhrases.forEach(p => {
-            if (p?.text && p?.embedding?.length) {
-              prevPhraseByText.set(p.text, p.embedding);
-            }
-          });
-          newSec.callerPhrases = newSec.callerPhrases.map(p => {
-            const prevEmb = prevPhraseByText.get(p?.text);
-            return prevEmb ? { ...p, embedding: prevEmb } : p;
-          });
-        }
+        // NOTE: per-phrase embedding preservation is handled automatically
+        // by the PhraseEmbedding sidecar collection, which keys embeddings
+        // by normalized phrase text. A PATCH that rearranges or renames a
+        // section never touches the sidecar — unchanged-text phrases keep
+        // their embedding via hydrate() at read time. Changed-text phrases
+        // naturally have no match and will be re-embedded by the
+        // fire-and-forget pass below.
 
         return newSec;
       });
@@ -2105,28 +2157,27 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
     CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
 
     // Fire-and-forget: embed callerPhrases + section content + keyword health
-    // ⚠️ CRITICAL: use targeted dot-notation $set for embeddings ONLY.
-    // Never replace the full sections array here — that would race against atomic
-    // Re-score updates (phraseCore, contentCore, phraseCoreEmbedding) and wipe them.
+    // ⚠️ CRITICAL: use targeted dot-notation $set for inline embeddings ONLY
+    // (contentEmbedding stays inline). Never replace the full sections array
+    // here — that would race against atomic Re-score updates (phraseCore,
+    // contentCore, phraseCoreEmbedding) and wipe them.
+    // Per-phrase embeddings go to the PhraseEmbedding sidecar collection to
+    // avoid the 16 MB BSON document ceiling on large containers.
     if (updates.title !== undefined || updates.sections !== undefined) {
       setImmediate(async () => {
         try {
           const sections = container.sections || [];
           const phraseCount  = await SemanticMatchService.embedCallerPhrases(sections);
           const contentCount = await SemanticMatchService.embedSectionContent(sections);
-          if (phraseCount > 0 || contentCount > 0) {
-            // Build dot-notation $set — only touch embedding fields, never phraseCore/contentCore
+
+          // Inline fields: only contentEmbedding (section-level, ~4 KB/section).
+          if (contentCount > 0) {
             const embeddingSet = {};
             sections.forEach((sec, sIdx) => {
               if (sec.contentEmbedding?.length) {
                 embeddingSet[`sections.${sIdx}.contentEmbedding`]   = sec.contentEmbedding;
                 embeddingSet[`sections.${sIdx}.contentEmbeddingAt`] = sec.contentEmbeddingAt || new Date();
               }
-              (sec.callerPhrases || []).forEach((phrase, pIdx) => {
-                if (phrase.embedding?.length) {
-                  embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
-                }
-              });
             });
             if (Object.keys(embeddingSet).length) {
               await CompanyKnowledgeContainer.updateOne(
@@ -2134,6 +2185,45 @@ router.patch('/:companyId/knowledge/:id', async (req, res) => {
                 { $set: embeddingSet }
               );
             }
+          }
+
+          // Sidecar: per-phrase embeddings → PhraseEmbedding collection.
+          if (phraseCount > 0) {
+            const entries = [];
+            const seen = new Set();
+            for (const sec of sections) {
+              for (const phrase of (sec.callerPhrases || [])) {
+                if (!phrase?.text?.trim() || !phrase.embedding?.length) continue;
+                const key = PhraseEmbeddingService._normalizeText(phrase.text);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                entries.push({
+                  text:      phrase.text,
+                  embedding: phrase.embedding,
+                  sectionId: sec._id || null,
+                });
+              }
+            }
+            if (entries.length) {
+              await PhraseEmbeddingService.saveBatch({
+                companyId,
+                containerId: container._id,
+                entries,
+              });
+            }
+          }
+
+          // Prune orphaned sidecar rows — phrases that no longer exist in
+          // the container (renamed/deleted text). Keeps sidecar aligned with
+          // current container state.
+          const currentTexts = [];
+          for (const sec of sections) {
+            for (const phrase of (sec.callerPhrases || [])) {
+              if (phrase?.text?.trim()) currentTexts.push(phrase.text);
+            }
+          }
+          if (currentTexts.length) {
+            await PhraseEmbeddingService.deleteOrphans(container._id, currentTexts);
           }
         } catch (_e) { /* non-fatal */ }
         KCKeywordHealthService.generateAndStoreEmbedding(id).catch(() => {});
@@ -2200,8 +2290,23 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    const result = await CompanyKnowledgeContainer.deleteOne(_resolveContainerQuery(id, companyId));
+    // Look up first so we have the real _id for the sidecar cleanup even
+    // when the caller passed kcId.
+    const existing = await CompanyKnowledgeContainer
+      .findOne(_resolveContainerQuery(id, companyId))
+      .select('_id')
+      .lean();
+    if (!existing) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
+
+    const result = await CompanyKnowledgeContainer.deleteOne({ _id: existing._id, companyId });
     if (!result.deletedCount) return res.status(404).json({ success: false, error: 'Knowledge container not found' });
+
+    // Sidecar cleanup — never leave orphaned phrase embeddings.
+    PhraseEmbeddingService.deleteForContainer(existing._id).catch(e =>
+      logger.warn('[companyKnowledge] sidecar cleanup failed on hard-delete', {
+        companyId, id, err: e.message,
+      }),
+    );
 
     KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
     BridgeService.invalidate(companyId).catch(() => {});
@@ -2389,29 +2494,56 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
-    // Load containers with full sections + embedding opt-in. Big payload
-    // (~14MB for 7K phrases × 512 floats) but needed so we can skip phrases
-    // that already have vectors.
+    // Post-sidecar: load containers WITHOUT inline embeddings (they no
+    // longer live there). Use the PhraseEmbedding collection to figure
+    // out which phrases already have vectors.
     const containers = await CompanyKnowledgeContainer
       .find({ companyId })
-      .select('+sections.callerPhrases.embedding')
-      .sort({ priority: 1, createdAt: 1 });
+      .select('_id title sections._id sections.callerPhrases.text')
+      .sort({ priority: 1, createdAt: 1 })
+      .lean();
 
     if (!containers.length) {
       return res.json({ success: true, containersProcessed: 0, phrasesEmbedded: 0, details: [] });
     }
 
-    // First pass — count what's pending so the response stats make sense
+    // Pre-fetch every embedded phrase text for this company in one query.
+    const PhraseEmbedding = require('../../models/PhraseEmbedding');
+    const doneRows = await PhraseEmbedding
+      .find({ companyId })
+      .select('containerId phraseText')
+      .lean();
+    const doneByContainer = new Map();
+    for (const r of doneRows) {
+      const cid = String(r.containerId);
+      if (!doneByContainer.has(cid)) doneByContainer.set(cid, new Set());
+      doneByContainer.get(cid).add(r.phraseText);
+    }
+
+    const norm = PhraseEmbeddingService._normalizeText;
+
+    // First pass — count pending across all containers.
     let totalPending = 0;
+    const pendingByContainer = new Map();  // cid → [{ sectionId, text }]
     for (const c of containers) {
+      const cid = String(c._id);
+      const done = doneByContainer.get(cid) || new Set();
+      const here = [];
+      const seen = new Set();
       for (const s of (c.sections || [])) {
         for (const p of (s.callerPhrases || [])) {
-          if (p.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) {
-            totalPending++;
-          }
+          const key = norm(p?.text);
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          if (!done.has(key)) here.push({ sectionId: s._id || null, text: p.text.trim() });
         }
       }
+      if (here.length) {
+        pendingByContainer.set(cid, here);
+        totalPending += here.length;
+      }
     }
+
     if (totalPending === 0) {
       return res.json({
         success:             true,
@@ -2423,38 +2555,50 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
       });
     }
 
-    // Second pass — embed + save per container
+    // Second pass — embed + save per container.
     const details             = [];
     let   totalEmbedded       = 0;
     let   totalFailed         = 0;
-    let   consecutiveAllFails = 0; // circuit breaker trip counter
+    let   consecutiveAllFails = 0;
 
     for (const container of containers) {
-      const sections = container.sections || [];
-      let pendingInContainer = 0;
-      for (const s of sections) {
-        for (const p of (s.callerPhrases || [])) {
-          if (p.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) pendingInContainer++;
-        }
-      }
-      if (pendingInContainer === 0) continue;
+      const cid = String(container._id);
+      const here = pendingByContainer.get(cid);
+      if (!here || !here.length) continue;
+      const pendingInContainer = here.length;
 
-      // embedCallerPhrases mutates sections in place — only fills phrases
-      // that are missing an embedding. Returns count of newly embedded.
-      const embedded = await SemanticMatchService.embedCallerPhrases(sections).catch(err => {
-        logger.warn('[companyKnowledge] bulk-embed: embedCallerPhrases threw', {
-          companyId, containerId: String(container._id), err: err.message,
+      const uniqueTexts = Array.from(new Set(here.map(p => p.text)));
+      let vectors = [];
+      try {
+        vectors = await SemanticMatchService.embedBatch(uniqueTexts);
+      } catch (err) {
+        logger.warn('[companyKnowledge] bulk-embed: embedBatch threw', {
+          companyId, containerId: cid, err: err.message,
         });
-        return 0;
-      });
+        vectors = [];
+      }
+
+      const vecByText = new Map();
+      for (let i = 0; i < uniqueTexts.length; i++) {
+        if (vectors[i]) vecByText.set(uniqueTexts[i], vectors[i]);
+      }
+
+      const entries = [];
+      const seen = new Set();
+      for (const p of here) {
+        if (seen.has(p.text)) continue;
+        seen.add(p.text);
+        const vec = vecByText.get(p.text);
+        if (!vec) continue;
+        entries.push({ text: p.text, embedding: vec, sectionId: p.sectionId });
+      }
+      const embedded = entries.length;
 
       if (embedded === 0 && pendingInContainer > 0) {
-        // Every phrase in this container failed — probably an upstream outage.
-        // Bail out early rather than burning through the remaining containers.
         consecutiveAllFails++;
         totalFailed += pendingInContainer;
         details.push({
-          containerId: String(container._id),
+          containerId: cid,
           title:       container.title,
           pending:     pendingInContainer,
           embedded:    0,
@@ -2462,7 +2606,7 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
         });
         if (consecutiveAllFails >= 2) {
           logger.error('[companyKnowledge] bulk-embed circuit breaker tripped', {
-            companyId, afterContainer: String(container._id),
+            companyId, afterContainer: cid,
           });
           return res.status(503).json({
             success:             false,
@@ -2478,28 +2622,18 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
       }
       consecutiveAllFails = 0;
 
-      // Build dot-notation $set — embeddings ONLY. We never touch phraseCore,
-      // phraseCoreEmbedding, anchorWords, or score; those belong to Re-score.
-      const embeddingSet = {};
-      sections.forEach((sec, sIdx) => {
-        (sec.callerPhrases || []).forEach((phrase, pIdx) => {
-          if (Array.isArray(phrase.embedding) && phrase.embedding.length > 0) {
-            embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
-          }
+      if (entries.length) {
+        await PhraseEmbeddingService.saveBatch({
+          companyId,
+          containerId: container._id,
+          entries,
         });
-      });
-
-      if (Object.keys(embeddingSet).length > 0) {
-        await CompanyKnowledgeContainer.updateOne(
-          { _id: container._id, companyId },
-          { $set: embeddingSet },
-        );
       }
 
       totalEmbedded += embedded;
       totalFailed   += Math.max(0, pendingInContainer - embedded);
       details.push({
-        containerId: String(container._id),
+        containerId: cid,
         title:       container.title,
         pending:     pendingInContainer,
         embedded,
@@ -2544,21 +2678,33 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
   if (!_validateCompanyAccess(req, res, companyId)) return;
 
   try {
+    // NOTE: No +select on embedding here — as of the sidecar migration,
+    // phrase embeddings live in the PhraseEmbedding collection, not inline.
     const container = await CompanyKnowledgeContainer
       .findOne(_resolveContainerQuery(id, companyId))
-      .select('+sections.callerPhrases.embedding');
+      .lean();
 
     if (!container) return res.status(404).json({ success: false, error: 'Container not found' });
 
     const sections = container.sections || [];
 
-    // Count what's missing BEFORE we touch anything so the response is accurate
-    let pending = 0;
+    // Build the pending list by joining container phrases against the
+    // PhraseEmbedding collection. Anything with text and NOT already in the
+    // embedded-text set is pending.
+    const alreadyEmbedded = await PhraseEmbeddingService.getEmbeddedTextSet(container._id);
+    const norm = PhraseEmbeddingService._normalizeText;
+
+    const pendingList = [];  // [{ sectionId, text }]
     for (const s of sections) {
       for (const p of (s.callerPhrases || [])) {
-        if (p?.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
+        const key = norm(p?.text);
+        if (!key) continue;
+        if (alreadyEmbedded.has(key)) continue;
+        pendingList.push({ sectionId: s._id || null, text: p.text.trim() });
       }
     }
+    const pending = pendingList.length;
+
     if (pending === 0) {
       return res.json({
         success:     true,
@@ -2571,14 +2717,14 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       });
     }
 
-    // Call the exact same function the save path uses so vectors match runtime.
-    // Throws on catastrophic failures (missing API key, OpenAI down). We catch
-    // and return a structured error so the client can show it in the log.
-    let embedded = 0;
+    // Dedup by normalized text before calling OpenAI — no point embedding
+    // the same string twice within one run.
+    const uniqueTexts = Array.from(new Set(pendingList.map(p => p.text)));
+    let vectors;
     try {
-      embedded = await SemanticMatchService.embedCallerPhrases(sections);
+      vectors = await SemanticMatchService.embedBatch(uniqueTexts);
     } catch (err) {
-      logger.warn('[companyKnowledge] embed-phrases: embedCallerPhrases threw', {
+      logger.warn('[companyKnowledge] embed-phrases: embedBatch threw', {
         companyId, containerId: id, err: err.message,
       });
       return res.status(502).json({
@@ -2592,47 +2738,35 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       });
     }
 
-    // Dot-notation $set — only touches embedding paths. NEVER replaces sections
-    // array (protects concurrent Re-score work).
-    const embeddingSet = {};
-    sections.forEach((sec, sIdx) => {
-      (sec.callerPhrases || []).forEach((phrase, pIdx) => {
-        if (Array.isArray(phrase.embedding) && phrase.embedding.length > 0) {
-          embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
-        }
-      });
+    // Pair texts with vectors. Any text that came back without a vector
+    // (OpenAI row-level failure) is counted as a failure.
+    const vecByText = new Map();
+    for (let i = 0; i < uniqueTexts.length; i++) {
+      if (vectors[i]) vecByText.set(uniqueTexts[i], vectors[i]);
+    }
+
+    // Build entries for saveBatch — one row per unique phrase. We use the
+    // first section occurrence for debug-only sectionId; it's not a join key.
+    const seen = new Set();
+    const entries = [];
+    for (const p of pendingList) {
+      if (seen.has(p.text)) continue;
+      seen.add(p.text);
+      const vec = vecByText.get(p.text);
+      if (!vec) continue;
+      entries.push({ text: p.text, embedding: vec, sectionId: p.sectionId });
+    }
+
+    const { upserted } = await PhraseEmbeddingService.saveBatch({
+      companyId,
+      containerId: container._id,
+      entries,
     });
 
-    // ─── BSON 16 MB safety: chunk the $set ───────────────────────────────────
-    // Big containers (e.g. No Cooling with 3,022 phrases × 512-dim floats)
-    // produce a single $set payload that overflows BSON's 17 MB serializer
-    // buffer, throwing:
-    //   RangeError [ERR_OUT_OF_RANGE]: The value of "offset" is out of range.
-    //   It must be >= 0 && <= 17825792
-    // The final *document* fits under 16 MB (512 × 8 B × ~3k ≈ 12 MB), but the
-    // update *operation* (dot-notation keys + embedding arrays + BSON overhead)
-    // roughly doubles. Fix: flush in chunks of ~500 phrases (~2 MB/chunk).
-    // Each chunk is its own updateOne — atomic per chunk, safe for concurrent
-    // readers, and no chunk ever approaches the BSON limit.
-    const CHUNK_SIZE = 500;
-    const entries = Object.entries(embeddingSet);
-    let written = 0;
-    for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-      const slice = entries.slice(i, i + CHUNK_SIZE);
-      const chunkSet = Object.fromEntries(slice);
-      await CompanyKnowledgeContainer.updateOne(
-        { _id: container._id, companyId },
-        { $set: chunkSet },
-      );
-      written += slice.length;
-    }
-
-    if (entries.length > CHUNK_SIZE) {
-      logger.info('[companyKnowledge] embed-phrases: chunked save', {
-        companyId, containerId: String(container._id), title: container.title,
-        phrases: entries.length, chunks: Math.ceil(entries.length / CHUNK_SIZE),
-      });
-    }
+    logger.info('[companyKnowledge] embed-phrases: sidecar save', {
+      companyId, containerId: String(container._id), title: container.title,
+      pending, unique: uniqueTexts.length, embedded: entries.length, upserted,
+    });
 
     // Invalidate per-container — cheaper than the full company sweep and keeps
     // BridgeService phraseIndex fresh for GATE 2.8.
@@ -2644,8 +2778,8 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       containerId: String(container._id),
       title:       container.title,
       pending,
-      embedded,
-      failed:      Math.max(0, pending - embedded),
+      embedded:    entries.length,
+      failed:      Math.max(0, pending - entries.length),
     });
   } catch (err) {
     logger.error('[companyKnowledge] embed-phrases error', { companyId, id, err: err.message, stack: err.stack });

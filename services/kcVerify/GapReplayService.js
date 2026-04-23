@@ -117,6 +117,7 @@ const SemanticMatchService = require('../engine/kc/SemanticMatchService');
 const KCS                  = require('../engine/agent2/KnowledgeContainerService');
 const KCGapResolution      = require('../../models/KCGapResolution');
 const CompanyKnowledgeContainer = require('../../models/CompanyKnowledgeContainer');
+const PhraseEmbeddingService = require('../kc/PhraseEmbeddingService');
 const logger               = require('../../utils/logger');
 
 // ── Thresholds MUST mirror the production runtime ─────────────────────────
@@ -660,16 +661,21 @@ function _captureKeywordGate(match, ctxAnchor) {
  * are required — Redis cache omits them because they're large.
  */
 async function _loadContainersWithEmbeddings(companyId) {
-  return CompanyKnowledgeContainer
+  // callerPhrases[].embedding now lives in the PhraseEmbedding sidecar —
+  // container docs stay small (<16 MB). We hydrate phrase vectors after load
+  // so downstream readers see phrase.embedding exactly as before.
+  const containers = await CompanyKnowledgeContainer
     .find({ companyId, isActive: true })
     .select(
       '+embeddingVector ' +
       '+sections.contentEmbedding ' +
-      '+sections.callerPhrases.embedding ' +
       '+sections.phraseCoreEmbedding'
     )
     .sort({ priority: 1, createdAt: 1 })
     .lean();
+
+  await PhraseEmbeddingService.hydrateMany(containers);
+  return containers;
 }
 
 // ============================================================================
