@@ -2293,6 +2293,179 @@ router.post('/:companyId/knowledge/move-section', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/bulk-embed-phrases — Backfill missing phrase vecs
+//
+// Why this exists:
+//   sections.callerPhrases[i].embedding is fire-and-forget on container save —
+//   OpenAI rate-limits, timeouts, or historical imports leave thousands of
+//   phrases with no vector. Those phrases are dark to GATE 2.8 (Semantic
+//   Match) — the runtime skips any phrase with !embedding?.length, so they
+//   can only match via exact phrase-index or the keyword-scoring gate. This
+//   endpoint is the deliberate repair pass for the "phraseVec" bar on the
+//   UAP Foundation strip.
+//
+// Design notes:
+//   • Mirrors the save-path (SemanticMatchService.embedCallerPhrases) so the
+//     embedding shape + model + dimensions match runtime exactly — no drift.
+//   • Uses targeted dot-notation $set — NEVER replaces the sections array —
+//     so concurrent Re-score work (phraseCore, phraseCoreEmbedding, scores,
+//     anchorWords) is never clobbered.
+//   • Schema has `select: false` on callerPhrases[i].embedding, so we load
+//     containers with an explicit +path opt-in so we can tell which phrases
+//     already have vectors and skip them.
+//   • Circuit breaker: if 2 consecutive containers fail every phrase (likely
+//     OpenAI outage or missing API key) the sweep aborts with HTTP 503 — no
+//     point burning budget on dead calls.
+//   • Returns per-container stats so the UI can render a sensible summary.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    // Load containers with full sections + embedding opt-in. Big payload
+    // (~14MB for 7K phrases × 512 floats) but needed so we can skip phrases
+    // that already have vectors.
+    const containers = await CompanyKnowledgeContainer
+      .find({ companyId })
+      .select('+sections.callerPhrases.embedding')
+      .sort({ priority: 1, createdAt: 1 });
+
+    if (!containers.length) {
+      return res.json({ success: true, containersProcessed: 0, phrasesEmbedded: 0, details: [] });
+    }
+
+    // First pass — count what's pending so the response stats make sense
+    let totalPending = 0;
+    for (const c of containers) {
+      for (const s of (c.sections || [])) {
+        for (const p of (s.callerPhrases || [])) {
+          if (p.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) {
+            totalPending++;
+          }
+        }
+      }
+    }
+    if (totalPending === 0) {
+      return res.json({
+        success:             true,
+        containersProcessed: 0,
+        phrasesEmbedded:     0,
+        totalPending:        0,
+        details:             [],
+        message:             'All phrases already have embeddings — nothing to do.',
+      });
+    }
+
+    // Second pass — embed + save per container
+    const details             = [];
+    let   totalEmbedded       = 0;
+    let   totalFailed         = 0;
+    let   consecutiveAllFails = 0; // circuit breaker trip counter
+
+    for (const container of containers) {
+      const sections = container.sections || [];
+      let pendingInContainer = 0;
+      for (const s of sections) {
+        for (const p of (s.callerPhrases || [])) {
+          if (p.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) pendingInContainer++;
+        }
+      }
+      if (pendingInContainer === 0) continue;
+
+      // embedCallerPhrases mutates sections in place — only fills phrases
+      // that are missing an embedding. Returns count of newly embedded.
+      const embedded = await SemanticMatchService.embedCallerPhrases(sections).catch(err => {
+        logger.warn('[companyKnowledge] bulk-embed: embedCallerPhrases threw', {
+          companyId, containerId: String(container._id), err: err.message,
+        });
+        return 0;
+      });
+
+      if (embedded === 0 && pendingInContainer > 0) {
+        // Every phrase in this container failed — probably an upstream outage.
+        // Bail out early rather than burning through the remaining containers.
+        consecutiveAllFails++;
+        totalFailed += pendingInContainer;
+        details.push({
+          containerId: String(container._id),
+          title:       container.title,
+          pending:     pendingInContainer,
+          embedded:    0,
+          failed:      pendingInContainer,
+        });
+        if (consecutiveAllFails >= 2) {
+          logger.error('[companyKnowledge] bulk-embed circuit breaker tripped', {
+            companyId, afterContainer: String(container._id),
+          });
+          return res.status(503).json({
+            success:             false,
+            error:               'Embedding service appears to be down — no phrases succeeded on the last 2 containers. Aborted.',
+            containersProcessed: details.length,
+            phrasesEmbedded:     totalEmbedded,
+            phrasesFailed:       totalFailed,
+            totalPending,
+            details,
+          });
+        }
+        continue;
+      }
+      consecutiveAllFails = 0;
+
+      // Build dot-notation $set — embeddings ONLY. We never touch phraseCore,
+      // phraseCoreEmbedding, anchorWords, or score; those belong to Re-score.
+      const embeddingSet = {};
+      sections.forEach((sec, sIdx) => {
+        (sec.callerPhrases || []).forEach((phrase, pIdx) => {
+          if (Array.isArray(phrase.embedding) && phrase.embedding.length > 0) {
+            embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
+          }
+        });
+      });
+
+      if (Object.keys(embeddingSet).length > 0) {
+        await CompanyKnowledgeContainer.updateOne(
+          { _id: container._id, companyId },
+          { $set: embeddingSet },
+        );
+      }
+
+      totalEmbedded += embedded;
+      totalFailed   += Math.max(0, pendingInContainer - embedded);
+      details.push({
+        containerId: String(container._id),
+        title:       container.title,
+        pending:     pendingInContainer,
+        embedded,
+        failed:      Math.max(0, pendingInContainer - embedded),
+      });
+    }
+
+    // Invalidate caches so the next call picks up new vectors. BridgeService
+    // carries the phraseIndex Layer 2 semantic match leans on, so that one
+    // especially matters.
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+
+    logger.info('[companyKnowledge] bulk-embed complete', {
+      companyId, containersTouched: details.length, totalEmbedded, totalFailed, totalPending,
+    });
+
+    return res.json({
+      success:             true,
+      containersProcessed: details.length,
+      phrasesEmbedded:     totalEmbedded,
+      phrasesFailed:       totalFailed,
+      totalPending,
+      details,
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] bulk-embed error', { companyId, err: err.message, stack: err.stack });
+    return res.status(500).json({ success: false, error: 'Failed to backfill phrase embeddings' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/:id/generate-keywords — Regen for existing container
 // Uses the same Groq logic as the pre-save endpoint — loads container from DB
 // then delegates to _runKeywordGeneration.

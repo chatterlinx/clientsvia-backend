@@ -1926,6 +1926,9 @@
     <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore + phraseCoreEmbedding (Logic 2), anchorWords (Logic 1), auto-fills tradeTerms. Enterprise-grade operation — can take several minutes.">
       <span class="tb-icon">↻</span> Re-score ALL
     </button>
+    <button class="tb-action" id="btnBulkEmbedPhrases" onclick="_bulkEmbedPhrases()" title="Backfill missing per-phrase embeddings (phraseVec). These are generated fire-and-forget on save — any OpenAI hiccup leaves phrases dark to GATE 2.8 Semantic Match. This repairs them.">
+      <span class="tb-icon">⚡</span> Embed phrases
+    </button>
     <div class="toolbar-spacer"></div>
     <span class="toolbar-result-count" id="resultCount"></span>
   </div>
@@ -4307,6 +4310,91 @@ function _bulkRescoreUpdateBadge() {
   btn.title = `Re-score ALL — ${n} section${n !== 1 ? 's' : ''} pending (clean sections will be skipped).`;
 }
 
+/**
+ * _bulkEmbedUpdateBadge — refresh the pending count on the Embed phrases button.
+ * Pending = totalPhrases - phrasesEmbedded (from the last Foundation strip scan).
+ * Call after _loadFoundationStrip resolves and after any save that may add phrases.
+ */
+function _bulkEmbedUpdateBadge() {
+  const btn = document.getElementById('btnBulkEmbedPhrases');
+  if (!btn) return;
+  const rep = _FDN && _FDN.last;
+  const total   = Number(rep?.summary?.totalPhrases || 0);
+  const covered = Number(rep?.summary?.coverage?.phrasesEmbedded || 0);
+  const pending = Math.max(0, total - covered);
+  let badge = btn.querySelector('.tb-embed-badge');
+  if (pending === 0) {
+    if (badge) badge.remove();
+    btn.title = total
+      ? 'All phrases have embeddings — phraseVec is clean.'
+      : 'Backfill missing per-phrase embeddings (phraseVec).';
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'tb-embed-badge';
+    badge.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;text-align:center;line-height:1.4;';
+    btn.appendChild(badge);
+  }
+  badge.textContent = pending;
+  btn.title = `Embed phrases — ${pending.toLocaleString()} phrase${pending !== 1 ? 's' : ''} missing embeddings (GATE 2.8 Semantic Match skips these).`;
+}
+
+/**
+ * _bulkEmbedPhrases — backfill missing callerPhrases[i].embedding across every container.
+ * Uses POST /knowledge/bulk-embed-phrases. Server-side circuit breaker trips after
+ * 2 consecutive all-fail containers (OpenAI outage). Dot-notation $set — never
+ * touches tradeTerms / phraseCore / anchorWords / score populated by Re-score.
+ */
+async function _bulkEmbedPhrases() {
+  if (!S.companyId) { _toast('No company selected.', 'error'); return; }
+  const rep = _FDN && _FDN.last;
+  const total   = Number(rep?.summary?.totalPhrases || 0);
+  const covered = Number(rep?.summary?.coverage?.phrasesEmbedded || 0);
+  const pending = Math.max(0, total - covered);
+
+  const msg = pending
+    ? `Embed ${pending.toLocaleString()} missing phrase embedding${pending !== 1 ? 's' : ''}?\n\nThis calls OpenAI embeddings for every caller phrase that is currently dark to GATE 2.8 Semantic Match.\n\nSafe to run repeatedly — already-embedded phrases are skipped.`
+    : 'Foundation strip has no pending-embed count yet. Run the Embed pass anyway?\n\nAlready-embedded phrases are skipped, so this is safe.';
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById('btnBulkEmbedPhrases');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.style.cursor = 'wait'; }
+  _toast('Embedding phrases… this can take a minute on large companies.', 'info');
+
+  try {
+    const url = `/api/admin/agent2/company/${S.companyId}/knowledge/bulk-embed-phrases`;
+    const rsp = await apiFetch(url, { method: 'POST' });
+    if (!rsp || !rsp.success) {
+      const reason = rsp?.circuitBreakerTripped
+        ? 'Circuit breaker tripped — OpenAI looks unhealthy. Try again in a few minutes.'
+        : (rsp?.error || 'Embed pass failed.');
+      throw new Error(reason);
+    }
+    const processed = Number(rsp.containersProcessed || 0);
+    const embedded  = Number(rsp.phrasesEmbedded     || 0);
+    const failed    = Number(rsp.phrasesFailed       || 0);
+    const startedWith = Number(rsp.totalPending || 0);
+    const parts = [];
+    parts.push(`${embedded.toLocaleString()} phrase${embedded !== 1 ? 's' : ''} embedded`);
+    if (failed) parts.push(`${failed.toLocaleString()} failed`);
+    parts.push(`across ${processed} container${processed !== 1 ? 's' : ''}`);
+    if (startedWith) parts.push(`(started with ${startedWith.toLocaleString()} pending)`);
+    _toast(`✅ ${parts.join(' · ')}`, failed ? 'warn' : 'success');
+
+    // Refresh the Foundation strip so the phraseVec bar reflects reality,
+    // then update badges from the new scan.
+    await _loadFoundationStrip(true);
+    _bulkEmbedUpdateBadge();
+    _bulkRescoreUpdateBadge();
+  } catch (err) {
+    console.warn('[services.html] _bulkEmbedPhrases error:', err);
+    _toast(`❌ ${err.message || 'Embed pass failed.'}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
+  }
+}
+
 function _brsShow() {
   const o = document.getElementById('bulkRescoreOverlay');
   if (o) { o.style.display = 'flex'; o.setAttribute('aria-hidden', 'false'); }
@@ -4578,6 +4666,8 @@ async function _loadFoundationStrip(forceRescan = false) {
     _renderFoundationStrip(rep);
     strip.style.display = '';
     _FDN.last = rep;
+    _bulkEmbedUpdateBadge();   // refresh "N pending" badge on Embed phrases button
+    _bulkRescoreUpdateBadge(); // and on Re-score ALL (cheap; containers may have moved)
   } catch (err) {
     console.warn('[services.html] _loadFoundationStrip error:', err);
     // Don't leave the strip blank if we had a prior successful render
