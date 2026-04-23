@@ -192,6 +192,24 @@
       position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
       color: var(--text-xs); pointer-events: none; font-size: 15px;
     }
+
+    /* KC Finder bar — search + jump-to-KC, sits just above the card grid so
+       you can locate a container without scrolling back up to the toolbar. */
+    .kc-finder-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 24px 4px;
+    }
+    .kc-finder-search { flex: 1; min-width: 200px; }
+    .kc-finder-jump {
+      min-width: 220px; max-width: 320px;
+      font-weight: 500; color: #1e293b;
+    }
+    /* Brief highlight applied by _onKcJump() so you can see which card you landed on. */
+    .kc-jump-highlight {
+      box-shadow: 0 0 0 3px rgba(14,165,233,.45) !important;
+      transition: box-shadow .25s ease;
+    }
+
     .toolbar-spacer { flex: 1; }
     .toolbar-result-count {
       font-size: 12px; font-weight: 600; color: var(--text-muted);
@@ -1884,10 +1902,7 @@
     <select class="cat-select" id="catFilter" onchange="applyCatFilter(this.value)">
       <option value="">All categories</option>
     </select>
-    <div class="search-wrap">
-      <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="searchInput" placeholder="Search containers & section content…" oninput="applySearch(this.value)">
-    </div>
+    <div class="toolbar-spacer"></div>
   </div>
   <div class="toolbar-row toolbar-row-2">
     <button class="tb-action" onclick="openPhraseFinder()" title="Find the best KC home for any caller phrase">
@@ -2287,6 +2302,22 @@
 .brs-delta-foot a { color: #4f46e5; text-decoration: none; font-weight: 500; }
 .brs-delta-foot a:hover { text-decoration: underline; }
 </style>
+
+<!-- ── KC Finder bar — search + jump-to-KC dropdown, sits right above the cards
+     so you're not scrolling to the toolbar every time you want to locate one. ── -->
+<div class="kc-finder-bar">
+  <div class="search-wrap kc-finder-search">
+    <span class="search-icon">🔍</span>
+    <input type="text" class="search-input" id="searchInput"
+      placeholder="Search containers & section content…"
+      oninput="applySearch(this.value)">
+  </div>
+  <select class="cat-select kc-finder-jump" id="kcJumpSelect"
+    onchange="_onKcJump(this.value); this.selectedIndex=0;"
+    title="Jump directly to any Knowledge Container card">
+    <option value="">⇩ Jump to KC…</option>
+  </select>
+</div>
 
 <!-- ── Container cards ────────────────────────────────────────────────────── -->
 <div class="cards-grid" id="cardsGrid">
@@ -3249,6 +3280,7 @@ async function loadContainers() {
     S.diagSimResults = null;
     _updateStats();
     _populateCatFilter();
+    _populateKcJump();
     applyFilters();
     extractAndRenderKCVariables();  // scan sections for {placeholders} and show table
     renderLivePromotions();         // scan sections for isPromotion and show promo card
@@ -3675,6 +3707,61 @@ function _populateCatFilter() {
   // Keep first "All categories" option
   sel.innerHTML = '<option value="">All categories</option>' +
     cats.map(c => `<option value="${_esc(c)}">${_esc(c)}</option>`).join('');
+}
+
+// ── KC Jump dropdown — quickly scroll to a specific container card ─────────
+// Populated from ALL containers (not S.filtered), grouped by category so the
+// admin can reach any card even if a search filter is currently active.
+// Regular vs Meta (noAnchor) containers get their own optgroup so the routing
+// boundary is visible at-a-glance.
+function _populateKcJump() {
+  const sel = document.getElementById('kcJumpSelect');
+  if (!sel) return;
+
+  const list = [...(S.containers || [])];
+  if (!list.length) {
+    sel.innerHTML = '<option value="">⇩ Jump to KC…</option>';
+    return;
+  }
+
+  const regular = list.filter(c => !c.noAnchor);
+  const meta    = list.filter(c =>  c.noAnchor);
+
+  // Group regular by category, then by title inside each category
+  const byCat = {};
+  regular.forEach(c => {
+    const cat = (c.category || '').trim() || 'Uncategorised';
+    (byCat[cat] ||= []).push(c);
+  });
+  Object.keys(byCat).forEach(cat => byCat[cat].sort((a, b) => (a.title || '').localeCompare(b.title || '')));
+  meta.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+  const mkOpt = (c) => {
+    const tag = c.kcId ? `${_esc(c.kcId)} · ` : '';
+    const off = c.isActive === false ? ' (off)' : '';
+    return `<option value="${_esc(String(c._id))}">${tag}${_esc(c.title || '(untitled)')}${off}</option>`;
+  };
+
+  const parts = ['<option value="">⇩ Jump to KC…</option>'];
+  Object.keys(byCat).sort().forEach(cat => {
+    parts.push(`<optgroup label="${_esc(cat)}">${byCat[cat].map(mkOpt).join('')}</optgroup>`);
+  });
+  if (meta.length) {
+    parts.push(`<optgroup label="⚠ Meta (noAnchor)">${meta.map(mkOpt).join('')}</optgroup>`);
+  }
+  sel.innerHTML = parts.join('');
+}
+
+function _onKcJump(containerId) {
+  if (!containerId) return;
+  const card = document.getElementById(`card-${containerId}`);
+  if (!card) {
+    _toast('Card not visible — clear search/filter and try again.', 'warn');
+    return;
+  }
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.add('kc-jump-highlight');
+  setTimeout(() => card.classList.remove('kc-jump-highlight'), 1400);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4770,6 +4857,7 @@ async function confirmDelete() {
     S.containers = S.containers.filter(c => c._id !== id);
     _updateStats();
     _populateCatFilter();
+    _populateKcJump();
     applyFilters();
     _toast('Container deactivated', 'success');
   } catch (err) {
