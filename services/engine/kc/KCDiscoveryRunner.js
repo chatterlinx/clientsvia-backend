@@ -1476,7 +1476,7 @@ class KCDiscoveryRunner {
                 sectionLabel: targetSection?.label,
               });
             } else if (uapResult.matchType === 'EXACT') {
-              // ── EXACT BYPASS (per UAP.md §6) ──────────────────────────────
+              // ── EXACT BYPASS (per UAP/v1.md §6) ───────────────────────────
               // Logic 1 confirmed anchor words AND the entire callerPhrase was
               // a substring of the input → highest possible UAP signal. Skip
               // Logic 2 embedding round-trip (~50ms saved on every EXACT match).

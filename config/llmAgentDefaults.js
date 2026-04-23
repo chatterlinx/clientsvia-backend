@@ -87,7 +87,7 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
   // of the LLM agent config. KC containers (services.html) are the single
   // source of truth for company knowledge. At runtime, kcContext is built
   // from live-ranked KC sections and injected into composeSystemPrompt's
-  // KNOWLEDGE BASE block. See UAP.md §17 (Agent Studio) for full design.
+  // KNOWLEDGE BASE block. See UAP/v1.md §17 (Agent Studio) for full design.
   //
   // If a legacy company has `knowledgeCards[]` populated in Mongo, it will
   // be IGNORED by the runtime. A one-time audit script logs any such data:
