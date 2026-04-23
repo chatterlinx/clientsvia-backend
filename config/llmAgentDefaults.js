@@ -459,10 +459,14 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcC
     // past 60% of the cap; otherwise hard-cut with ellipsis.
     const KC_PROMPT_SECTION_MAX_CHARS = 1500;
     parts.push('\n=== KNOWLEDGE BASE (top matches for this caller\'s question) ===');
+    // ARCHITECTURAL RULE (locked April 2026): container.title and section.label
+    // are ADMIN-ONLY organizational metadata. They NEVER enter the LLM prompt —
+    // the LLM sees only caller-facing body text (responses + trade). Sections
+    // are separated by an opaque numeric index so the model understands
+    // boundaries without being influenced by admin naming.
+    let _kcSourceIdx = 0;
     for (const entry of kcContext) {
       if (!entry?.section) continue;
-      const containerTitle = entry.container?.title || 'Knowledge';
-      const sectionLabel   = entry.section.label || 'Section';
       // Prefer groqContent (deep) → fallback to content (fixed verbatim)
       let body = (entry.section.groqContent && entry.section.groqContent.trim())
         || (entry.section.content && entry.section.content.trim())
@@ -484,7 +488,8 @@ function composeSystemPrompt(settings, channel = 'call', mode = 'discovery', kcC
           body = slice.replace(/\s+\S*$/, '') + '…';
         }
       }
-      parts.push(`\n--- ${containerTitle} / ${sectionLabel} ---`);
+      _kcSourceIdx++;
+      parts.push(`\n--- Source ${_kcSourceIdx} ---`);
       parts.push(body);
     }
     parts.push('\n=== END KNOWLEDGE BASE ===');
