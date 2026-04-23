@@ -1964,6 +1964,72 @@
      Populates phraseCore + phraseCoreEmbedding + anchorWords + auto-fills
      tradeTerms (when the container has a tradeVocabularyKey).
      ══════════════════════════════════════════════════════════════════════════ -->
+<!-- Bulk Embed phrases overlay — reuses brs-* CSS, embed-specific labels. -->
+<div id="bulkEmbedOverlay" class="brs-overlay" style="display:none;" aria-hidden="true">
+  <div class="brs-modal" role="dialog" aria-labelledby="embTitle">
+    <div class="brs-header" style="background: linear-gradient(135deg, #dc2626 0%, #f59e0b 100%);">
+      <span class="brs-icon">⚡</span>
+      <div class="brs-title" id="embTitle">Embed missing phrases</div>
+      <button type="button" class="brs-close" id="embCloseBtn" onclick="_embClose()" title="Close">✕</button>
+    </div>
+
+    <!-- Confirm pane -->
+    <div class="brs-pane" id="embPaneConfirm">
+      <div class="brs-confirm-body">
+        <div class="brs-warn-icon">⚡</div>
+        <div class="brs-confirm-text">
+          <div class="brs-confirm-title">Backfill phraseVec vectors</div>
+          <div class="brs-confirm-detail" id="embPlanSummary">Counting pending phrases…</div>
+          <ul class="brs-confirm-list">
+            <li>Populates <strong>sections.callerPhrases[i].embedding</strong> — the vectors GATE 2.8 Semantic Match uses</li>
+            <li>Never touches <strong>phraseCore</strong>, <strong>anchorWords</strong>, <strong>score</strong>, or <strong>tradeTerms</strong> (Re-score's territory)</li>
+            <li>Safe to re-run — already-embedded phrases are skipped</li>
+            <li>Runs one container at a time so we get live progress</li>
+            <li>Per-container errors are shown below — no more opaque "failed"</li>
+            <li>Can take <strong>several minutes</strong> on large companies — leave this tab open</li>
+          </ul>
+        </div>
+      </div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-secondary" onclick="_embClose()">Cancel</button>
+        <button type="button" class="brs-btn brs-btn-primary" id="embStartBtn" onclick="_embStart()">Start Embed</button>
+      </div>
+    </div>
+
+    <!-- Running pane -->
+    <div class="brs-pane" id="embPaneRunning" style="display:none;">
+      <div class="brs-progress-head">
+        <div class="brs-progress-label" id="embCurrentLabel">Preparing…</div>
+        <div class="brs-progress-count" id="embProgressCount">0 / 0</div>
+      </div>
+      <div class="brs-progress-bar-outer">
+        <div class="brs-progress-bar-inner" id="embProgressBar" style="width:0%; background: linear-gradient(90deg,#dc2626,#f59e0b);"></div>
+      </div>
+      <div class="brs-stats-row">
+        <div class="brs-stat"><span class="brs-stat-num" id="embStatContainers">0/0</span><span class="brs-stat-lbl">Containers</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="embStatEmbedded">0</span><span class="brs-stat-lbl">Embedded</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="embStatSkipped">0</span><span class="brs-stat-lbl">Skipped</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="embStatFailed">0</span><span class="brs-stat-lbl">Failed</span></div>
+        <div class="brs-stat"><span class="brs-stat-num" id="embStatElapsed">0s</span><span class="brs-stat-lbl">Elapsed</span></div>
+      </div>
+      <div class="brs-log" id="embLog"></div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-danger" id="embStopBtn" onclick="_embRequestStop()">Stop</button>
+      </div>
+    </div>
+
+    <!-- Done pane -->
+    <div class="brs-pane" id="embPaneDone" style="display:none;">
+      <div class="brs-done-icon" id="embDoneIcon">✅</div>
+      <div class="brs-done-title" id="embDoneTitle">Embed complete</div>
+      <div class="brs-done-detail" id="embDoneDetail"></div>
+      <div class="brs-actions">
+        <button type="button" class="brs-btn brs-btn-primary" onclick="_embCloseAndReload()">Reload containers</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="bulkRescoreOverlay" class="brs-overlay" style="display:none;" aria-hidden="true">
   <div class="brs-modal" role="dialog" aria-labelledby="brsTitle">
     <div class="brs-header">
@@ -4341,58 +4407,229 @@ function _bulkEmbedUpdateBadge() {
 }
 
 /**
- * _bulkEmbedPhrases — backfill missing callerPhrases[i].embedding across every container.
- * Uses POST /knowledge/bulk-embed-phrases. Server-side circuit breaker trips after
- * 2 consecutive all-fail containers (OpenAI outage). Dot-notation $set — never
- * touches tradeTerms / phraseCore / anchorWords / score populated by Re-score.
+ * _EMB — state for the bulk Embed phrases overlay. Parallels _BRS so the
+ * two workflows can run side-by-side without stepping on each other.
+ * Client iterates one container at a time so we get live progress, small
+ * payloads (no 2-minute silent timeouts), and per-container error surfaces.
  */
+const _EMB = {
+  running:          false,
+  stopRequested:    false,
+  plan:             [],      // [{ containerId, title, pending }]
+  totalPending:     0,
+  startedAt:        0,
+  tickHandle:       null,
+  done:             0,        // containers completed (success + skipped + failed)
+  embedded:         0,        // phrases embedded so far
+  skipped:          0,        // containers already 100%
+  failed:           0,        // phrases that failed to embed
+  containerFails:   0,        // containers with zero embedded (for circuit breaker)
+  consecutiveFails: 0,
+};
+
+/** Entry point — toolbar button. Fetches embed-plan, shows confirm pane. */
 async function _bulkEmbedPhrases() {
+  if (_EMB.running) { _embShow(); return; }
   if (!S.companyId) { _toast('No company selected.', 'error'); return; }
-  const rep = _FDN && _FDN.last;
-  const total   = Number(rep?.summary?.totalPhrases || 0);
-  const covered = Number(rep?.summary?.coverage?.phrasesEmbedded || 0);
-  const pending = Math.max(0, total - covered);
 
-  const msg = pending
-    ? `Embed ${pending.toLocaleString()} missing phrase embedding${pending !== 1 ? 's' : ''}?\n\nThis calls OpenAI embeddings for every caller phrase that is currently dark to GATE 2.8 Semantic Match.\n\nSafe to run repeatedly — already-embedded phrases are skipped.`
-    : 'Foundation strip has no pending-embed count yet. Run the Embed pass anyway?\n\nAlready-embedded phrases are skipped, so this is safe.';
-  if (!confirm(msg)) return;
-
-  const btn = document.getElementById('btnBulkEmbedPhrases');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.style.cursor = 'wait'; }
-  _toast('Embedding phrases… this can take a minute on large companies.', 'info');
+  // Fetch the plan from the server — fast, no embedding happens here.
+  const planSummary = document.getElementById('embPlanSummary');
+  if (planSummary) planSummary.textContent = 'Counting pending phrases…';
+  _embShowPane('confirm');
+  _embShow();
 
   try {
-    const url = `/api/admin/agent2/company/${S.companyId}/knowledge/bulk-embed-phrases`;
-    const rsp = await apiFetch(url, { method: 'POST' });
-    if (!rsp || !rsp.success) {
-      const reason = rsp?.circuitBreakerTripped
-        ? 'Circuit breaker tripped — OpenAI looks unhealthy. Try again in a few minutes.'
-        : (rsp?.error || 'Embed pass failed.');
-      throw new Error(reason);
-    }
-    const processed = Number(rsp.containersProcessed || 0);
-    const embedded  = Number(rsp.phrasesEmbedded     || 0);
-    const failed    = Number(rsp.phrasesFailed       || 0);
-    const startedWith = Number(rsp.totalPending || 0);
-    const parts = [];
-    parts.push(`${embedded.toLocaleString()} phrase${embedded !== 1 ? 's' : ''} embedded`);
-    if (failed) parts.push(`${failed.toLocaleString()} failed`);
-    parts.push(`across ${processed} container${processed !== 1 ? 's' : ''}`);
-    if (startedWith) parts.push(`(started with ${startedWith.toLocaleString()} pending)`);
-    _toast(`✅ ${parts.join(' · ')}`, failed ? 'warn' : 'success');
+    const rsp = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge/embed-plan`);
+    if (!rsp || !rsp.success) throw new Error(rsp?.error || 'embed-plan failed');
+    _EMB.plan         = rsp.containers || [];
+    _EMB.totalPending = Number(rsp.totalPending || 0);
 
-    // Refresh the Foundation strip so the phraseVec bar reflects reality,
-    // then update badges from the new scan.
-    await _loadFoundationStrip(true);
-    _bulkEmbedUpdateBadge();
-    _bulkRescoreUpdateBadge();
+    if (!_EMB.plan.length) {
+      if (planSummary) planSummary.innerHTML = '<strong style="color:#16a34a;">✓ All phrases already have embeddings — nothing to do.</strong>';
+      const startBtn = document.getElementById('embStartBtn');
+      if (startBtn) startBtn.disabled = true;
+      return;
+    }
+    if (planSummary) {
+      planSummary.innerHTML =
+        `You are about to embed <strong>${_EMB.totalPending.toLocaleString()}</strong> ` +
+        `phrase${_EMB.totalPending !== 1 ? 's' : ''} across <strong>${_EMB.plan.length}</strong> ` +
+        `container${_EMB.plan.length !== 1 ? 's' : ''}.`;
+    }
+    const startBtn = document.getElementById('embStartBtn');
+    if (startBtn) startBtn.disabled = false;
   } catch (err) {
-    console.warn('[services.html] _bulkEmbedPhrases error:', err);
-    _toast(`❌ ${err.message || 'Embed pass failed.'}`, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
+    console.warn('[services.html] embed-plan error:', err);
+    if (planSummary) planSummary.innerHTML = `<span style="color:#dc2626;">❌ Failed to build embed plan: ${err.message || err}</span>`;
   }
+}
+
+function _embShow() {
+  const o = document.getElementById('bulkEmbedOverlay');
+  if (o) { o.style.display = 'flex'; o.setAttribute('aria-hidden', 'false'); }
+}
+function _embClose() {
+  if (_EMB.running) {
+    if (!confirm('An embed pass is running. Close anyway? It will keep running in the background until you click Stop.')) return;
+  }
+  const o = document.getElementById('bulkEmbedOverlay');
+  if (o) { o.style.display = 'none'; o.setAttribute('aria-hidden', 'true'); }
+}
+function _embCloseAndReload() {
+  _embClose();
+  loadContainers();
+  _loadFoundationStrip(true);
+}
+function _embShowPane(which) {
+  ['Confirm', 'Running', 'Done'].forEach(k => {
+    const el = document.getElementById(`embPane${k}`);
+    if (el) el.style.display = (k.toLowerCase() === which.toLowerCase()) ? 'block' : 'none';
+  });
+}
+function _embRequestStop() {
+  _EMB.stopRequested = true;
+  _embLogLine('⏸ Stop requested — finishing current container then halting.', 'skip');
+}
+function _embLogLine(text, kind = '') {
+  const log = document.getElementById('embLog');
+  if (!log) return;
+  const div = document.createElement('div');
+  div.className = 'brs-log-line' + (kind ? ` brs-log-${kind}` : '');
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  while (log.children.length > 400) log.removeChild(log.firstChild);
+}
+function _embTick() {
+  if (!_EMB.startedAt) return;
+  const s = Math.floor((Date.now() - _EMB.startedAt) / 1000);
+  const el = document.getElementById('embStatElapsed');
+  if (el) el.textContent = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+function _embUpdateStats() {
+  const total = _EMB.plan.length;
+  const pct = total ? Math.floor((_EMB.done / total) * 100) : 0;
+  const pbar = document.getElementById('embProgressBar');
+  if (pbar) pbar.style.width = `${pct}%`;
+  const pc = document.getElementById('embProgressCount');
+  if (pc) pc.textContent = `${_EMB.done} / ${total}`;
+  const sc = document.getElementById('embStatContainers');
+  if (sc) sc.textContent = `${_EMB.done}/${total}`;
+  const se = document.getElementById('embStatEmbedded');
+  if (se) se.textContent = _EMB.embedded.toLocaleString();
+  const sk = document.getElementById('embStatSkipped');
+  if (sk) sk.textContent = _EMB.skipped;
+  const sf = document.getElementById('embStatFailed');
+  if (sf) sf.textContent = _EMB.failed.toLocaleString();
+}
+
+/** Start the embed iteration. Called from Start Embed button on confirm pane. */
+async function _embStart() {
+  if (_EMB.running) return;
+  _EMB.running          = true;
+  _EMB.stopRequested    = false;
+  _EMB.done             = 0;
+  _EMB.embedded         = 0;
+  _EMB.skipped          = 0;
+  _EMB.failed           = 0;
+  _EMB.consecutiveFails = 0;
+  _EMB.startedAt        = Date.now();
+  _EMB.tickHandle       = setInterval(_embTick, 1000);
+
+  const tbBtn = document.getElementById('btnBulkEmbedPhrases');
+  if (tbBtn) tbBtn.disabled = true;
+
+  const log = document.getElementById('embLog');
+  if (log) log.innerHTML = '';
+
+  _embShowPane('running');
+  _embUpdateStats();
+  _embLogLine(`▶ Starting embed — ${_EMB.totalPending.toLocaleString()} phrase${_EMB.totalPending !== 1 ? 's' : ''} across ${_EMB.plan.length} container${_EMB.plan.length !== 1 ? 's' : ''}`, 'hdr');
+
+  let abortedReason = null;
+
+  for (const task of _EMB.plan) {
+    if (_EMB.stopRequested) { abortedReason = 'stopped_by_user'; break; }
+
+    const curLbl = document.getElementById('embCurrentLabel');
+    if (curLbl) curLbl.textContent = `${task.title} — ${task.pending.toLocaleString()} pending`;
+    _embLogLine(`\n▸ ${task.title} (${task.pending.toLocaleString()} pending)`, 'hdr');
+
+    try {
+      const rsp = await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/${task.containerId}/embed-phrases`,
+        { method: 'POST' }
+      );
+      if (rsp && rsp.success) {
+        _EMB.consecutiveFails = 0;
+        _EMB.embedded += Number(rsp.embedded || 0);
+        if (rsp.pending === 0) {
+          _EMB.skipped++;
+          _embLogLine(`  · already fully embedded — skipped`, 'skip');
+        } else {
+          _embLogLine(`  ✓ ${rsp.embedded}/${rsp.pending} phrases embedded`, 'ok');
+          if (rsp.failed) {
+            _EMB.failed += Number(rsp.failed);
+            _embLogLine(`  ⚠ ${rsp.failed} phrases failed (partial)`, 'err');
+          }
+        }
+      } else {
+        _EMB.consecutiveFails++;
+        _EMB.failed += Number(task.pending || 0);
+        _embLogLine(`  ✗ ${rsp?.error || 'unknown error'}`, 'err');
+      }
+    } catch (err) {
+      _EMB.consecutiveFails++;
+      _EMB.failed += Number(task.pending || 0);
+      _embLogLine(`  ✗ ${err?.message || err}`, 'err');
+    }
+
+    _EMB.done++;
+    _embUpdateStats();
+
+    if (_EMB.consecutiveFails >= 3) {
+      abortedReason = 'circuit_breaker';
+      _embLogLine(`\n⛔ Aborted — 3 consecutive container failures. Check OPENAI_API_KEY / quota / outage.`, 'err');
+      break;
+    }
+    await new Promise(r => setTimeout(r, 15));
+  }
+
+  clearInterval(_EMB.tickHandle);
+  _EMB.tickHandle = null;
+  _EMB.running    = false;
+  if (tbBtn) tbBtn.disabled = false;
+
+  const elapsedSec = Math.floor((Date.now() - _EMB.startedAt) / 1000);
+  const elapsedTxt = elapsedSec < 60 ? `${elapsedSec}s` : `${Math.floor(elapsedSec/60)}m ${elapsedSec%60}s`;
+  const iconEl   = document.getElementById('embDoneIcon');
+  const titleEl  = document.getElementById('embDoneTitle');
+  const detailEl = document.getElementById('embDoneDetail');
+
+  if (abortedReason === 'circuit_breaker') {
+    if (iconEl)  iconEl.textContent  = '⛔';
+    if (titleEl) titleEl.textContent = 'Stopped — embedding service unhealthy';
+  } else if (abortedReason === 'stopped_by_user') {
+    if (iconEl)  iconEl.textContent  = '⏸';
+    if (titleEl) titleEl.textContent = 'Stopped by user';
+  } else if (_EMB.failed > 0) {
+    if (iconEl)  iconEl.textContent  = '⚠️';
+    if (titleEl) titleEl.textContent = 'Embed complete — with errors';
+  } else {
+    if (iconEl)  iconEl.textContent  = '✅';
+    if (titleEl) titleEl.textContent = 'Embed complete';
+  }
+  if (detailEl) {
+    detailEl.innerHTML =
+      `<strong>${_EMB.embedded.toLocaleString()}</strong> phrase${_EMB.embedded !== 1 ? 's' : ''} embedded · ` +
+      `<strong>${_EMB.skipped}</strong> container${_EMB.skipped !== 1 ? 's' : ''} skipped · ` +
+      `<strong>${_EMB.failed.toLocaleString()}</strong> failed · ` +
+      `elapsed <strong>${elapsedTxt}</strong>`;
+  }
+  _embShowPane('done');
+
+  // Refresh Foundation strip so phraseVec shows new reality
+  _loadFoundationStrip(true).catch(() => {});
 }
 
 function _brsShow() {

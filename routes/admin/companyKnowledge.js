@@ -2466,6 +2466,151 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/embed-plan
+// Fast (no embedding) — returns the list of containers with missing phrase vecs
+// so the client can iterate one container at a time and show live progress.
+// Lean query with +path to opt into select:false embedding, only projects the
+// fields we need to compute pending counts.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+  try {
+    const containers = await CompanyKnowledgeContainer
+      .find({ companyId })
+      .select('_id title kcId priority +sections.callerPhrases.text +sections.callerPhrases.embedding')
+      .sort({ priority: 1, createdAt: 1 })
+      .lean();
+
+    const plan = [];
+    let totalPending = 0;
+    for (const c of containers) {
+      let pending = 0;
+      let total   = 0;
+      for (const s of (c.sections || [])) {
+        for (const p of (s.callerPhrases || [])) {
+          if (!p?.text?.trim()) continue;
+          total++;
+          if (!(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
+        }
+      }
+      if (pending > 0) {
+        plan.push({
+          containerId: String(c._id),
+          title:       c.title || '(untitled)',
+          kcId:        c.kcId || null,
+          pending,
+          total,
+        });
+        totalPending += pending;
+      }
+    }
+    return res.json({ success: true, containers: plan, totalPending });
+  } catch (err) {
+    logger.error('[companyKnowledge] embed-plan error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to build embed plan' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/:id/embed-phrases
+// Single-container embed. Client iterates the embed-plan and calls this once
+// per container so we get live progress + small payloads + per-container
+// error visibility (no more opaque "Embed pass failed"). Same embedding
+// shape as the save path (SemanticMatchService.embedCallerPhrases) so vectors
+// match runtime exactly. Dot-notation $set — never touches Re-score fields.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
+  const { companyId, id } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  try {
+    const container = await CompanyKnowledgeContainer
+      .findOne(_resolveContainerQuery(id, companyId))
+      .select('+sections.callerPhrases.embedding');
+
+    if (!container) return res.status(404).json({ success: false, error: 'Container not found' });
+
+    const sections = container.sections || [];
+
+    // Count what's missing BEFORE we touch anything so the response is accurate
+    let pending = 0;
+    for (const s of sections) {
+      for (const p of (s.callerPhrases || [])) {
+        if (p?.text?.trim() && !(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
+      }
+    }
+    if (pending === 0) {
+      return res.json({
+        success:     true,
+        containerId: String(container._id),
+        title:       container.title,
+        pending:     0,
+        embedded:    0,
+        failed:      0,
+        message:     'Already fully embedded',
+      });
+    }
+
+    // Call the exact same function the save path uses so vectors match runtime.
+    // Throws on catastrophic failures (missing API key, OpenAI down). We catch
+    // and return a structured error so the client can show it in the log.
+    let embedded = 0;
+    try {
+      embedded = await SemanticMatchService.embedCallerPhrases(sections);
+    } catch (err) {
+      logger.warn('[companyKnowledge] embed-phrases: embedCallerPhrases threw', {
+        companyId, containerId: id, err: err.message,
+      });
+      return res.status(502).json({
+        success:     false,
+        containerId: String(container._id),
+        title:       container.title,
+        pending,
+        embedded:    0,
+        failed:      pending,
+        error:       `Embedding service error: ${err.message || 'unknown'}`,
+      });
+    }
+
+    // Dot-notation $set — only touches embedding paths. NEVER replaces sections
+    // array (protects concurrent Re-score work).
+    const embeddingSet = {};
+    sections.forEach((sec, sIdx) => {
+      (sec.callerPhrases || []).forEach((phrase, pIdx) => {
+        if (Array.isArray(phrase.embedding) && phrase.embedding.length > 0) {
+          embeddingSet[`sections.${sIdx}.callerPhrases.${pIdx}.embedding`] = phrase.embedding;
+        }
+      });
+    });
+
+    if (Object.keys(embeddingSet).length > 0) {
+      await CompanyKnowledgeContainer.updateOne(
+        { _id: container._id, companyId },
+        { $set: embeddingSet },
+      );
+    }
+
+    // Invalidate per-container — cheaper than the full company sweep and keeps
+    // BridgeService phraseIndex fresh for GATE 2.8.
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+
+    return res.json({
+      success:     true,
+      containerId: String(container._id),
+      title:       container.title,
+      pending,
+      embedded,
+      failed:      Math.max(0, pending - embedded),
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] embed-phrases error', { companyId, id, err: err.message, stack: err.stack });
+    return res.status(500).json({ success: false, error: err.message || 'Failed to embed phrases' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/:id/generate-keywords — Regen for existing container
 // Uses the same Groq logic as the pre-save endpoint — loads container from DB
 // then delegates to _runKeywordGeneration.
