@@ -1928,7 +1928,7 @@
     <button class="tb-action" onclick="openTodo()" title="KC gap audit — see what callers asked that KC couldn't answer">
       <span class="tb-icon">📋</span> Gaps
     </button>
-    <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore + phraseCoreEmbedding (Logic 2), anchorWords (Logic 1), auto-fills tradeTerms. Enterprise-grade operation — can take several minutes.">
+    <button class="tb-action" id="btnBulkRescoreAll" onclick="_bulkRescoreAllContainers()" title="Loop EVERY active section of EVERY container and run Re-score. Populates phraseCore + phraseCoreEmbedding (Logic 2) and anchorWords (Logic 1). Enterprise-grade operation — can take several minutes.">
       <span class="tb-icon">↻</span> Re-score ALL
     </button>
     <button class="tb-action" id="btnBulkEmbedPhrases" onclick="_bulkEmbedPhrases()" title="Backfill missing per-phrase embeddings (phraseVec). These are generated fire-and-forget on save — any OpenAI hiccup leaves phrases dark to GATE 2.8 Semantic Match. This repairs them.">
@@ -1942,7 +1942,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════════
      Foundation Coverage Strip — always-visible UAP engine health readout
      Populated by _loadFoundationStrip() from /knowledge/health. Shows 4
-     coverage bars (tradeTerms, phraseCore, embeddings, anchorWords) + outstanding
+     coverage bars (phraseCore, embeddings, anchorWords) + outstanding
      severity counts. Clickable refresh forces /knowledge/health/rescan.
      ══════════════════════════════════════════════════════════════════════════ -->
 <div id="foundationStrip" class="fdn-strip" style="display:none;" aria-label="UAP Foundation Coverage">
@@ -1985,8 +1985,7 @@
      Bulk Re-score ALL Containers — Progress Overlay
      Enterprise-grade bulk op: loops every active section in every container,
      runs the same /phrase-score call as the per-section Re-score button.
-     Populates phraseCore + phraseCoreEmbedding + anchorWords + auto-fills
-     tradeTerms (when the container has a tradeVocabularyKey).
+     Populates phraseCore + phraseCoreEmbedding + anchorWords.
      ══════════════════════════════════════════════════════════════════════════ -->
 <!-- Bulk Embed phrases overlay — reuses brs-* CSS, embed-specific labels. -->
 <div id="bulkEmbedOverlay" class="brs-overlay" style="display:none;" aria-hidden="true">
@@ -2006,7 +2005,7 @@
           <div class="brs-confirm-detail" id="embPlanSummary">Counting pending phrases…</div>
           <ul class="brs-confirm-list">
             <li>Populates <strong>sections.callerPhrases[i].embedding</strong> — the vectors GATE 2.8 Semantic Match uses</li>
-            <li>Never touches <strong>phraseCore</strong>, <strong>anchorWords</strong>, <strong>score</strong>, or <strong>tradeTerms</strong> (Re-score's territory)</li>
+            <li>Never touches <strong>phraseCore</strong>, <strong>anchorWords</strong>, or <strong>score</strong> (Re-score's territory)</li>
             <li>Safe to re-run — already-embedded phrases are skipped</li>
             <li>Runs one container at a time so we get live progress</li>
             <li>Per-container errors are shown below — no more opaque "failed"</li>
@@ -2072,7 +2071,6 @@
           <ul class="brs-confirm-list">
             <li>Populates <strong>phraseCore</strong> + <strong>phraseCoreEmbedding</strong> → lights up Logic 2 (Core Confirmation gate)</li>
             <li>Auto-fills <strong>anchorWords</strong> on every empty phrase → lights up Logic 1 (Word Gate) — admin overrides preserved</li>
-            <li>Auto-fills <strong>tradeTerms</strong> on sections whose container has a trade vocabulary (Phase 5b)</li>
             <li>Safe to re-run — all admin-set values are preserved</li>
             <li>Runs sequentially to avoid hammering the embedding service</li>
             <li>Can take <strong>several minutes</strong> on large companies — leave this tab open</li>
@@ -4034,10 +4032,8 @@ function _cardHTML(c) {
   // the per-card scoring chips so admins can see which containers are lit.
   const activeSections   = allSections.filter(s => s.isActive !== false);
   const activeCount      = activeSections.length;
-  const hasVocabKey      = Boolean(c.tradeVocabularyKey);
-  const isMeta           = Boolean(c.noAnchor);
 
-  let coreFilled = 0, embedded = 0, anchorsOk = 0, tradeOk = 0;
+  let coreFilled = 0, embedded = 0, anchorsOk = 0;
   for (const s of activeSections) {
     if (typeof s.phraseCore === 'string' && s.phraseCore.trim().length > 0) coreFilled++;
     // phraseCoreEmbedding has `select: false` in the schema — never ships to the
@@ -4054,7 +4050,6 @@ function _cardHTML(c) {
       );
       if (allHaveAnchors) anchorsOk++;
     }
-    if (Array.isArray(s.tradeTerms) && s.tradeTerms.length > 0) tradeOk++;
   }
 
   const pct = (n) => activeCount === 0 ? 0 : Math.round((n / activeCount) * 100);
@@ -4075,21 +4070,12 @@ function _cardHTML(c) {
   const coreCls    = scoringChipCls(coreFilled);
   const embedCls   = scoringChipCls(embedded);
   const anchorCls  = scoringChipCls(anchorsOk);
-  // tradeTerms only meaningful for non-meta containers with a vocab key.
-  // Meta = noAnchor (by design no tradeTerms). No vocab key = can't allowlist.
-  const tradeApplicable = !isMeta && hasVocabKey;
-  const tradeCls   = scoringChipCls(tradeOk, tradeApplicable);
 
   const scoringTip = [
     `Scoring health for ${activeCount} active section${activeCount !== 1 ? 's' : ''}:`,
     `• phraseCore filled:     ${coreFilled}/${activeCount} (${pct(coreFilled)}%)`,
     `• phraseCore embedded:   ${embedded}/${activeCount} (${pct(embedded)}%)`,
     `• anchorWords on all phrases: ${anchorsOk}/${activeCount} (${pct(anchorsOk)}%)`,
-    tradeApplicable
-      ? `• tradeTerms filled:     ${tradeOk}/${activeCount} (${pct(tradeOk)}%)`
-      : (isMeta
-          ? `• tradeTerms: N/A (meta-container, noAnchor=true)`
-          : `• tradeTerms: N/A (no tradeVocabularyKey set on container)`),
     `Run the ↻ Re-score ALL toolbar button to light any dark fields.`,
   ].join('\n');
 
@@ -4101,7 +4087,6 @@ function _cardHTML(c) {
         <span class="kc-scoring-chip ${coreCls}">${scoringDotFor(coreCls)}core ${coreFilled}/${activeCount}</span>
         <span class="kc-scoring-chip ${embedCls}">${scoringDotFor(embedCls)}embed ${embedded}/${activeCount}</span>
         <span class="kc-scoring-chip ${anchorCls}">${scoringDotFor(anchorCls)}anchors ${anchorsOk}/${activeCount}</span>
-        <span class="kc-scoring-chip ${tradeCls}">${scoringDotFor(tradeCls)}trade ${tradeApplicable ? `${tradeOk}/${activeCount}` : 'n/a'}</span>
       </div>`;
 
   // ── Analytics (may be null during initial load) ───────────────────────
@@ -4309,9 +4294,8 @@ function openTodo() {
 //
 // Loops every active section of every container and calls the existing
 // per-section /phrase-score endpoint. No backend changes required — the
-// scoring endpoint already persists phraseCore, phraseCoreEmbedding,
-// contentCore, contentEmbedding, and auto-fills tradeTerms when the
-// container has a tradeVocabularyKey (Phase 5b AUTO_TRADETERMS_FILLED).
+// scoring endpoint persists phraseCore, phraseCoreEmbedding,
+// contentCore, and contentEmbedding.
 //
 // Anchor word auto-population happens in save paths during normal operation.
 // This orchestrator only drives the phrase-score scoring flow — it does NOT
@@ -4322,7 +4306,7 @@ function openTodo() {
 //   • Per-section fire-and-forget persist happens server-side
 //   • 3-consecutive-failure circuit breaker aborts the run
 //   • User can Stop the run at any time (resumable — just click again)
-//   • Safe to re-run: existing scores / tradeTerms overrides are preserved
+//   • Safe to re-run: existing scores are preserved
 //   • Pure client-side: uses only the existing /phrase-score endpoint
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -5129,7 +5113,6 @@ function _renderFoundationStrip(rep) {
 
     const bars = [
       // Section-level (no fraction — denominator is sections, shown in hint)
-      { lbl: 'tradeTerms',  pct: Number(cov.tradeTermsFilledPct   || 0) },
       { lbl: 'phraseCore',  pct: Number(cov.phraseCoreFilledPct   || 0) },
       { lbl: 'sect.embed',  pct: Number(cov.phraseCoreEmbeddedPct || 0) },
       // Phrase-level (fraction shown alongside percentage)
@@ -5372,7 +5355,6 @@ function _brsRenderDelta(pre, post) {
     <div class="brs-delta">
       <div class="brs-delta-section">
         <div class="brs-delta-h">Foundation Coverage — before → after</div>
-        ${_fdnCoverageDeltaRow('tradeTerms (sections)',    preCov.tradeTermsFilledPct,   postCov.tradeTermsFilledPct)}
         ${_fdnCoverageDeltaRow('phraseCore (sections)',    preCov.phraseCoreFilledPct,   postCov.phraseCoreFilledPct)}
         ${_fdnCoverageDeltaRow('phraseCoreEmb (sections)', preCov.phraseCoreEmbeddedPct, postCov.phraseCoreEmbeddedPct)}
         ${_fdnCoverageDeltaRow('anchors (phrases)',        preCov.anchorWordsFilledPct,  postCov.anchorWordsFilledPct)}
@@ -6672,8 +6654,8 @@ function _pfLoadTradeViewer() {
       <span>No trade matches</span>
     </div>
     <div class="pf-cue-editor-hint">
-      Trade terms are defined in each section's tradeTerms[] array or via container-level trade vocabularies in GlobalShare.
-      Add terms like "ac repair", "service call", "maintenance plan" to sections so the CueExtractor can route to them.
+      Trade terms are defined at the container level via tradeVocabularyKey → GlobalShare trade vocabularies.
+      Set a vocabulary on a container so the CueExtractor can route to it.
     </div>`;
     return;
   }
@@ -6685,25 +6667,17 @@ function _pfLoadTradeViewer() {
   <div style="display:flex;flex-direction:column;gap:8px;">`;
 
   for (const t of trades) {
-    const isContainer = t.sectionIdx === -1;
-    const typeBadge = isContainer
-      ? '<span style="font-size:9px;background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:3px;font-weight:600;">VOCAB</span>'
-      : '<span style="font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px;font-weight:600;">SECTION</span>';
-    const clickAttr = !isContainer
-      ? `onclick="_pfLoadEditor('${t.containerId}',${t.sectionIdx},null)" style="cursor:pointer;"`
-      : '';
-    html += `<div style="padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;background:white;display:flex;align-items:center;gap:10px;" ${clickAttr}>
+    const typeBadge = '<span style="font-size:9px;background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:3px;font-weight:600;">VOCAB</span>';
+    html += `<div style="padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;background:white;display:flex;align-items:center;gap:10px;">
       ${typeBadge}
       <span style="font-weight:700;color:#1e293b;">"${_esc(t.term)}"</span>
-      <span style="color:#64748b;font-size:11px;">${isContainer ? 'Container-level vocabulary' : _esc(t.sectionLabel || 'Section ' + t.sectionIdx)}</span>
-      ${!isContainer ? '<span style="color:#6d28d9;font-size:10px;margin-left:auto;">click to edit →</span>' : ''}
+      <span style="color:#64748b;font-size:11px;">Container-level vocabulary</span>
     </div>`;
   }
 
   html += `</div>
   <div class="pf-cue-editor-hint">
     <b>VOCAB</b> = container-level trade vocabulary (defined in GlobalShare, matches broadly).
-    <b>SECTION</b> = section-level tradeTerms[] (click to edit the section and refine terms).
   </div>`;
   el.innerHTML = html;
 }
@@ -7061,7 +7035,7 @@ function _pfBuildCueStrip(cueFrame, tmResult, allCuePatterns) {
     html += `<div class="pf-cue-cell miss" onclick="_pfLoadTradeViewer()" style="cursor:pointer;" title="Click to see trade term details">
       <div class="pf-cue-label">TRADE</div>
       <div class="pf-cue-value">—</div>
-      <div class="pf-cue-suggest">add tradeTerms[] to sections</div>
+      <div class="pf-cue-suggest">set tradeVocabularyKey on container</div>
     </div>`;
   }
   html += '</div>';
@@ -7079,7 +7053,7 @@ function _pfBuildCueStrip(cueFrame, tmResult, allCuePatterns) {
   } else if (fc >= 3 && !hasTrade) {
     statusCls = 'gate-partial';
     badgeText = `${fc}/8 FIELDS`;
-    guidance = 'Cues detected but no trade term — add tradeTerms[] to target section';
+    guidance = 'Cues detected but no trade term — set tradeVocabularyKey on the container';
   } else if (fc > 0) {
     statusCls = 'gate-weak';
     badgeText = `${fc}/8 FIELDS`;
