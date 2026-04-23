@@ -598,6 +598,137 @@ function _buildDiscoveryContext(notes) {
 }
 
 // ============================================================================
+// ROUTE_DECISION — unified per-turn routing forensics (UAP/v1.md §26)
+// ============================================================================
+// Builds a single qaLog entry describing the complete routing decision for
+// a turn: which gates produced candidates, the winner + winnerBy reason,
+// the runner-up, and the score margin between them. Additive — existing
+// gate-level events (KC_CUE_EXTRACT_HIT, KC_UAP_HIT, KC_SEMANTIC_MATCH,
+// KC_KEYWORD_MATCH, KC_LLM_FALLBACK, KC_SECTION_GAP) remain untouched.
+//
+// Fires once per terminal dispatch (3 sites: SECTION_GAP → LLM, MATCH → KC,
+// NO_MATCH → LLM). Never throws — forensics must never break call path.
+// ============================================================================
+
+function _buildRouteDecision({ match, cueFrame, uapDiagnostic, semanticDiagnostic, fallbackReason }) {
+  const candidates = [];
+
+  // GATE 2.4b — CueExtractor trade match
+  if (cueFrame && Array.isArray(cueFrame.tradeMatches) && cueFrame.tradeMatches.length > 0) {
+    const t0 = cueFrame.tradeMatches[0];
+    candidates.push({
+      gate:        'KC_CUE_EXTRACT',
+      containerId: t0.containerId || null,
+      score:       (typeof t0.specificity === 'number') ? Math.round(t0.specificity * 100) : null,
+      reason:      `trade[0]="${t0.term}" specificity=${typeof t0.specificity === 'number' ? t0.specificity.toFixed(3) : 'n/a'} fanout=${t0.fanout ?? 'n/a'}`,
+    });
+  }
+
+  // GATE 2.5 — UAP Layer 1 phrase candidate (from diagnostic snapshot)
+  if (uapDiagnostic && uapDiagnostic.ran && uapDiagnostic.bestCandidate) {
+    const u = uapDiagnostic.bestCandidate;
+    const anchorNote = uapDiagnostic.anchorGate
+      ? ` anchor=${uapDiagnostic.anchorGate.pass ? 'pass' : 'fail'}`
+      : '';
+    candidates.push({
+      gate:        'UAP_L1',
+      containerId: u.containerId || null,
+      score:       (typeof u.confidence === 'number') ? Math.round(u.confidence * 100) : null,
+      reason:      `${u.matchType || 'phrase'} conf=${typeof u.confidence === 'number' ? u.confidence.toFixed(3) : 'n/a'}${anchorNote}`,
+    });
+  }
+
+  // GATE 2.8 — Semantic candidate (match OR closest-below-threshold)
+  if (semanticDiagnostic && semanticDiagnostic.ran) {
+    if (semanticDiagnostic.matchFound && typeof semanticDiagnostic.similarity === 'number') {
+      candidates.push({
+        gate:        'UAP_SEMANTIC',
+        containerId: semanticDiagnostic.containerId || null,
+        score:       Math.round(semanticDiagnostic.similarity * 100),
+        reason:      `semantic match sim=${semanticDiagnostic.similarity.toFixed(3)}`,
+      });
+    } else if (semanticDiagnostic.bestBelow && typeof semanticDiagnostic.bestBelow.similarity === 'number') {
+      const s = semanticDiagnostic.bestBelow;
+      candidates.push({
+        gate:        'UAP_SEMANTIC',
+        containerId: s.containerId || null,
+        score:       Math.round(s.similarity * 100),
+        reason:      `closest below threshold sim=${s.similarity.toFixed(3)}`,
+      });
+    }
+  }
+
+  // GATE 3 — Keyword winner (pulled from the final match object when source=KEYWORD)
+  if (match && match.matchSource === 'KEYWORD' && typeof match.score === 'number') {
+    candidates.push({
+      gate:        'KEYWORD',
+      containerId: match.container ? String(match.container._id || '') : null,
+      score:       match.score,
+      reason:      `keyword score=${match.score}`,
+    });
+  }
+
+  // Determine winner + winnerBy
+  let winner, winnerBy;
+  if (match && match.matchSource) {
+    winner   = match.matchSource;
+    winnerBy = typeof match.score === 'number' ? `score=${match.score}` : match.matchSource;
+  } else if (fallbackReason === 'kc_section_gap') {
+    winner   = 'KC_SECTION_GAP';
+    winnerBy = 'container matched, no section cleared';
+  } else {
+    winner   = 'LLM_FALLBACK';
+    winnerBy = 'no gate produced a match';
+  }
+
+  // Compute runner-up + margin from scored candidates
+  const scored = candidates
+    .filter(c => typeof c.score === 'number')
+    .slice()
+    .sort((a, b) => b.score - a.score);
+
+  const runnerUp = scored.length > 1 ? {
+    gate:        scored[1].gate,
+    containerId: scored[1].containerId,
+    score:       scored[1].score,
+  } : null;
+
+  const margin = (scored.length > 1) ? (scored[0].score - scored[1].score) : null;
+
+  return { winner, winnerBy, candidates, runnerUp, margin };
+}
+
+async function _writeRouteDecision({ companyId, callSid, turn, userInput, decision, startMs, emit }) {
+  try {
+    // Fire-and-forget qaLog write
+    _writeDiscoveryNotes(companyId, callSid, {
+      qaLog: [{
+        type:      'ROUTE_DECISION',
+        turn:      turn ?? 0,
+        question:  userInput,
+        decision: {
+          ...decision,
+          elapsedMs: Date.now() - startMs,
+        },
+        timestamp: new Date().toISOString(),
+      }],
+    }).catch(() => {});
+
+    // Mirror as an observability event for Call Review Console
+    if (typeof emit === 'function') {
+      emit('KC_ROUTE_DECISION', {
+        companyId, callSid, turn,
+        winner:       decision.winner,
+        winnerBy:     decision.winnerBy,
+        candidateCount: decision.candidates.length,
+        runnerUp:     decision.runnerUp,
+        margin:       decision.margin,
+      });
+    }
+  } catch (_e) { /* forensics only — never break call path */ }
+}
+
+// ============================================================================
 // MAIN ORCHESTRATOR
 // ============================================================================
 
@@ -2444,6 +2575,15 @@ class KCDiscoveryRunner {
         filteredTo:      _gapFilteredCount,
       });
 
+      // ── ROUTE_DECISION qaLog (UAP/v1.md §26) — SECTION_GAP dispatch ──
+      _writeRouteDecision({
+        companyId, callSid, turn, userInput, startMs, emit,
+        decision: _buildRouteDecision({
+          match, cueFrame, uapDiagnostic, semanticDiagnostic,
+          fallbackReason: 'kc_section_gap',
+        }),
+      });
+
       return await _handleLLMFallback({
         userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
         bridgeToken, redis, callerName, onSentence,
@@ -2463,6 +2603,14 @@ class KCDiscoveryRunner {
     // questions ("how much is it?") naturally re-match the anchored container.
     // No separate Redis anchor or topic-hop detection needed.
     if (match && match.container) {
+      // ── ROUTE_DECISION qaLog (UAP/v1.md §26) — KC match dispatch ────
+      _writeRouteDecision({
+        companyId, callSid, turn, userInput, startMs, emit,
+        decision: _buildRouteDecision({
+          match, cueFrame, uapDiagnostic, semanticDiagnostic,
+        }),
+      });
+
       return await _handleKCMatch({
         match, userInput, companyId, callSid, company, kbSettings, callerName,
         channel, nextState, emit, startMs, turn,
@@ -2478,6 +2626,15 @@ class KCDiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     // GATE 4 — NO KC MATCH → LLM FALLBACK (Claude, bucket=COMPLEX)
     // ══════════════════════════════════════════════════════════════════════════
+
+    // ── ROUTE_DECISION qaLog (UAP/v1.md §26) — no-match LLM dispatch ──
+    _writeRouteDecision({
+      companyId, callSid, turn, userInput, startMs, emit,
+      decision: _buildRouteDecision({
+        match: null, cueFrame, uapDiagnostic, semanticDiagnostic,
+        fallbackReason: 'no_kc_match',
+      }),
+    });
 
     return await _handleLLMFallback({
       userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
