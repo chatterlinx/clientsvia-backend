@@ -168,6 +168,11 @@
     .toolbar-row-2 {
       padding: 10px 0;
       gap: 6px;
+      /* Wrap onto a second line when the viewport can't fit all buttons —
+         keeps the action bar from spilling past the right edge on narrower
+         windows. row-gap adds vertical breathing room between wrapped rows. */
+      flex-wrap: wrap;
+      row-gap: 8px;
     }
     .filter-btn {
       padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
