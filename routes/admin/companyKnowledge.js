@@ -218,18 +218,22 @@ const SETTINGS_FIELDS = [
 
 /**
  * _extractContentKeywords — Synchronous NLP extraction of bigrams + significant
- * unigrams from section label + content. Used by Gate 3 keyword fallback.
+ * unigrams from section CONTENT only. Used by GATE 3 keyword scoring.
  *
- * @param {string} label
- * @param {string} content
+ * ARCHITECTURAL RULE (locked April 2026): contentKeywords derive from content
+ * (responses) only — never from section.label. Labels are admin-only metadata
+ * and must not influence routing. Callers that previously passed `label` are
+ * updated to pass content alone.
+ *
+ * @param {string} content   — section.content (optionally with groqContent appended)
  * @returns {string[]}
  */
-function _extractContentKeywords(label, content) {
+function _extractContentKeywords(content) {
   // Shared stop words — single source of truth (utils/stopWords.js)
   const StopWords = require('../../utils/stopWords');
   const STOP = StopWords.getStopWords();
 
-  const text = `${label || ''} ${content || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const text = `${content || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
   const words = text.split(/\s+/).filter(w => w.length >= 3 && !STOP.has(w));
   if (!words.length) return [];
 
@@ -251,15 +255,17 @@ function _extractContentKeywords(label, content) {
 /**
  * _deriveTradeTermsFromPhrases — PHRASE-ONLY tradeTerms derivation.
  *
- * ARCHITECTURAL INVARIANT (locked): UAP reads phrases. Groq reads responses.
- * This helper sources terms ONLY from phrase-side fields (label, callerPhrases.text,
- * callerPhrases.anchorWords). It NEVER reads section.content or section.groqContent.
+ * ARCHITECTURAL RULE (locked April 2026): UAP reads phrases. Groq reads
+ * responses. section.label is ADMIN-ONLY metadata — never a routing signal.
+ * This helper sources terms ONLY from callerPhrases.text and
+ * callerPhrases.anchorWords. It NEVER reads section.label, section.content,
+ * or section.groqContent.
  *
  * Intersects candidates with the container's GlobalShare tradeVocabulary allowlist
  * (passed in as allowSet) so only curated trade vocabulary survives — not noisy
  * phrase tokens. This is the same algorithm as scripts/backfill-trade-terms.js.
  *
- * @param {Object}  section   — section doc with label + callerPhrases[]
+ * @param {Object}  section   — section doc with callerPhrases[]
  * @param {Set}     allowSet  — lowercase terms from GlobalShare tradeVocabulary
  * @returns {string[]}        — max 15 terms sorted by freq desc, then length desc
  */
@@ -287,8 +293,7 @@ function _deriveTradeTermsFromPhrases(section, allowSet) {
     }
   };
 
-  // Phrase-side sources only
-  if (section.label) addFromText(section.label, 2);
+  // Phrase-side sources only — label removed (admin metadata, not a signal).
   for (const p of (section.callerPhrases || [])) {
     if (p?.text) addFromText(p.text, 1);
   }
@@ -301,11 +306,10 @@ function _deriveTradeTermsFromPhrases(section, allowSet) {
     }
   }
 
-  const labelTokens = new Set(tokens(section.label || ''));
   const out = [];
   for (const [term, freq] of candidates.entries()) {
     if (!allowSet.has(term)) continue;
-    if (freq >= 2 || labelTokens.has(term)) out.push({ term, freq });
+    if (freq >= 2) out.push({ term, freq });
   }
   out.sort((a, b) => (b.freq - a.freq) || (b.term.length - a.term.length));
   return out.slice(0, 15).map(x => x.term);
@@ -359,11 +363,13 @@ function _sanitiseBody(body) {
             });
         }
 
-        // Auto-extract contentKeywords from section label + content (+ groqContent when available)
+        // Auto-extract contentKeywords from section.content (+ groqContent when
+        // available). section.label REMOVED (April 2026) — it's admin-only
+        // metadata and must not influence GATE 3 keyword scoring.
         const keywordSource = section.groqContent
           ? `${section.content} ${section.groqContent}`
           : section.content;
-        section.contentKeywords = _extractContentKeywords(section.label, keywordSource);
+        section.contentKeywords = _extractContentKeywords(keywordSource);
 
         // Per-section exclusion keywords — trim, lowercase, deduplicate
         if (Array.isArray(s.negativeKeywords)) {
