@@ -61,6 +61,204 @@ const MAX_BACKUPS = 5;
 const MAX_PATTERNS = 10000; // sanity ceiling — current DB is ~1,927
 const BAD_ROW_REJECT_PCT = 0.10; // >10% malformed → reject whole payload
 
+// ═════════════════════════════════════════════════════════════════════════════
+// SEMANTIC LINT — 7 Universal Cue shape guards (UAP/v1.md §23.3)
+// ═════════════════════════════════════════════════════════════════════════════
+// Each of the 7 universal cues has a semantic SHAPE. `_semanticLint()` flags
+// patterns that clearly violate that shape (nouns in modifierCore, PP-phrases
+// instead of modifiers, fillers in directiveCue, urgency tokens with no time
+// marker, etc.).
+//
+// Principle: CONSERVATIVE. Reject only clear violations. When in doubt, accept.
+// False negatives (missed pollution) cost far less than false positives
+// (rejecting legitimate admin-authored patterns).
+//
+// Output: { ok: true } OR { ok: false, reason: '<code>', suggestedToken?: '...' }
+// Flagged patterns surface in `/preview` and `/apply` responses as `warnings[]`.
+// Default behavior: warnings surface but are NOT dropped from the import.
+// Opt-in strict mode: body/query `strictSemantic:true` DROPS warnings from
+// `clean[]` before writing to the dictionary.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Filler / stopword lexicons (rejected when they form the ENTIRE pattern)
+const _FILLERS = new Set([
+    'um', 'uh', 'er', 'hmm', 'like', 'just', 'well', 'yeah', 'ok', 'okay',
+    'so', 'basically', 'actually', 'literally', 'right', 'mean',
+]);
+const _STOPWORDS_ONLY = new Set([
+    'the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'for', 'with', 'by',
+    'from', 'and', 'or', 'but', 'as', 'is', 'was', 'be', 'been', 'being',
+]);
+
+// Prepositions that mark a pp-phrase (reject when first token of modifierCore)
+const _PREPOSITIONS_LEADING = new Set([
+    'in', 'on', 'at', 'from', 'under', 'behind', 'near', 'beside', 'over',
+    'through', 'inside', 'outside', 'above', 'below', 'beneath', 'between',
+    'around', 'into', 'onto', 'across',
+]);
+
+// Ability / permission markers (permissionCue)
+const _ABILITY_MARKERS = new Set([
+    'able', 'can', 'could', 'may', 'might', 'allow', 'allowed', 'permit',
+    'permitted', 'possible',
+]);
+
+// Urgency markers (urgencyCore)
+const _URGENCY_UNIGRAMS = new Set([
+    'now', 'today', 'asap', 'immediate', 'immediately', 'emergency', 'urgent',
+    'urgently', 'quick', 'quickly', 'fast', 'tonight', 'stat', 'pronto',
+    'hurry', 'rush',
+]);
+const _URGENCY_BIGRAMS_RE = /\b(right away|right now|as soon as|on the way|without delay|in a hurry|same day|first thing|as early as|soon as possible)\b/;
+
+// Information-seeking markers (infoCue)
+const _WH_WORDS = new Set([
+    'what', 'who', 'where', 'when', 'why', 'how', 'which', 'whose', 'whom',
+]);
+const _KNOWLEDGE_VERBS = new Set([
+    'know', 'tell', 'explain', 'show', 'understand', 'clarify', 'describe',
+    'confirm',
+]);
+const _INFO_BIGRAMS_RE = /\b(tell me|do you (know|have|offer|sell|do|carry)|let me know|i'?d like to know|can you tell|is there)\b/;
+
+// Action verbs (actionCore) — what the caller wants DONE (verb + object)
+const _ACTION_VERBS = new Set([
+    'pay', 'charge', 'get', 'send', 'schedule', 'fix', 'repair', 'book',
+    'replace', 'install', 'remove', 'check', 'come', 'bring', 'give', 'help',
+    'cancel', 'reschedule', 'call', 'text', 'email', 'stop', 'start', 'quote',
+    'estimate', 'diagnose', 'service', 'clean', 'refund', 'credit', 'dispatch',
+    'receive', 'accept', 'add', 'update', 'change', 'transfer', 'route',
+    'maintain', 'tune', 'inspect', 'test', 'reset', 'replace', 'order',
+]);
+
+// Directive verbs (directiveCue) — imperatives addressed at the agent
+const _DIRECTIVE_VERBS = new Set([
+    'get', 'send', 'schedule', 'fix', 'repair', 'call', 'book', 'put', 'give',
+    'check', 'come', 'bring', 'dispatch', 'set', 'help', 'cancel',
+    'reschedule', 'confirm', 'drop', 'hold', 'wait', 'transfer', 'route',
+    'page', 'add', 'remove', 'update', 'change', 'pick', 'have', 'go',
+]);
+
+// Request markers (requestCue)
+const _REQUEST_MARKERS = new Set([
+    'want', 'need', 'require', 'looking',
+]);
+const _REQUEST_BIGRAMS_RE = /\b(i want|i need|i require|i would like|i'd like|i'd love|i'll take|i'm looking|i am looking|i want to|can you|could you|would you|will you|send (me|a|somebody|someone)|get me|put me|set up|sign me up|schedule me|book (me|an|a))\b/;
+
+// Modifier markers (modifierCore) — repeat / negation / quantifier / degree
+const _REPEAT_MODIFIERS = new Set([
+    'another', 'again', 'still', 'back', 'same', 'repeat', 'recurring',
+    'keeps', 'comes', 'came', 'returning', 'persistent',
+]);
+const _NEGATION_MODIFIERS = new Set([
+    'not', 'no', 'none', 'never', 'without', 'neither', 'nothing',
+]);
+const _QUANTIFIER_MODIFIERS = new Set([
+    'more', 'less', 'any', 'some', 'few', 'many', 'enough', 'several',
+    'couple', 'lot', 'bit',
+]);
+
+/**
+ * Run the semantic predicate for a given (pattern, token) pair.
+ * Returns `{ ok: true }` on accept, or `{ ok: false, reason, suggestedToken? }`
+ * on a clear shape violation.
+ *
+ * @param {string} pattern — normalized (lowercased, trimmed) pattern text
+ * @param {string} token   — one of the 7 VALID_TOKENS
+ * @returns {{ok:true} | {ok:false, reason:string, suggestedToken?:string}}
+ */
+function _semanticLint(pattern, token) {
+    if (typeof pattern !== 'string' || !pattern) {
+        return { ok: false, reason: 'empty-pattern' };
+    }
+    const words = pattern.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return { ok: false, reason: 'empty-pattern' };
+
+    const first = words[0];
+    const hasAny = (set) => words.some(w => set.has(w));
+    const allFillerOrStop = words.every(
+        w => _FILLERS.has(w) || _STOPWORDS_ONLY.has(w)
+    );
+
+    // Universal reject (applies to all tokens): pure filler / stopword pattern
+    if (allFillerOrStop) {
+        return { ok: false, reason: 'all-filler-or-stopword' };
+    }
+    // Universal reject: single-word pattern that's a filler
+    if (words.length === 1 && _FILLERS.has(first)) {
+        return { ok: false, reason: 'single-filler-word' };
+    }
+
+    switch (token) {
+        case 'urgencyCore': {
+            if (hasAny(_URGENCY_UNIGRAMS)) return { ok: true };
+            if (_URGENCY_BIGRAMS_RE.test(pattern)) return { ok: true };
+            return { ok: false, reason: 'no-urgency-marker' };
+        }
+
+        case 'permissionCue': {
+            if (hasAny(_ABILITY_MARKERS)) return { ok: true };
+            return { ok: false, reason: 'no-ability-marker' };
+        }
+
+        case 'requestCue': {
+            if (_REQUEST_BIGRAMS_RE.test(pattern)) return { ok: true };
+            if (hasAny(_REQUEST_MARKERS)) return { ok: true };
+            return { ok: false, reason: 'no-request-marker' };
+        }
+
+        case 'infoCue': {
+            if (_WH_WORDS.has(first)) return { ok: true };
+            if (hasAny(_WH_WORDS)) return { ok: true };
+            if (hasAny(_KNOWLEDGE_VERBS)) return { ok: true };
+            if (_INFO_BIGRAMS_RE.test(pattern)) return { ok: true };
+            return { ok: false, reason: 'no-info-marker' };
+        }
+
+        case 'directiveCue': {
+            // Imperative: first word is a directive verb
+            if (_DIRECTIVE_VERBS.has(first)) return { ok: true };
+            // Contains a directive or action verb somewhere
+            if (hasAny(_DIRECTIVE_VERBS)) return { ok: true };
+            if (hasAny(_ACTION_VERBS)) return { ok: true };
+            return { ok: false, reason: 'no-directive-verb' };
+        }
+
+        case 'actionCore': {
+            if (hasAny(_ACTION_VERBS)) return { ok: true };
+            // If it has a REQUEST_MARKER but no action verb, it's probably a
+            // requestCue that got misfiled — suggest the correct bucket.
+            if (hasAny(_REQUEST_MARKERS)) {
+                return {
+                    ok: false,
+                    reason: 'no-action-verb',
+                    suggestedToken: 'requestCue',
+                };
+            }
+            return { ok: false, reason: 'no-action-verb' };
+        }
+
+        case 'modifierCore': {
+            // PP-phrase ("in the garage", "from the attic") — wrong bucket
+            if (_PREPOSITIONS_LEADING.has(first)) {
+                return { ok: false, reason: 'pp-phrase' };
+            }
+            if (hasAny(_REPEAT_MODIFIERS)) return { ok: true };
+            if (hasAny(_NEGATION_MODIFIERS)) return { ok: true };
+            if (hasAny(_QUANTIFIER_MODIFIERS)) return { ok: true };
+            // Bare single word that isn't a modifier marker → likely a noun
+            // that belongs in tradeVocabularies, not a cue pattern
+            if (words.length === 1) {
+                return { ok: false, reason: 'bare-noun-or-filler' };
+            }
+            // Multi-word compound (e.g. "something like that") — permissive
+            return { ok: true };
+        }
+    }
+    // Unknown token (should be caught by VALID_TOKENS upstream)
+    return { ok: true };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function _countByToken(patterns) {
     const counts = {};
@@ -72,7 +270,24 @@ function _countByToken(patterns) {
     return counts;
 }
 
-function _validatePatterns(raw) {
+/**
+ * Validate a raw cuePhrases payload.
+ *
+ * Two-pass:
+ *   Pass 1 — SHAPE: array check, type check, VALID_TOKENS enum, dedup. Failures
+ *            go into `skipped[]`. If >BAD_ROW_REJECT_PCT fail shape, the whole
+ *            payload is rejected hard.
+ *   Pass 2 — SEMANTIC: run `_semanticLint()` on each shape-valid row. Failures
+ *            go into `warnings[]`. By default warnings are ADVISORY (included
+ *            in clean[], surfaced in response). With `opts.strictSemantic=true`,
+ *            warnings are DROPPED from clean[] before being written to the
+ *            dictionary.
+ *
+ * @param {Array} raw — input payload
+ * @param {{strictSemantic?:boolean}} [opts]
+ * @returns {{ok:true, clean:Array, skipped:Array, warnings:Array} | {ok:false, error:string, bad?:Array}}
+ */
+function _validatePatterns(raw, opts = {}) {
     if (!Array.isArray(raw)) {
         return { ok: false, error: 'cuePhrases must be an array' };
     }
@@ -83,9 +298,10 @@ function _validatePatterns(raw) {
         return { ok: false, error: `cuePhrases cannot exceed ${MAX_PATTERNS} items (got ${raw.length})` };
     }
 
+    const strictSemantic = opts.strictSemantic === true;
     const seen = new Set();
     const bad = [];
-    const clean = [];
+    const shapeClean = []; // shape-valid rows, pre-semantic
     for (let i = 0; i < raw.length; i++) {
         const row = raw[i];
         if (!row || typeof row !== 'object') {
@@ -105,9 +321,10 @@ function _validatePatterns(raw) {
         const key = `${pattern}|${token}`;
         if (seen.has(key)) continue; // silent dedup
         seen.add(key);
-        clean.push({ pattern, token });
+        shapeClean.push({ pattern, token, _idx: i });
     }
 
+    // Hard-reject payload if too many shape failures
     if (bad.length > 0 && bad.length >= raw.length * BAD_ROW_REJECT_PCT) {
         return {
             ok: false,
@@ -115,7 +332,31 @@ function _validatePatterns(raw) {
             bad: bad.slice(0, 20),
         };
     }
-    return { ok: true, clean, skipped: bad };
+
+    // Pass 2 — semantic predicate
+    const clean = [];
+    const warnings = [];
+    for (const row of shapeClean) {
+        const lint = _semanticLint(row.pattern, row.token);
+        if (lint.ok) {
+            clean.push({ pattern: row.pattern, token: row.token });
+        } else {
+            const w = {
+                idx: row._idx,
+                pattern: row.pattern,
+                token: row.token,
+                reason: lint.reason,
+            };
+            if (lint.suggestedToken) w.suggestedToken = lint.suggestedToken;
+            warnings.push(w);
+            // Advisory default: keep in clean[] too. Strict: drop.
+            if (!strictSemantic) {
+                clean.push({ pattern: row.pattern, token: row.token });
+            }
+        }
+    }
+
+    return { ok: true, clean, skipped: bad, warnings };
 }
 
 async function _getCurrent() {
@@ -134,6 +375,20 @@ function _diff(before, after) {
     const added = after.filter(p => !beforeKeys.has(`${p.pattern}|${p.token}`));
     const removed = before.filter(p => !afterKeys.has(`${p.pattern}|${p.token}`));
     return { added, removed };
+}
+
+/**
+ * Group semantic-lint warnings by reason code for at-a-glance triage reporting.
+ * Returns `{ <reason>: count, ... }`.
+ */
+function _groupWarningsByReason(warnings) {
+    const out = {};
+    if (!Array.isArray(warnings)) return out;
+    for (const w of warnings) {
+        const r = w?.reason || 'unknown';
+        out[r] = (out[r] || 0) + 1;
+    }
+    return out;
 }
 
 // ── GET /export ─────────────────────────────────────────────────────────────
@@ -216,7 +471,8 @@ router.get('/state', async (req, res) => {
 // ── POST /preview ───────────────────────────────────────────────────────────
 router.post('/preview', async (req, res) => {
     try {
-        const v = _validatePatterns(req.body?.cuePhrases);
+        const strictSemantic = req.body?.strictSemantic === true;
+        const v = _validatePatterns(req.body?.cuePhrases, { strictSemantic });
         if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
 
         const { current } = await _getCurrent();
@@ -235,6 +491,7 @@ router.post('/preview', async (req, res) => {
 
         res.json({
             success: true,
+            strictSemantic,
             beforeTotal: current.length,
             afterTotal: v.clean.length,
             delta: v.clean.length - current.length,
@@ -244,6 +501,10 @@ router.post('/preview', async (req, res) => {
             removedCount: removed.length,
             removedSample: removed.slice(0, 30),
             skippedRows: v.skipped.length,
+            // Semantic lint surfacing (UAP/v1.md §23.3)
+            warningsCount: v.warnings.length,
+            warningsSample: v.warnings.slice(0, 40),
+            warningsByReason: _groupWarningsByReason(v.warnings),
         });
     } catch (err) {
         logger.error('[cuePhrasesImport /preview]', { error: err.message });
@@ -254,7 +515,8 @@ router.post('/preview', async (req, res) => {
 // ── POST /apply ─────────────────────────────────────────────────────────────
 router.post('/apply', async (req, res) => {
     try {
-        const v = _validatePatterns(req.body?.cuePhrases);
+        const strictSemantic = req.body?.strictSemantic === true;
+        const v = _validatePatterns(req.body?.cuePhrases, { strictSemantic });
         if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
 
         const { current } = await _getCurrent();
@@ -298,16 +560,21 @@ router.post('/apply', async (req, res) => {
             delta: v.clean.length - current.length,
             backupId: newBackup.backupId,
             reason,
+            strictSemantic,
+            warnings: v.warnings.length,
         });
 
         res.json({
             success: true,
+            strictSemantic,
             beforeTotal: current.length,
             afterTotal: v.clean.length,
             delta: v.clean.length - current.length,
             counts: _countByToken(v.clean),
             backupId: newBackup.backupId,
             cacheInvalidated: true,
+            warningsCount: v.warnings.length,
+            warningsByReason: _groupWarningsByReason(v.warnings),
         });
     } catch (err) {
         logger.error('[cuePhrasesImport /apply]', { error: err.message, stack: err.stack });
@@ -329,7 +596,8 @@ router.post('/preview/:token', async (req, res) => {
             });
         }
 
-        const v = _validatePatterns(req.body?.cuePhrases);
+        const strictSemantic = req.body?.strictSemantic === true;
+        const v = _validatePatterns(req.body?.cuePhrases, { strictSemantic });
         if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
 
         // Enforce scope: every incoming row MUST match the selected token
@@ -364,6 +632,7 @@ router.post('/preview/:token', async (req, res) => {
             success: true,
             scope: 'single-token',
             token,
+            strictSemantic,
             beforeTotal: current.length,
             afterTotal: merged.length,
             delta: merged.length - current.length,
@@ -373,6 +642,9 @@ router.post('/preview/:token', async (req, res) => {
             removedCount: removed.length,
             removedSample: removed.slice(0, 30),
             skippedRows: v.skipped.length,
+            warningsCount: v.warnings.length,
+            warningsSample: v.warnings.slice(0, 40),
+            warningsByReason: _groupWarningsByReason(v.warnings),
         });
     } catch (err) {
         logger.error('[cuePhrasesImport /preview/:token]', { error: err.message });
@@ -394,7 +666,8 @@ router.post('/apply/:token', async (req, res) => {
             });
         }
 
-        const v = _validatePatterns(req.body?.cuePhrases);
+        const strictSemantic = req.body?.strictSemantic === true;
+        const v = _validatePatterns(req.body?.cuePhrases, { strictSemantic });
         if (!v.ok) return res.status(400).json({ success: false, error: v.error, bad: v.bad });
 
         // Enforce scope
@@ -456,12 +729,15 @@ router.post('/apply/:token', async (req, res) => {
             dictAfter: merged.length,
             backupId: newBackup.backupId,
             reason,
+            strictSemantic,
+            warnings: v.warnings.length,
         });
 
         res.json({
             success: true,
             scope: 'single-token',
             token,
+            strictSemantic,
             tokenBefore,
             tokenAfter,
             tokenDelta: tokenAfter - tokenBefore,
@@ -470,6 +746,8 @@ router.post('/apply/:token', async (req, res) => {
             counts: _countByToken(merged),
             backupId: newBackup.backupId,
             cacheInvalidated: true,
+            warningsCount: v.warnings.length,
+            warningsByReason: _groupWarningsByReason(v.warnings),
         });
     } catch (err) {
         logger.error('[cuePhrasesImport /apply/:token]', { error: err.message, stack: err.stack });
