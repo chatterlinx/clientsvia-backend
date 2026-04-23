@@ -18,17 +18,16 @@
  *     Section: "No Cooling — New Symptom After Recent Technician Visit"
  *     Caller pattern: "Tony was here, changed the motor, now water is leaking"
  *
- * tradeTerms are PRE-POPULATED using the phrase-only allowlist algorithm
- * (matches scripts/backfill-trade-terms.js). GATE 2.4 Field 8 lights up
- * immediately on import.
+ * Section-level tradeTerms have been removed (April 2026). Trade routing
+ * now uses container-level tradeVocabularyKey → GlobalShare vocab. This
+ * generator still emits sections — just no tradeTerms arrays.
  *
  * IMPORT WORKFLOW:
- *   1. Run Phase 3 + Phase 4 scripts first (backfill + meta noAnchor flip)
- *   2. node scripts/gen-kc-nocooling-repeat.js
- *   3. Import kc-nocooling-repeat.json into "No Cooling" container
+ *   1. node scripts/gen-kc-nocooling-repeat.js
+ *   2. Import kc-nocooling-repeat.json into "No Cooling" container
  *      via services-item.html Import button
- *   4. Re-score All → Fix All → Generate Missing Audio
- *   5. Verify Config Health tab shows 0 new HIGH/CRITICAL issues
+ *   3. Re-score All → Fix All → Generate Missing Audio
+ *   4. Verify Config Health tab shows 0 new HIGH/CRITICAL issues
  *
  * ============================================================================
  */
@@ -99,15 +98,6 @@ const sections = [
       'pay', 'another', 'service', 'call', 'charge', 'fee', 'diagnostic',
       'trip', 'callback', 'warranty', 'visit', 'again', 'twice',
     ],
-    tradeTerms: [
-      'service call',
-      'diagnostic fee',
-      'trip charge',
-      'callback',
-      'warranty',
-      'return visit',
-      'repair',
-    ],
     negativeKeywords: [
       'installation estimate',
       'new system pricing',
@@ -144,18 +134,6 @@ const sections = [
       'week', 'now', 'leaking', 'water', 'motor', 'cooling', 'broken',
       'again', 'new', 'different', 'after',
     ],
-    tradeTerms: [
-      'technician',
-      'cooling',
-      'leaking',
-      'water',
-      'motor',
-      'compressor',
-      'capacitor',
-      'refrigerant',
-      'drain line',
-      'repair',
-    ],
     negativeKeywords: [
       'new installation quote',
       'maintenance plan sale',
@@ -188,7 +166,6 @@ const output = {
         text.toLowerCase().split(/\s+/).some(w => w.replace(/[^a-z]/g, '').includes(aw))
       ),
     })),
-    tradeTerms:       s.tradeTerms,
     negativeKeywords: s.negativeKeywords,
     useFixedResponse: true,
     isActive:         true,
@@ -215,9 +192,6 @@ for (const s of output.sections) {
     console.error(`✗ Section ${s.index} "${s.label}" only ${s.callerPhrases.length} phrases (min 10)`);
     errors++;
   }
-  if (!Array.isArray(s.tradeTerms) || s.tradeTerms.length === 0) {
-    console.warn(`⚠ Section ${s.index} "${s.label}" has no tradeTerms pre-populated`);
-  }
   const emptyPhrases = s.callerPhrases.filter(p => !p.text.trim());
   if (emptyPhrases.length) {
     console.error(`✗ Section ${s.index} "${s.label}" has ${emptyPhrases.length} empty phrases`);
@@ -237,5 +211,4 @@ fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
 console.log(`\n✅ Generated ${outPath}`);
 console.log(`   ${output.sectionCount} sections`);
 console.log(`   ${output.sections.reduce((n, s) => n + s.callerPhrases.length, 0)} total callerPhrases`);
-console.log(`   ${output.sections.reduce((n, s) => n + (s.tradeTerms?.length || 0), 0)} total tradeTerms (pre-populated)`);
 console.log(`   Import into "No Cooling" container → Re-score All → Fix All → Generate Missing Audio`);

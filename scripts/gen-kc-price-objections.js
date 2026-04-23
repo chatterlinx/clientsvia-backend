@@ -18,7 +18,7 @@
  *   - noAnchor=true — pricing pushback should NOT steal anchor from the
  *     service container that just quoted the price
  *   - HVAC negativeKeywords prevent matching on service-specific questions
- *   - tradeTerms empty — CueExtractor GATE 2.4 never fires
+ *   - no tradeVocabularyKey — CueExtractor GATE 2.4 never fires
  *   - contentKeywords are pricing/value terms only
  *
  * WORKFLOW:

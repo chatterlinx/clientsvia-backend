@@ -33,7 +33,6 @@ const SECTIONS = [
       phrase('price for AC maintenance', ['price', 'maintenance']),
       phrase('how much do you charge for a tune-up', ['charge', 'tune']),
     ],
-    tradeTerms: ['tune-up', 'ac maintenance', 'preventive maintenance', 'seasonal service'],
     negativeKeywords: ['duct', 'emergency', 'leak'],
   },
 
@@ -52,7 +51,6 @@ const SECTIONS = [
       phrase('how much is duct cleaning', ['duct', 'cleaning']),
       phrase('I need my ductwork cleaned', ['ductwork', 'cleaned']),
     ],
-    tradeTerms: ['duct cleaning', 'air ducts', 'ductwork', 'dryer vent'],
     negativeKeywords: ['tune-up', 'emergency'],
   },
 
@@ -71,7 +69,6 @@ const SECTIONS = [
       phrase('my AC is low on freon', ['freon']),
       phrase('the AC is not blowing cold anymore', ['cold']),
     ],
-    tradeTerms: ['refrigerant', 'freon', 'coolant', 'leak', 'recharge', 'r-410a'],
     negativeKeywords: ['duct', 'thermostat'],
     preQualifyQuestion: {
       enabled: true,
@@ -106,7 +103,6 @@ const SECTIONS = [
     useFixedResponse: false,
     bookingAction: 'offer_to_book',
     callerPhrases: [],  // DELIBERATELY EMPTY — tests semantic/keyword fallback
-    tradeTerms: ['thermostat', 'temperature control', 'smart thermostat', 'nest', 'ecobee', 'honeywell'],
     negativeKeywords: ['duct', 'tune-up'],
   },
 
@@ -125,7 +121,6 @@ const SECTIONS = [
       phrase('I have no air conditioning', ['no', 'air conditioning']),
       phrase('AC emergency need someone today', ['emergency', 'today']),
     ],
-    tradeTerms: ['emergency', 'ac repair', 'broken ac', 'no cooling', 'same day'],
     negativeKeywords: ['tune-up', 'duct', 'thermostat'],
     upsellChain: [
       {

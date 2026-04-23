@@ -11,7 +11,7 @@
  * ROUTING SAFETY:
  *   - noAnchor=true — warranty questions should NOT steal anchor
  *   - HVAC-specific negativeKeywords prevent matching on service questions
- *   - tradeTerms empty
+ *   - no tradeVocabularyKey
  *
  * WORKFLOW:
  *   1. Create empty container titled "Warranty & Guarantee" in services.html

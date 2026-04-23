@@ -28,7 +28,6 @@ const SECTIONS = [
       { text: 'Your Google Maps listing needs to be updated' },
       { text: 'We specialize in digital marketing for local businesses' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -46,7 +45,6 @@ const SECTIONS = [
       { text: 'We have a special offer on home warranty coverage' },
       { text: 'This is regarding your auto warranty' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -62,7 +60,6 @@ const SECTIONS = [
       { text: 'I am calling from the utility company about your energy usage' },
       { text: 'We offer free energy audits for businesses in your area' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -79,7 +76,6 @@ const SECTIONS = [
       { text: 'I am calling about your student loan forgiveness options' },
       { text: 'We can help with debt consolidation' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -99,7 +95,6 @@ const SECTIONS = [
       { text: 'This is a courtesy call to verify your information' },
       { text: 'We would like to conduct a quick customer satisfaction survey' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -117,7 +112,6 @@ const SECTIONS = [
       { text: 'This is your final notice' },
       { text: 'We have been trying to reach you about an urgent matter' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
   {
@@ -133,7 +127,6 @@ const SECTIONS = [
       { text: 'Is this a residential number' },
       { text: 'Sorry I think I have the wrong number' },
     ],
-    tradeTerms: [],
     negativeKeywords: [],
   },
 ];

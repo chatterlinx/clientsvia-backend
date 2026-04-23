@@ -12,7 +12,7 @@
  * ROUTING SAFETY:
  *   - noAnchor=true — scheduling logistics should NOT steal anchor
  *   - HVAC-specific negativeKeywords prevent matching on service questions
- *   - tradeTerms empty — CueExtractor GATE 2.4 never fires
+ *   - no tradeVocabularyKey — CueExtractor GATE 2.4 never fires
  *
  * WORKFLOW:
  *   1. Create empty container titled "Scheduling & Availability" in services.html

@@ -98,7 +98,7 @@ const DETERMINERS = new Set([
 ]);
 
 // ============================================================================
-// TRADE INDEX — build reverse lookup from KC sections' tradeTerms[]
+// TRADE INDEX — build reverse lookup from container tradeVocabularyKey
 // ============================================================================
 
 /**

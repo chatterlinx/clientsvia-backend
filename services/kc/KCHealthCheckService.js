@@ -7,7 +7,7 @@
  *
  * PURPOSE:
  *   Read-only structural audit of a company's KC configuration. Surfaces
- *   blind spots that leave UAP operating below full power — empty tradeTerms,
+ *   blind spots that leave UAP operating below full power —
  *   meta-containers with noAnchor unset, missing phrase cores, etc.
  *
  *   This is the Config Health complement to kcGaps (Runtime Health).
@@ -438,7 +438,6 @@ async function runHealthCheck(companyId) {
       severityCounts,
       coverage: {
         // Section-level (denominator = activeSections)
-        tradeTermsFilledPct:   coverage.tradeTermsFilledPct,
         phraseCoreFilledPct:   coverage.phraseCoreFilledPct,
         phraseCoreEmbeddedPct: coverage.phraseCoreEmbeddedPct,
         // Phrase-level (denominator = totalPhrases) — raw counts + percentages

@@ -11,7 +11,7 @@
  *
  * ROUTING SAFETY:
  *   - Every section has HVAC negativeKeywords so recovery never fires on HVAC content
- *   - tradeTerms is EMPTY — CueExtractor GATE 2.4 never triggers
+ *   - no tradeVocabularyKey — CueExtractor GATE 2.4 never triggers
  *   - Container must be set to noAnchor=true after import (never poisons anchor)
  *   - contentKeywords are emotional/meta terms only
  *
@@ -1413,5 +1413,5 @@ console.log('  3. Enable "No anchor (meta-container)" toggle');
 console.log('  4. Re-score All \u2192 Fix All \u2192 Generate Missing Audio');
 console.log('\nROUTING SAFETY:');
 console.log('  - noAnchor=true prevents anchor poisoning');
-console.log('  - tradeTerms=[] prevents CueExtractor (GATE 2.4) from firing');
+console.log('  - no tradeVocabularyKey prevents CueExtractor (GATE 2.4) from firing');
 console.log('  - HVAC negativeKeywords on every section prevent cross-contamination');

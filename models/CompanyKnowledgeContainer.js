@@ -223,16 +223,6 @@ const sectionSchema = new mongoose.Schema(
       default: [],
     },
 
-    // ── Trade Terms — admin-curated trade-specific vocabulary ────────────
-    // Per-section nouns/phrases callers use when asking about this topic.
-    // Used by CueExtractor for tradeCore matching at runtime.
-    // Examples: "ac maintenance", "duct cleaning", "service call", "thermostat"
-    tradeTerms: {
-      type:    [String],
-      default: [],
-      comment: 'Admin-curated trade-specific terms for this section. Used by CueExtractor for tradeCore routing.'
-    },
-
     // ── Content embedding — for semantic matching ────────────────────────
     // 512-dim vector of section content, used by SemanticMatchService.
     // Auto-generated on save. select: false keeps it out of regular queries.
@@ -559,7 +549,7 @@ const companyKnowledgeContainerSchema = new mongoose.Schema(
     // ── Trade Vocabulary Link — reference to GlobalShare trade vocabulary ──
     // Links this container to a shared industry vocabulary (e.g. "HVAC", "PLUMBING").
     // CueExtractor reads terms from the global library at runtime — no copying.
-    // Null = no link, falls back to per-section tradeTerms[] only.
+    // Null = no trade vocabulary link (container won't participate in tradeCore routing).
     tradeVocabularyKey: {
       type:    String,
       default: null,

@@ -178,7 +178,6 @@ Each company has multiple KC containers. Each container has multiple sections.
 - `isActive` (boolean) — per-section on/off
 - `contentKeywords` (string[]) — auto-extracted bigrams for GATE 3 keyword scoring
 - `negativeKeywords` (string[]) — exclusion keywords, skip section if found in utterance
-- `tradeTerms` (string[]) — admin-curated trade terms for CueExtractor field 8 section-level routing
 - `useFixedResponse` (boolean) — per-section fixed response toggle
 - `fixedResponseText` / `audioUrl` — pre-cached fixed response + audio
 - `contentEmbedding` ([Number], 512-dim) — for GATE 2.8 semantic match
@@ -230,9 +229,10 @@ Extracts the structural skeleton from caller "word salad." The 7 universal field
 
 **Fields 1-7** are the same for ALL companies (English language patterns). Loaded from `PhraseReducerService.getCuePatterns()`. Patterns grouped by token, sorted longest-first within each group. First (longest) substring match per field wins.
 
-**Field 8** is the only per-company variable. Built from two sources into a reverse index `{ normalizedTerm: [{ term, containerId, sectionIdx, sectionLabel }] }`:
-- **Source 1 — Global vocabularies:** Container's `tradeVocabularyKey` links to GlobalShare `tradeVocabularies`. Terms indexed at container level (`sectionIdx = -1`, no section targeting).
-- **Source 2 — Per-section tradeTerms[]:** Custom overrides on individual sections. Terms indexed with specific `sectionIdx` for direct section routing.
+**Field 8** is the only per-company variable. Built from one source into a reverse index `{ normalizedTerm: [{ term, containerId, sectionIdx, sectionLabel }] }`:
+- **Global vocabularies (only):** Container's `tradeVocabularyKey` links to GlobalShare `tradeVocabularies`. Terms indexed at container level (`sectionIdx = -1` always; per-phrase anchorWords + phraseCore handle section-level precision downstream).
+
+> **Historical note (April 2026):** A prior iteration indexed per-section `section.tradeTerms[]` as a second source with specific `sectionIdx` values. That path has been fully removed (commits ed7d653cf → 144a775b7 → 7e6c59816 → this commit) after the per-phrase anchorWords + phraseCore system made it redundant.
 
 ### Trade Index Caching (Two-Tier)
 
@@ -462,8 +462,7 @@ If caller utterance starts with rejection pattern (`_REJECTION_RE`: no/nope/that
 #### Branch A — GATE 2.4b: Trade match present
 **Condition:** `fieldCount >= 3 AND tradeMatches.length > 0`
 - First trade match wins (sorted longest-first).
-- `sectionIdx === -1` (container-level vocab) → no section targeting, Groq reads all sections. Anchor check skipped.
-- `sectionIdx >= 0` (section-level tradeTerms) → targets specific section. Anchor confirmation runs: >=90% of any phrase's anchorWords must be present (stem-matched).
+- Trade matches are now always container-level (`sectionIdx === -1`) — Groq reads all sections. Anchor check skipped at this gate; per-phrase anchorWords gate section selection downstream (GATE 2.5).
 - **matchSource:** `'CUE_EXTRACT'`
 - **Score:** `Math.round((fieldCount / 8) * 100)`
 
