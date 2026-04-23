@@ -1438,7 +1438,6 @@ function _renderHealthCoverage() {
           ${s.totalPhrases || 0} phrases
         </span>
       </div>
-      ${_covBar('tradeTerms filled',        cv.tradeTermsFilledPct  || 0)}
       ${_covBar('phraseCore filled',        cv.phraseCoreFilledPct  || 0)}
       ${_covBar('phraseCore embedded',      cv.phraseCoreEmbeddedPct|| 0)}
       ${_covBar('anchorWords on phrases',   cv.anchorWordsFilledPct || 0)}

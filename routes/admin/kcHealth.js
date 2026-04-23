@@ -7,8 +7,8 @@
  *
  * Structural audit of a company's KC configuration. Complement to kcGaps
  * (runtime call failures). This endpoint reports on misconfigured containers
- * and sections — empty tradeTerms, meta-containers with noAnchor unset,
- * missing phrase cores, etc.
+ * and sections — meta-containers with noAnchor unset, missing phrase cores,
+ * etc.
  *
  * MOUNT: /api/admin/agent2/company
  *

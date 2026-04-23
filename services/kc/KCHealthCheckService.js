@@ -149,21 +149,12 @@ function _checkContainer(container) {
 
 function _checkSection(section, container) {
   const checks   = [];
-  const isMeta   = _isMetaContainer(container.title);
-  const hasVKey  = !!container.tradeVocabularyKey;
   const active   = section.isActive !== false;
   const label    = section.label || '(unlabelled)';
   const phrases  = section.callerPhrases || [];
 
-  // TRADE_TERMS_EMPTY — HIGH (only relevant for trade containers that CAN fill)
-  if (active && !isMeta && hasVKey && (section.tradeTerms || []).length === 0) {
-    checks.push({
-      id:           'TRADE_TERMS_EMPTY',
-      severity:     'HIGH',
-      message:      `Section "${label}" has no tradeTerms. GATE 2.4 Field 8 dark for this section.`,
-      sectionLabel: label,
-    });
-  }
+  // Section-level tradeTerms rule removed (April 2026) — trade routing is
+  // now container-level via tradeVocabularyKey → GlobalShare vocab.
 
   // PHRASE_CORE_MISSING — MED
   if (active && phrases.length > 0 && !section.phraseCore) {
@@ -240,7 +231,6 @@ function _pct(num, den) {
 function _computeCoverage(containers) {
   let totalSections         = 0;
   let activeSections        = 0;
-  let sectionsWithTrade     = 0;
   let sectionsWithCore      = 0;
   let sectionsWithEmb       = 0;
   let totalPhrases          = 0;
@@ -259,7 +249,6 @@ function _computeCoverage(containers) {
     for (const s of (c.sections || [])) {
       totalSections++;
       if (s.isActive !== false) activeSections++;
-      if ((s.tradeTerms || []).length > 0)    sectionsWithTrade++;
       if (s.phraseCore)                       sectionsWithCore++;
       if (s.phraseCoreScoredAt)               sectionsWithEmb++; // proxy — real embedding is select:false
       for (const p of (s.callerPhrases || [])) {
@@ -276,7 +265,6 @@ function _computeCoverage(containers) {
     activeSections,
     totalPhrases,
     // ── Section-level coverage (denominator = activeSections) ──────────
-    tradeTermsFilledPct:     _pct(sectionsWithTrade,  activeSections),
     phraseCoreFilledPct:     _pct(sectionsWithCore,   activeSections),
     phraseCoreEmbeddedPct:   _pct(sectionsWithEmb,    activeSections),
     // ── Phrase-level coverage (denominator = totalPhrases) ─────────────
@@ -373,7 +361,6 @@ async function runHealthCheck(companyId) {
         category:           1,
         'sections.label':             1,
         'sections.isActive':          1,
-        'sections.tradeTerms':        1,
         'sections.negativeKeywords':  1,
         'sections.contentKeywords':   1,
         'sections.content':           1,  // DEFLECTION_CONTENT scans trailing phrase

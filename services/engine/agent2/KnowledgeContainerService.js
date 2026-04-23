@@ -861,7 +861,8 @@ function findContainer(containers, input, context = null) {
     // locked architectural rule: container.title + section.label are
     // ADMIN-ONLY organizational metadata. Routing matches ONLY against
     // callerPhrases, anchorWords, contentKeywords (derived from content),
-    // and tradeTerms. If a container is losing matches it should rely on,
+    // and container-level tradeVocabularyKey. If a container is losing
+    // matches it should rely on,
     // the fix is to author better callerPhrases / contentKeywords — not
     // to paper over it with title scoring.
 

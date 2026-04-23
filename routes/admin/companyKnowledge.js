@@ -253,69 +253,6 @@ function _extractContentKeywords(content) {
 }
 
 /**
- * _deriveTradeTermsFromPhrases — PHRASE-ONLY tradeTerms derivation.
- *
- * ARCHITECTURAL RULE (locked April 2026): UAP reads phrases. Groq reads
- * responses. section.label is ADMIN-ONLY metadata — never a routing signal.
- * This helper sources terms ONLY from callerPhrases.text and
- * callerPhrases.anchorWords. It NEVER reads section.label, section.content,
- * or section.groqContent.
- *
- * Intersects candidates with the container's GlobalShare tradeVocabulary allowlist
- * (passed in as allowSet) so only curated trade vocabulary survives — not noisy
- * phrase tokens. This is the same algorithm as scripts/backfill-trade-terms.js.
- *
- * @param {Object}  section   — section doc with callerPhrases[]
- * @param {Set}     allowSet  — lowercase terms from GlobalShare tradeVocabulary
- * @returns {string[]}        — max 15 terms sorted by freq desc, then length desc
- */
-function _deriveTradeTermsFromPhrases(section, allowSet) {
-  if (!allowSet || allowSet.size === 0) return [];
-
-  const STOP = require('../../utils/stopWords').getStopWords();
-  const normalize = s => `${s || ''}`.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const tokens    = s => normalize(s).split(' ').filter(w => w.length >= 4 && !STOP.has(w));
-
-  const candidates = new Map(); // term → freq
-  const addFromText = (text, weight = 1) => {
-    const toks = tokens(text);
-    const seen = new Set();
-    for (const w of toks) {
-      if (seen.has(w)) continue;
-      seen.add(w);
-      candidates.set(w, (candidates.get(w) || 0) + weight);
-    }
-    for (let i = 0; i < toks.length - 1; i++) {
-      const bg = `${toks[i]} ${toks[i + 1]}`;
-      if (seen.has(bg)) continue;
-      seen.add(bg);
-      candidates.set(bg, (candidates.get(bg) || 0) + weight);
-    }
-  };
-
-  // Phrase-side sources only — label removed (admin metadata, not a signal).
-  for (const p of (section.callerPhrases || [])) {
-    if (p?.text) addFromText(p.text, 1);
-  }
-  for (const p of (section.callerPhrases || [])) {
-    for (const aw of (p?.anchorWords || [])) {
-      const n = normalize(aw);
-      if (n.length >= 4 && !STOP.has(n)) {
-        candidates.set(n, (candidates.get(n) || 0) + 1);
-      }
-    }
-  }
-
-  const out = [];
-  for (const [term, freq] of candidates.entries()) {
-    if (!allowSet.has(term)) continue;
-    if (freq >= 2) out.push({ term, freq });
-  }
-  out.sort((a, b) => (b.freq - a.freq) || (b.term.length - a.term.length));
-  return out.slice(0, 15).map(x => x.term);
-}
-
-/**
  * _sanitiseBody — Strip fields not in ALLOWED_FIELDS and clean values.
  * Sections are validated minimally. contentKeywords auto-extracted on save.
  *
@@ -378,17 +315,9 @@ function _sanitiseBody(body) {
           )];
         }
 
-        // Per-section tradeTerms — GATE 2.4 Field 8 (tradeCore) allowlist.
-        // PHRASE-ONLY derivation invariant — admin-curated terms only.
-        // Runtime CueExtractor reads this directly; empty means Field 8 dark.
-        // Strings: trim + lowercase + dedupe, cap at 15 (matches backfill script).
-        if (Array.isArray(s.tradeTerms)) {
-          section.tradeTerms = [...new Set(
-            s.tradeTerms
-              .map(t => `${t}`.toLowerCase().trim())
-              .filter(t => t && t.length >= 3 && t.length <= 60)
-          )].slice(0, 15);
-        }
+        // Section-level tradeTerms removed (April 2026) — phrases+anchors
+        // handle section routing; container.tradeVocabularyKey handles trade
+        // coverage. CueExtractor Field 8 now indexes by container only.
 
         // Per-section booking action override
         const BA_VALID = ['offer_to_book', 'advisor_callback', 'none'];
@@ -672,7 +601,7 @@ router.get('/:companyId/knowledge/active', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/routing-landscape — Lightweight routing-only view
 // Returns ONLY the fields needed for phrase conflict analysis and negativeKeyword
-// derivation: callerPhrases, contentKeywords, negativeKeywords, tradeTerms.
+// derivation: callerPhrases, contentKeywords, negativeKeywords.
 // No embeddings, no content, no groqContent, no audio — minimal payload.
 // ⚠️ MUST be registered BEFORE /:id
 // ─────────────────────────────────────────────────────────────────────────────
@@ -682,7 +611,7 @@ router.get('/:companyId/knowledge/routing-landscape', async (req, res) => {
 
   try {
     const containers = await CompanyKnowledgeContainer.find({ companyId })
-      .select('title kcId isActive noAnchor sections.label sections.isActive sections.callerPhrases.text sections.callerPhrases.anchorWords sections.contentKeywords sections.negativeKeywords sections.tradeTerms')
+      .select('title kcId isActive noAnchor sections.label sections.isActive sections.callerPhrases.text sections.callerPhrases.anchorWords sections.contentKeywords sections.negativeKeywords')
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
@@ -3085,20 +3014,15 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
 
   try {
     // ── Load target section (callerPhrases.text for fresh T1 embedding) ──
-    // Also load tradeVocabularyKey + tradeTerms + anchorWords to support the
-    // AUTO_TRADETERMS_FILLED fallback (Phase 5b) — when tradeTerms is empty
-    // and the container has a vocab key, derive phrase-only after scoring.
     const targetRaw = await CompanyKnowledgeContainer.collection.findOne(
       _resolveRawQuery(containerId, companyId),
       { projection: {
-        tradeVocabularyKey: 1,
         'sections.contentEmbedding': 1,
         'sections.callerPhrases.text': 1,
         'sections.callerPhrases.anchorWords': 1,
         'sections.isActive': 1,
         'sections.label': 1,
         'sections.content': 1,
-        'sections.tradeTerms': 1,
       } }
     );
     if (!targetRaw) return res.status(404).json({ success: false, error: 'Container not found' });
@@ -3420,48 +3344,8 @@ router.post('/:companyId/knowledge/phrase-score', async (req, res) => {
           });
         }
 
-        // ── AUTO_TRADETERMS_FILLED (Phase 5b safety net) ─────────────────
-        // If the section's tradeTerms is empty AND the container has a
-        // tradeVocabularyKey, derive phrase-only terms and auto-fill.
-        // PHRASE-ONLY invariant: reads label + callerPhrases + anchorWords
-        // ONLY — never content/groqContent. Intersected with GlobalShare
-        // tradeVocabulary allowlist. Prevents GATE 2.4 Field 8 from going
-        // dark after Re-score on containers with empty tradeTerms.
-        const currentTerms = Array.isArray(targetSection.tradeTerms) ? targetSection.tradeTerms : [];
-        if (currentTerms.length === 0 && targetRaw.tradeVocabularyKey) {
-          try {
-            const AdminSettingsModel = require('../../models/AdminSettings');
-            const adminDoc = await AdminSettingsModel.findOne({}, {
-              'globalHub.phraseIntelligence.tradeVocabularies': 1,
-            }).lean();
-            const vocabs = adminDoc?.globalHub?.phraseIntelligence?.tradeVocabularies || [];
-            const vocab  = vocabs.find(v => v?.tradeKey === targetRaw.tradeVocabularyKey);
-            if (vocab?.terms?.length) {
-              const allowSet = new Set(
-                vocab.terms
-                  .map(t => `${t || ''}`.toLowerCase().trim())
-                  .filter(Boolean)
-              );
-              // targetSection has: label + callerPhrases[{text, anchorWords}]
-              const derived = _deriveTradeTermsFromPhrases(targetSection, allowSet);
-              if (derived.length) {
-                setOps[`sections.${sectionIndex}.tradeTerms`] = derived;
-                logger.info('[companyKnowledge] AUTO_TRADETERMS_FILLED', {
-                  companyId,
-                  containerId,
-                  sectionIndex,
-                  tradeVocabularyKey: targetRaw.tradeVocabularyKey,
-                  termCount:          derived.length,
-                  sampleTerms:        derived.slice(0, 5),
-                });
-              }
-            }
-          } catch (deriveErr) {
-            logger.warn('[companyKnowledge] AUTO_TRADETERMS_FILLED derivation failed (non-fatal)', {
-              companyId, containerId, sectionIndex, error: deriveErr.message,
-            });
-          }
-        }
+        // Section-level tradeTerms auto-derivation removed (April 2026) —
+        // section-level trade routing retired in favour of phrases+anchors.
 
         if (Object.keys(setOps).length) {
           await CompanyKnowledgeContainer.collection.updateOne(
@@ -3764,12 +3648,10 @@ router.post('/:companyId/knowledge/suggest-negatives', async (req, res) => {
 
     const _fmtSection = (s) => {
       const phrases = (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text).join(', ');
-      const terms   = (s.tradeTerms || []).join(', ');
-      return `[${s.label || 'Untitled'}] Content: ${(s.content || '').substring(0, 300)}${phrases ? ` | Phrases: ${phrases}` : ''}${terms ? ` | Trade terms: ${terms}` : ''}`;
+      return `[${s.label || 'Untitled'}] Content: ${(s.content || '').substring(0, 300)}${phrases ? ` | Phrases: ${phrases}` : ''}`;
     };
 
     const targetPhrases = (target.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text).join(', ');
-    const targetTerms   = (target.tradeTerms || []).join(', ');
 
     const systemPrompt = `You are a routing disambiguation expert for an AI phone receptionist system.
 
@@ -3802,7 +3684,6 @@ Return ONLY a JSON object:
 Label: ${target.label || 'Untitled'}
 Content: ${(target.content || '').substring(0, 400)}
 ${targetPhrases ? `Caller phrases: ${targetPhrases}` : ''}
-${targetTerms ? `Trade terms: ${targetTerms}` : ''}
 ${existingNegs.length ? `Already excluded: ${existingNegs.join(', ')}` : ''}
 
 SIBLING SECTIONS:
