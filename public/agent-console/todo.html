@@ -648,6 +648,10 @@
       <span>Config Health</span>
       <span class="tab-count" id="tabCountHealth">&middot;</span>
     </button>
+    <button class="tab-btn"        data-tab="cuemisses" onclick="switchTab('cuemisses')">
+      <span>Cue Misses</span>
+      <span class="tab-count" id="tabCountCueMisses">&middot;</span>
+    </button>
   </div>
 
   <!-- Runtime Gaps panel (existing) -->
@@ -672,6 +676,16 @@
       <div id="healthCoverage"></div>
       <div id="healthPlatform"></div>
       <div id="healthContainers"></div>
+    </div>
+  </div>
+
+  <!-- Cue Misses panel (UAP/v1.md §28) -->
+  <div class="tab-panel" id="panelCueMisses">
+    <div id="cueMissesLoading" class="state-loading">Loading cue miss data...</div>
+    <div id="cueMissesContent" style="display:none;">
+      <div id="cueMissStatCards"></div>
+      <div id="cueMissIntro" class="uap-pointer-banner"></div>
+      <div id="cueMissTable"></div>
     </div>
   </div>
 </div>

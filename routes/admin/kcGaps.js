@@ -414,4 +414,119 @@ router.get('/:companyId/knowledge/gaps', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/knowledge/cue-misses  —  UAP/v1.md §28
+// ══════════════════════════════════════════════════════════════════════════════
+// Surfaces KC_CUE_MISS qaLog entries so the admin can see which caller
+// utterances the CueExtractor couldn't parse into a routed KC match. The
+// five reason codes (NO_FIELDS_EXTRACTED, LOW_FIELD_COUNT,
+// MULTI_TRADE_NO_VOCAB_HIT, SINGLE_TRADE_SCAN_MISS, plus any future
+// additions) group the misses by root cause, driving dictionary growth
+// and trade-vocabulary expansion.
+//
+// Query params:
+//   range    — 24h | 7d | 30d (default: 7d)
+//   reason   — filter by reason code (default: all)
+//   limit    — cap entries (default: 200, max: 500)
+//
+// Returns: { success, misses, summary: { total, byReason, topUtterances } }
+// ══════════════════════════════════════════════════════════════════════════════
+
+router.get('/:companyId/knowledge/cue-misses', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const range    = RANGE_MS[req.query.range] ? req.query.range : '7d';
+  const cutoff   = new Date(Date.now() - RANGE_MS[range]).toISOString();
+  const reason   = req.query.reason && typeof req.query.reason === 'string' ? req.query.reason : null;
+  const limitRaw = parseInt(req.query.limit, 10);
+  const limit    = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
+
+  try {
+    const matchStage = {
+      'discoveryNotes.qaLog.type':      'KC_CUE_MISS',
+      'discoveryNotes.qaLog.timestamp': { $gte: cutoff },
+    };
+    if (reason) matchStage['discoveryNotes.qaLog.reason'] = reason;
+
+    const pipeline = [
+      { $match: { companyId: new mongoose.Types.ObjectId(companyId) } },
+      { $unwind: { path: '$discoveryNotes', preserveNullAndEmptyArrays: false } },
+      { $unwind: { path: '$discoveryNotes.qaLog', preserveNullAndEmptyArrays: false } },
+      { $match: matchStage },
+      {
+        $project: {
+          _id:              0,
+          callSid:          '$discoveryNotes.callSid',
+          callReason:       '$discoveryNotes.callReason',
+          turn:             '$discoveryNotes.qaLog.turn',
+          reason:           '$discoveryNotes.qaLog.reason',
+          fieldCount:       '$discoveryNotes.qaLog.fieldCount',
+          utterance:        '$discoveryNotes.qaLog.utterance',
+          requestCue:       '$discoveryNotes.qaLog.requestCue',
+          permissionCue:    '$discoveryNotes.qaLog.permissionCue',
+          infoCue:          '$discoveryNotes.qaLog.infoCue',
+          directiveCue:     '$discoveryNotes.qaLog.directiveCue',
+          actionCore:       '$discoveryNotes.qaLog.actionCore',
+          urgencyCore:      '$discoveryNotes.qaLog.urgencyCore',
+          modifierCore:     '$discoveryNotes.qaLog.modifierCore',
+          topicWords:       '$discoveryNotes.qaLog.topicWords',
+          companyTradeKeys: '$discoveryNotes.qaLog.companyTradeKeys',
+          isSingleTrade:    '$discoveryNotes.qaLog.isSingleTrade',
+          timestamp:        '$discoveryNotes.qaLog.timestamp',
+        },
+      },
+      {
+        $facet: {
+          entries: [
+            { $sort: { timestamp: -1 } },
+            { $limit: limit },
+          ],
+          byReason: [
+            { $group: { _id: '$reason', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+          ],
+          totalCount: [
+            { $count: 'total' },
+          ],
+          topUtterances: [
+            { $match: { utterance: { $ne: null } } },
+            { $group: {
+              _id:    '$utterance',
+              reason: { $first: '$reason' },
+              count:  { $sum: 1 },
+            } },
+            { $sort: { count: -1 } },
+            { $limit: 20 },
+          ],
+        },
+      },
+    ];
+
+    const [result] = await Customer.aggregate(pipeline).allowDiskUse(true);
+    const entries       = (result && result.entries)       || [];
+    const byReasonArr   = (result && result.byReason)      || [];
+    const total         = (result && result.totalCount && result.totalCount[0] && result.totalCount[0].total) || 0;
+    const topUtterances = (result && result.topUtterances) || [];
+
+    const byReason = {};
+    for (const r of byReasonArr) byReason[r._id || 'UNKNOWN'] = r.count;
+
+    return res.json({
+      success: true,
+      misses:  entries,
+      summary: {
+        total,
+        byReason,
+        range,
+        reason:         reason || null,
+        topUtterances,
+      },
+    });
+  } catch (err) {
+    logger.error('[kcGaps] CUE_MISS aggregation error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;

@@ -204,6 +204,7 @@ const PATH = {
   KC_UPSELL_PENDING:  'KC_UPSELL_PENDING',   // Upsell offer sent, waiting for YES / NO
   // ── CueExtractor paths ─────────────────────────────────────────────────────
   KC_CUE_EXTRACT_HIT: 'KC_CUE_EXTRACT_HIT',  // CueExtractor match → routed to KC section
+  KC_CUE_MISS:        'KC_CUE_MISS',         // CueExtractor did NOT yield routing — see reason field (§28)
 };
 
 // ============================================================================
@@ -726,6 +727,60 @@ async function _writeRouteDecision({ companyId, callSid, turn, userInput, decisi
       });
     }
   } catch (_e) { /* forensics only — never break call path */ }
+}
+
+// ============================================================================
+// ============================================================================
+// KC_CUE_MISS — Dictionary-gap telemetry (UAP/v1.md §28)
+// ============================================================================
+// Fired whenever the CueExtractor block runs but does NOT produce a routed
+// KC match. Five canonical reasons:
+//
+//   NO_FIELDS_EXTRACTED        — fieldCount === 0 (utterance yielded zero
+//                                cue fields — strongest dictionary-gap signal)
+//   LOW_FIELD_COUNT            — 0 < fieldCount < CUE_MIN_FIELD_COUNT (the
+//                                8-cue extractor got partial signal but not
+//                                enough to trust trade routing)
+//   MULTI_TRADE_NO_VOCAB_HIT   — fieldCount >= MIN, tradeMatches empty,
+//                                multi-trade company (no tradeVocabulary term
+//                                hit — dictionary gap OR ambiguous intent)
+//   SINGLE_TRADE_SCAN_MISS     — fieldCount >= MIN, tradeMatches empty,
+//                                single-trade company, GATE 2.4c cue-profile
+//                                scan also missed (callerPhrases or cue cover
+//                                gap on this topic)
+//
+// Forensics-only — never blocks routing. Downstream gates (UAP, semantic,
+// keyword) still get their chance. qaLog write is fire-and-forget.
+// ============================================================================
+
+function _emitCueMiss({ emit, companyId, callSid, turn, userInput, cueFrame, reason }) {
+  try {
+    const payload = {
+      companyId,
+      callSid,
+      turn:         turn ?? 0,
+      reason,
+      fieldCount:   cueFrame?.fieldCount ?? 0,
+      utterance:    typeof userInput === 'string' ? userInput.slice(0, 200) : null,
+      requestCue:   cueFrame?.requestCue    || null,
+      permissionCue:cueFrame?.permissionCue || null,
+      infoCue:      cueFrame?.infoCue       || null,
+      directiveCue: cueFrame?.directiveCue  || null,
+      actionCore:   cueFrame?.actionCore    || null,
+      urgencyCore:  cueFrame?.urgencyCore   || null,
+      modifierCore: cueFrame?.modifierCore  || null,
+      topicWords:   Array.isArray(cueFrame?.topicWords) ? cueFrame.topicWords : [],
+      companyTradeKeys: Array.isArray(cueFrame?.companyTradeKeys) ? cueFrame.companyTradeKeys : [],
+      isSingleTrade:    cueFrame?.isSingleTrade === true,
+      timestamp:    new Date().toISOString(),
+    };
+    if (typeof emit === 'function') emit('KC_CUE_MISS', payload);
+    _writeDiscoveryNotes(companyId, callSid, {
+      qaLog: [{ type: 'KC_CUE_MISS', ...payload }],
+    }).catch(() => {});
+  } catch (_e) {
+    // Never throw — telemetry must not break routing
+  }
 }
 
 // ============================================================================
@@ -1484,6 +1539,11 @@ class KCDiscoveryRunner {
             logger.debug('[KC_ENGINE] CUE PROFILE SCAN — no phrase match (single-trade), falling through', {
               companyId, callSid, turn, fieldCount: cueFrame.fieldCount,
             });
+            // ── CUE_MISS (§28) — single-trade cue scan missed too ─────
+            _emitCueMiss({
+              emit, companyId, callSid, turn, userInput, cueFrame,
+              reason: 'SINGLE_TRADE_SCAN_MISS',
+            });
           }
         } else {
           // ── PATH B: Multi-trade — no trade match = ambiguous trade ────
@@ -1496,11 +1556,31 @@ class KCDiscoveryRunner {
             requestCue:      cueFrame.requestCue || null,
             actionCore:      cueFrame.actionCore || null,
           });
+          // ── CUE_MISS (§28) — multi-trade, no vocab term hit ─────────
+          _emitCueMiss({
+            emit, companyId, callSid, turn, userInput, cueFrame,
+            reason: 'MULTI_TRADE_NO_VOCAB_HIT',
+          });
         }
       } else if (cueFrame.fieldCount > 0) {
         logger.debug('[KC_ENGINE] CUE EXTRACT — enrichment only (fieldCount=%d, tradeMatches=%d)',
           cueFrame.fieldCount, cueFrame.tradeMatches.length, {
             companyId, callSid, turn,
+        });
+        // ── CUE_MISS (§28) — partial signal below MIN threshold ─────
+        _emitCueMiss({
+          emit, companyId, callSid, turn, userInput, cueFrame,
+          reason: 'LOW_FIELD_COUNT',
+        });
+      } else {
+        // fieldCount === 0 — strongest dictionary-gap signal.
+        // CueExtractor ran, produced an empty frame. Either the utterance
+        // is genuinely ambiguous (fillers, false starts) OR the cuePhrases
+        // dictionary + tradeVocabulary has a gap on this topic.
+        // ── CUE_MISS (§28) — zero-field extraction ─────────────────
+        _emitCueMiss({
+          emit, companyId, callSid, turn, userInput, cueFrame,
+          reason: 'NO_FIELDS_EXTRACTED',
         });
       }
     } catch (_cueErr) {

@@ -34,9 +34,13 @@ const G = {
   containerGapCounts: {},     // containerId → occurrence count
 
   // ── Config Health tab state ──────────────────────────────────────────
-  activeTab:    'gaps',   // 'gaps' | 'health'
+  activeTab:    'gaps',   // 'gaps' | 'health' | 'cuemisses'
   healthLoaded: false,
   health:       null,     // last /health response
+
+  // ── Cue Misses tab state (UAP/v1.md §28) ─────────────────────────────
+  cueMissesLoaded: false,
+  cueMisses:       null,  // last /cue-misses response
 
   // ── Closed-loop verify / resolve state ───────────────────────────────
   // resolutions    — gapKey → resolution doc from /gaps/resolutions
@@ -1260,18 +1264,19 @@ function switchTab(tabId) {
   });
 
   // Update panels
-  document.getElementById('panelGaps').classList.toggle('active',   tabId === 'gaps');
-  document.getElementById('panelHealth').classList.toggle('active', tabId === 'health');
+  document.getElementById('panelGaps').classList.toggle('active',      tabId === 'gaps');
+  document.getElementById('panelHealth').classList.toggle('active',    tabId === 'health');
+  document.getElementById('panelCueMisses').classList.toggle('active', tabId === 'cuemisses');
 
   // Lazy-load health on first switch
-  if (tabId === 'health' && !G.healthLoaded) {
-    loadHealth();
-  }
+  if (tabId === 'health'    && !G.healthLoaded)    loadHealth();
+  if (tabId === 'cuemisses' && !G.cueMissesLoaded) loadCueMisses();
 }
 
 function refreshActiveTab() {
-  if (G.activeTab === 'health') rescanHealth();
-  else loadGaps();
+  if (G.activeTab === 'health')    return rescanHealth();
+  if (G.activeTab === 'cuemisses') return loadCueMisses();
+  return loadGaps();
 }
 
 // ── Fetch health from API ────────────────────────────────────────────────────
@@ -2417,4 +2422,171 @@ if (typeof window._toast === 'undefined' && typeof _toast === 'undefined') {
     clearTimeout(window.__toastT);
     window.__toastT = setTimeout(() => el.classList.remove('show'), 2400);
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUE MISSES TAB — UAP/v1.md §28
+// ═══════════════════════════════════════════════════════════════════════════
+// Fetches KC_CUE_MISS qaLog entries (utterances where the CueExtractor failed
+// to produce a routed match) and renders:
+//   - per-reason stat cards (NO_FIELDS_EXTRACTED, LOW_FIELD_COUNT,
+//     MULTI_TRADE_NO_VOCAB_HIT, SINGLE_TRADE_SCAN_MISS)
+//   - top recurring utterances
+//   - recent-misses table
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CUE_MISS_REASONS = {
+  NO_FIELDS_EXTRACTED:      { label: 'Zero-Field',      hint: 'CueExtractor parsed nothing — strongest dictionary-gap signal' },
+  LOW_FIELD_COUNT:          { label: 'Low Field Count', hint: 'Partial signal (< 3 fields) — utterance weakly parseable' },
+  MULTI_TRADE_NO_VOCAB_HIT: { label: 'No Trade Vocab',  hint: 'Multi-trade company, no tradeVocabulary term hit' },
+  SINGLE_TRADE_SCAN_MISS:   { label: 'Phrase Scan Miss',hint: 'Single-trade cue-profile scan (GATE 2.4c) also missed' },
+};
+
+async function loadCueMisses() {
+  const btn = document.getElementById('btnRefresh');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+
+  document.getElementById('cueMissesLoading').style.display = 'block';
+  document.getElementById('cueMissesContent').style.display = 'none';
+
+  try {
+    const qs  = new URLSearchParams({ range: G.range || '7d', limit: '200' }).toString();
+    const res = await AgentConsoleAuth.apiFetch(
+      `/api/admin/agent2/company/${G.companyId}/knowledge/cue-misses?${qs}`
+    );
+
+    if (!res || !res.success) throw new Error((res && res.error) || 'API error');
+
+    G.cueMisses       = res;
+    G.cueMissesLoaded = true;
+
+    document.getElementById('cueMissesLoading').style.display = 'none';
+    document.getElementById('cueMissesContent').style.display = 'block';
+
+    _renderCueMissStatCards();
+    _renderCueMissIntro();
+    _renderCueMissTable();
+    _updateCueMissTabCount();
+  } catch (err) {
+    document.getElementById('cueMissesLoading').innerHTML =
+      `<span style="color:#dc2626;">Error: ${_esc(err.message)}</span>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+  }
+}
+
+function _updateCueMissTabCount() {
+  const el = document.getElementById('tabCountCueMisses');
+  if (!el) return;
+  const total = (G.cueMisses && G.cueMisses.summary && G.cueMisses.summary.total) || 0;
+  el.textContent = total;
+}
+
+function _renderCueMissStatCards() {
+  const host = document.getElementById('cueMissStatCards');
+  const sum  = (G.cueMisses && G.cueMisses.summary) || {};
+  const by   = sum.byReason || {};
+
+  const reasons = Object.keys(CUE_MISS_REASONS);
+  const cards = [
+    `<div class="stat-card"><div class="stat-label">Total misses (${_esc(sum.range || '7d')})</div><div class="stat-value">${sum.total || 0}</div></div>`,
+  ].concat(reasons.map(r => {
+    const meta = CUE_MISS_REASONS[r];
+    const n    = by[r] || 0;
+    return `
+      <div class="stat-card" title="${_esc(meta.hint)}">
+        <div class="stat-label">${_esc(meta.label)}</div>
+        <div class="stat-value">${n}</div>
+      </div>`;
+  }));
+
+  host.innerHTML = `<div class="stat-cards-row">${cards.join('')}</div>`;
+}
+
+function _renderCueMissIntro() {
+  const host = document.getElementById('cueMissIntro');
+  const sum  = (G.cueMisses && G.cueMisses.summary) || {};
+  const top  = (sum.topUtterances || []).slice(0, 5);
+
+  if (top.length === 0) {
+    host.innerHTML = `
+      <div class="pointer-head">🎯 What this page tells you</div>
+      <div class="pointer-body">
+        Every row below is a caller utterance the CueExtractor could <b>not</b> parse into
+        a routed KC match. Routing still continued — downstream UAP / semantic / keyword
+        gates may have saved the turn — but a <b>CUE_MISS</b> is the strongest signal that
+        the cuePhrases dictionary or tradeVocabulary has a gap on this topic.
+        No misses recorded in the selected range.
+      </div>
+    `;
+    return;
+  }
+
+  const topHtml = top.map(t =>
+    `<li><span class="mono">${_esc(t.reason || '—')}</span> &times;${t.count} — ${_esc((t._id || '').slice(0, 120))}</li>`
+  ).join('');
+
+  host.innerHTML = `
+    <div class="pointer-head">🎯 Top recurring unparsed utterances</div>
+    <div class="pointer-body">
+      <ul style="margin:0.5rem 0 0 1.25rem;">${topHtml}</ul>
+      <div style="margin-top:.6rem;color:#475569;font-size:.85rem;">
+        Repeat offenders → add the missing term to <b>cuePhrases</b> (globalshare.html)
+        or <b>tradeVocabulary</b> (globalshare.html → Trades tab), then re-run Re-score All.
+      </div>
+    </div>
+  `;
+}
+
+function _renderCueMissTable() {
+  const host    = document.getElementById('cueMissTable');
+  const misses  = (G.cueMisses && G.cueMisses.misses) || [];
+
+  if (misses.length === 0) {
+    host.innerHTML = `<div class="empty-state">No cue misses in this range. 🎉</div>`;
+    return;
+  }
+
+  const rows = misses.map(m => {
+    const reasonMeta = CUE_MISS_REASONS[m.reason] || { label: m.reason, hint: '' };
+    const ts  = m.timestamp ? new Date(m.timestamp).toLocaleString() : '—';
+    const cues = [
+      m.requestCue    && `req:${_esc(m.requestCue)}`,
+      m.permissionCue && `perm:${_esc(m.permissionCue)}`,
+      m.directiveCue  && `dir:${_esc(m.directiveCue)}`,
+      m.actionCore    && `act:${_esc(m.actionCore)}`,
+      m.urgencyCore   && `urg:${_esc(m.urgencyCore)}`,
+      m.modifierCore  && `mod:${_esc(m.modifierCore)}`,
+    ].filter(Boolean).join(' · ') || '—';
+
+    return `
+      <tr>
+        <td class="mono" title="${_esc(reasonMeta.hint)}">${_esc(reasonMeta.label)}</td>
+        <td>${m.fieldCount || 0}</td>
+        <td>${_esc(m.utterance || '—')}</td>
+        <td class="mono" style="font-size:.8rem;">${cues}</td>
+        <td>${m.turn ?? 0}</td>
+        <td class="mono" style="font-size:.75rem;">${_esc(m.callSid || '—')}</td>
+        <td style="white-space:nowrap;font-size:.8rem;">${_esc(ts)}</td>
+      </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="gap-table-wrap">
+      <table class="gap-table">
+        <thead>
+          <tr>
+            <th>Reason</th>
+            <th>Fields</th>
+            <th>Utterance</th>
+            <th>Extracted Cues</th>
+            <th>Turn</th>
+            <th>CallSid</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
