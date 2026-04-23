@@ -226,6 +226,21 @@
       box-shadow: 0 1px 3px rgba(220,38,38,0.25);
     }
     .btn-section-delete svg { flex: 0 0 auto; }
+
+    /* Move button — neutral blue, same shape as Delete, sits right before it. */
+    .btn-section-move {
+      border: 1px solid #bfdbfe; background: #eff6ff; cursor: pointer;
+      padding: 5px 10px; color: #1d4ed8; border-radius: 5px;
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600; line-height: 1;
+      transition: color .15s, background .15s, border-color .15s, box-shadow .15s;
+    }
+    .btn-section-move:hover {
+      color: #fff; background: #1d4ed8; border-color: #1e40af;
+      box-shadow: 0 1px 3px rgba(29,78,216,0.25);
+    }
+    .btn-section-move svg { flex: 0 0 auto; }
+
     .section-row-body { padding: 16px 18px; }
 
     /* ── Section active/inactive toggle ───────────────────────────────── */
@@ -2241,6 +2256,7 @@ function _populateForm(c) {
   const sorted = [...(c.sections || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
   if (sorted.length) {
     sorted.forEach(s => addSection(s.label, s.content, {
+      mongoId:            s._id ? String(s._id) : null,   // needed by Move-to-KC (server looks section up by _id)
       callerPhrases:      (s.callerPhrases || []).map(p => typeof p === 'string' ? p : p.text || '').filter(Boolean),
       // Build per-phrase anchor words map from DB: { phraseText → [word, ...] }
       phraseAnchorWords:  Object.fromEntries(
@@ -2313,6 +2329,7 @@ function addSection(label = '', content = '', sectionMeta = null) {
   const promotionLabel  = sectionMeta?.promotionLabel || '';
 
   S.sectionData.set(id, {
+    mongoId:          sectionMeta?.mongoId || null,   // DB subdoc _id — set on load, null for new sections
     isActive:         sectionIsActive,
     isPromotion,
     promotionLabel,
@@ -2393,6 +2410,16 @@ function addSection(label = '', content = '', sectionMeta = null) {
           ${sectionIsActive ? 'checked' : ''}>
         <span class="section-active-knob"></span>
       </label>
+      <button type="button" class="btn-section-move" onclick="openMoveSectionModal(this)" title="Move this section to another Knowledge Container">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 9l-3 3 3 3"/>
+          <path d="M9 5l3-3 3 3"/>
+          <path d="M15 19l3 3-3 3" transform="translate(0,-5)"/>
+          <path d="M19 15l3-3-3-3"/>
+          <path d="M2 12h20M12 2v20"/>
+        </svg>
+        Move
+      </button>
       <button type="button" class="btn-section-delete" onclick="deleteSection(this)" title="Delete this section">
         <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
           <polyline points="3 6 5 6 21 6"/>
@@ -3044,6 +3071,190 @@ function deleteSection(btn) {
   confirm.addEventListener('click', doDelete);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', onKey);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOVE SECTION — transfer a single section to another Knowledge Container.
+// Server preserves the section _id (historical continuity), does push-before-pull
+// so failure = duplicate (recoverable) rather than data loss.
+// noAnchor boundary mismatch (regular ↔ meta) requires an explicit confirm flag.
+// ─────────────────────────────────────────────────────────────────────────────
+async function openMoveSectionModal(btn) {
+  const row = btn.closest('.section-row');
+  const sid = parseInt(row.dataset.sid, 10);
+  const data = sid ? S.sectionData.get(sid) : null;
+
+  // Guard: only persisted sections can be moved (need DB _id on server).
+  if (!data || !data.mongoId) {
+    _toast('Save the section first, then move it. New sections have no database ID yet.', 'error');
+    return;
+  }
+
+  const labelInput = row.querySelector('.section-label-input');
+  const rawLabel   = (labelInput?.value || '').trim() || labelInput?.placeholder || 'this section';
+  const label      = rawLabel.slice(0, 120);
+
+  const sourceContainerId = S.mongoId || S.itemId;
+  // Read noAnchor from the live UI checkbox — that's the authoritative in-page state.
+  const sourceNoAnchor    = !!document.getElementById('fNoAnchor')?.checked;
+
+  // Fetch list of KCs (this company only)
+  let containers = [];
+  try {
+    const resp = await apiFetch(`/api/admin/agent2/company/${S.companyId}/knowledge`);
+    containers = (resp?.containers || []).filter(c => String(c._id) !== String(sourceContainerId));
+  } catch (e) {
+    _toast('Could not load Knowledge Containers — check your connection.', 'error');
+    return;
+  }
+  if (!containers.length) {
+    _toast('No other Knowledge Containers to move into. Create one first.', 'error');
+    return;
+  }
+
+  // Split into regular vs meta (noAnchor) so admin sees the boundary clearly.
+  const regularKCs = containers.filter(c => !c.noAnchor)
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  const metaKCs    = containers.filter(c => c.noAnchor)
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+  const mkOption = (c) => {
+    const sectionsCount = Array.isArray(c.sections) ? c.sections.length : (c.sectionsCount || 0);
+    const tag = c.kcId ? `${_esc(c.kcId)} · ` : '';
+    return `<option value="${_esc(String(c._id))}" data-no-anchor="${c.noAnchor ? '1' : '0'}" data-title="${_esc(c.title || '(untitled)')}">${tag}${_esc(c.title || '(untitled)')} — ${sectionsCount} sections</option>`;
+  };
+
+  const overlay = document.createElement('div');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px);';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px 28px;min-width:460px;max-width:560px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#dbeafe;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;">⇌</div>
+        <div style="font-size:16px;font-weight:700;color:#1e1e2e;">Move section to another KC</div>
+      </div>
+      <div style="font-size:13px;color:#374151;margin-bottom:6px;">Moving:</div>
+      <div style="font-size:14px;font-weight:600;color:#1d4ed8;background:#eff6ff;padding:8px 12px;border-radius:6px;border-left:3px solid #3b82f6;margin-bottom:14px;word-break:break-word;">${_esc(label)}</div>
+
+      <label style="font-size:12px;color:#374151;font-weight:600;display:block;margin-bottom:4px;">Destination Knowledge Container</label>
+      <select id="mvTargetSelect"
+        style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;background:#fff;outline:none;box-sizing:border-box;">
+        <option value="">— select a container —</option>
+        ${regularKCs.length ? `<optgroup label="Knowledge Containers">${regularKCs.map(mkOption).join('')}</optgroup>` : ''}
+        ${metaKCs.length    ? `<optgroup label="⚠ Meta Containers (noAnchor)">${metaKCs.map(mkOption).join('')}</optgroup>` : ''}
+      </select>
+
+      <div id="mvBoundaryWarn" style="display:none;margin-top:12px;padding:10px 12px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e;line-height:1.5;">
+        <strong>noAnchor boundary mismatch.</strong>
+        <span id="mvBoundaryWarnText"></span>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#78350f;font-weight:500;cursor:pointer;">
+          <input type="checkbox" id="mvConfirmBoundary" style="width:14px;height:14px;"> I understand — move it anyway.
+        </label>
+      </div>
+
+      <div style="font-size:11px;color:#6b7280;margin-top:12px;line-height:1.5;">
+        The section keeps its <strong>_id</strong> (so historical analytics and call logs still track it).
+        Audio URLs, caller phrases, embeddings, anchor words, phrase scores, and pre-qualify / upsell config all move with it.
+        This action commits immediately — no Save needed.
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+        <button type="button" id="mvCancel"
+          style="padding:8px 16px;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;">Cancel</button>
+        <button type="button" id="mvConfirm" disabled
+          style="padding:8px 16px;border:none;background:#1d4ed8;color:#fff;border-radius:6px;font-size:13px;font-weight:600;cursor:not-allowed;opacity:0.5;">Move section</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const select      = overlay.querySelector('#mvTargetSelect');
+  const confirmBtn  = overlay.querySelector('#mvConfirm');
+  const cancelBtn   = overlay.querySelector('#mvCancel');
+  const warnBox     = overlay.querySelector('#mvBoundaryWarn');
+  const warnText    = overlay.querySelector('#mvBoundaryWarnText');
+  const confirmBox  = overlay.querySelector('#mvConfirmBoundary');
+
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+
+  const refreshConfirmState = () => {
+    const targetId = select.value;
+    if (!targetId) {
+      confirmBtn.disabled = true;
+      confirmBtn.style.cursor = 'not-allowed';
+      confirmBtn.style.opacity = '0.5';
+      warnBox.style.display = 'none';
+      return;
+    }
+    const opt = select.options[select.selectedIndex];
+    const targetNoAnchor = opt?.dataset?.noAnchor === '1';
+    const mismatch = (targetNoAnchor !== sourceNoAnchor);
+    if (mismatch) {
+      warnBox.style.display = 'block';
+      warnText.textContent = sourceNoAnchor
+        ? ' This section is from a Meta Container (noAnchor) and you are moving it into a regular KC. It will start scoring as an anchor and may offer booking.'
+        : ' You are moving this section into a Meta Container (noAnchor). It will stop scoring as an anchor and will no longer offer booking.';
+      confirmBtn.disabled = !confirmBox.checked;
+    } else {
+      warnBox.style.display = 'none';
+      confirmBox.checked = false;
+      confirmBtn.disabled = false;
+    }
+    confirmBtn.style.cursor = confirmBtn.disabled ? 'not-allowed' : 'pointer';
+    confirmBtn.style.opacity = confirmBtn.disabled ? '0.5' : '1';
+  };
+
+  select.addEventListener('change', refreshConfirmState);
+  confirmBox.addEventListener('change', refreshConfirmState);
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+
+  confirmBtn.addEventListener('click', async () => {
+    const targetContainerId = select.value;
+    if (!targetContainerId) return;
+    const opt = select.options[select.selectedIndex];
+    const targetTitle = opt?.dataset?.title || 'the selected container';
+    const targetNoAnchor = opt?.dataset?.noAnchor === '1';
+    const mismatch = (targetNoAnchor !== sourceNoAnchor);
+
+    // Busy state
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Moving…';
+    confirmBtn.style.opacity = '0.7';
+    confirmBtn.style.cursor = 'progress';
+
+    try {
+      await apiFetch(
+        `/api/admin/agent2/company/${S.companyId}/knowledge/move-section`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceContainerId,
+            sourceSectionId:   data.mongoId,
+            targetContainerId,
+            confirmBoundaryMismatch: mismatch ? true : undefined,
+          }),
+        }
+      );
+      close();
+      _toast(`Moved "${label.slice(0, 40)}" → ${targetTitle}`, 'success');
+      // Remove the row from the DOM + local state so the admin sees it gone immediately.
+      if (sid) S.sectionData.delete(sid);
+      row.remove();
+      updateSectionNumbers();
+      _updateComplexityIndicator();
+    } catch (err) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Move section';
+      confirmBtn.style.opacity = '1';
+      confirmBtn.style.cursor = 'pointer';
+      const msg = (err && err.message) || 'Move failed';
+      _toast(msg, 'error');
+    }
+  });
 }
 
 function updateSectionNumbers() {

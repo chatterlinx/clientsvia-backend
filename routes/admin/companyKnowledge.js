@@ -2150,6 +2150,149 @@ router.delete('/:companyId/knowledge/:id/hard', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /:companyId/knowledge/move-section — Move one section to another KC
+//
+// Atomic-ish relocation of a section subdoc from one container to another
+// within the SAME company. Preserves section `_id` so every qaLog / analytics
+// reference stays continuous across the move (history of the section follows
+// it). No transactions used — MongoDB subdoc array ops are individually
+// atomic; we order push-before-pull so a mid-operation failure leaves a
+// recoverable duplicate rather than an unrecoverable loss.
+//
+// Body:
+//   sourceContainerId         — _id or kcId of the source container
+//   sourceSectionId           — _id (subdoc ObjectId) of the section to move
+//   targetContainerId         — _id or kcId of the destination container
+//   confirmBoundaryMismatch?  — set true to allow moves where source.noAnchor
+//                                differs from target.noAnchor (safety rail —
+//                                silently changing routing semantics is a very
+//                                easy foot-gun; UI must explicitly confirm).
+//
+// Returns:
+//   { success, movedSection, source:{id,title,kcId}, target:{id,title,kcId} }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:companyId/knowledge/move-section', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+
+  const { sourceContainerId, sourceSectionId, targetContainerId, confirmBoundaryMismatch } = req.body || {};
+
+  if (!sourceContainerId || !sourceSectionId || !targetContainerId) {
+    return res.status(400).json({ success: false, error: 'sourceContainerId, sourceSectionId, and targetContainerId are required' });
+  }
+  if (String(sourceContainerId) === String(targetContainerId)) {
+    return res.status(400).json({ success: false, error: 'Source and target containers must differ — nothing to move' });
+  }
+  if (!mongoose.Types.ObjectId.isValid(sourceSectionId)) {
+    return res.status(400).json({ success: false, error: 'sourceSectionId must be a valid ObjectId' });
+  }
+
+  try {
+    // Load source container WITH the hidden phraseCoreEmbedding so the section
+    // carries its full runtime payload into the target. Without `+path` the
+    // embedding is silently dropped by select:false and the moved section
+    // lands with a dead Logic 2 gate until the next Re-score.
+    const source = await CompanyKnowledgeContainer
+      .findOne(_resolveContainerQuery(sourceContainerId, companyId))
+      .select('+sections.phraseCoreEmbedding')
+      .lean();
+    if (!source) return res.status(404).json({ success: false, error: 'Source container not found' });
+
+    const sectionIdStr = String(sourceSectionId);
+    const section = (source.sections || []).find(s => s?._id && String(s._id) === sectionIdStr);
+    if (!section) return res.status(404).json({ success: false, error: 'Source section not found in source container' });
+
+    // Load target for boundary-mismatch safety check. Cheap — we only need the
+    // top-level flags; no need for embeddings here.
+    const target = await CompanyKnowledgeContainer
+      .findOne(_resolveContainerQuery(targetContainerId, companyId))
+      .select('title kcId noAnchor')
+      .lean();
+    if (!target) return res.status(404).json({ success: false, error: 'Target container not found' });
+
+    const sourceIsMeta = source.noAnchor === true;
+    const targetIsMeta = target.noAnchor === true;
+    if (sourceIsMeta !== targetIsMeta && confirmBoundaryMismatch !== true) {
+      return res.status(409).json({
+        success:   false,
+        error:     'noAnchor boundary mismatch',
+        detail:    `Source container noAnchor=${sourceIsMeta}, target noAnchor=${targetIsMeta}. ` +
+                   'Moving across this boundary changes routing semantics (anchor scoring, booking suppression). ' +
+                   'Pass { confirmBoundaryMismatch: true } in the body to proceed.',
+        sourceNoAnchor: sourceIsMeta,
+        targetNoAnchor: targetIsMeta,
+      });
+    }
+
+    // Place the section at the end of target's current sections[]. Target's
+    // existing `order` values are preserved — we compute a new tail order so
+    // the moved section lands last without renumbering siblings.
+    const targetOrder = (target.sections || []).reduce((max, s) => Math.max(max, s?.order ?? -1), -1) + 1;
+    const sectionForTarget = { ...section, order: targetOrder };
+
+    // PUSH TO TARGET FIRST — if this fails, source is untouched (no data loss,
+    // just a no-op from the admin's perspective). If we pulled first and then
+    // failed to push, the section would vanish.
+    const pushed = await CompanyKnowledgeContainer.findOneAndUpdate(
+      _resolveContainerQuery(targetContainerId, companyId),
+      { $push: { sections: sectionForTarget } },
+      { new: true }
+    ).lean();
+    if (!pushed) {
+      return res.status(500).json({ success: false, error: 'Failed to push section into target container' });
+    }
+
+    // PULL FROM SOURCE — if this fails, section now exists in BOTH containers
+    // (duplicate). We log it loudly so admin can investigate and delete the
+    // source copy. Worse than clean but recoverable.
+    const pulled = await CompanyKnowledgeContainer.findOneAndUpdate(
+      _resolveContainerQuery(sourceContainerId, companyId),
+      { $pull: { sections: { _id: section._id } } },
+      { new: true }
+    ).lean();
+    if (!pulled) {
+      logger.error('[companyKnowledge] move-section: target push succeeded, source pull FAILED — section duplicated', {
+        companyId, sourceContainerId, sourceSectionId, targetContainerId,
+      });
+      return res.status(500).json({
+        success:  false,
+        error:    'Partial move: section was added to target but removal from source failed. Section now exists in both containers. Delete the duplicate from source manually.',
+        partial:  true,
+      });
+    }
+
+    // Cache invalidation — both containers' phrase indexes need rebuild; the
+    // company-wide trade index and runtime KC cache also go stale.
+    KnowledgeContainerService.invalidateCache(companyId).catch(() => {});
+    BridgeService.invalidate(companyId).catch(() => {});
+    CueExtractorService.invalidateTradeIndex(companyId).catch(() => {});
+
+    logger.info('[companyKnowledge] Moved section', {
+      companyId,
+      sectionId:   String(section._id),
+      sectionLabel: section.label,
+      fromKc:      source.kcId || source._id,
+      toKc:        target.kcId || target._id,
+      boundaryOverride: sourceIsMeta !== targetIsMeta,
+    });
+
+    return res.json({
+      success: true,
+      movedSection: {
+        _id:   String(section._id),
+        label: section.label,
+        order: targetOrder,
+      },
+      source: { id: String(source._id), kcId: source.kcId, title: source.title },
+      target: { id: String(target._id), kcId: target.kcId, title: target.title },
+    });
+  } catch (err) {
+    logger.error('[companyKnowledge] move-section error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to move section' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /:companyId/knowledge/:id/generate-keywords — Regen for existing container
 // Uses the same Groq logic as the pre-save endpoint — loads container from DB
 // then delegates to _runKeywordGeneration.
