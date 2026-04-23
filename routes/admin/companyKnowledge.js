@@ -2763,9 +2763,19 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       entries,
     });
 
+    // Count phrase SLOTS now covered (not sidecar rows). A container can have
+    // the same normalized text repeated across sections — one sidecar row
+    // covers all of them. Callers think in phrase slots, not in rows.
+    let coveredSlots = 0;
+    for (const p of pendingList) {
+      if (vecByText.has(p.text)) coveredSlots++;
+    }
+    const failedSlots = Math.max(0, pending - coveredSlots);
+
     logger.info('[companyKnowledge] embed-phrases: sidecar save', {
       companyId, containerId: String(container._id), title: container.title,
-      pending, unique: uniqueTexts.length, embedded: entries.length, upserted,
+      pending, unique: uniqueTexts.length, rowsWritten: entries.length, upserted,
+      coveredSlots, failedSlots,
     });
 
     // Invalidate per-container — cheaper than the full company sweep and keeps
@@ -2778,8 +2788,14 @@ router.post('/:companyId/knowledge/:id/embed-phrases', async (req, res) => {
       containerId: String(container._id),
       title:       container.title,
       pending,
-      embedded:    entries.length,
-      failed:      Math.max(0, pending - entries.length),
+      // `embedded` reports phrase slots covered by a vector — matches the
+      // admin's mental model ("I had 3,022 pending, 3,022 are now embedded").
+      // Sidecar row count (`upserted`) is reported separately for operators
+      // who care about the dedupe savings.
+      embedded:    coveredSlots,
+      rowsWritten: entries.length,
+      uniqueTexts: uniqueTexts.length,
+      failed:      failedSlots,
     });
   } catch (err) {
     logger.error('[companyKnowledge] embed-phrases error', { companyId, id, err: err.message, stack: err.stack });
