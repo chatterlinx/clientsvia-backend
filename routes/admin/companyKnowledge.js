@@ -1899,6 +1899,55 @@ router.post('/:companyId/knowledge/enable-all-fixed', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /:companyId/knowledge/embed-plan
+// Fast (no embedding) — returns the list of containers with missing phrase
+// vecs so the client can iterate one container at a time and show live
+// progress. Lean query with +path to opt into select:false embedding, only
+// projects the fields needed to compute pending counts.
+// ⚠️ MUST be declared BEFORE GET /:id below — Express route order matters
+// or "embed-plan" gets matched as a container :id and 404s.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
+  const { companyId } = req.params;
+  if (!_validateCompanyAccess(req, res, companyId)) return;
+  try {
+    const containers = await CompanyKnowledgeContainer
+      .find({ companyId })
+      .select('_id title kcId priority +sections.callerPhrases.text +sections.callerPhrases.embedding')
+      .sort({ priority: 1, createdAt: 1 })
+      .lean();
+
+    const plan = [];
+    let totalPending = 0;
+    for (const c of containers) {
+      let pending = 0;
+      let total   = 0;
+      for (const s of (c.sections || [])) {
+        for (const p of (s.callerPhrases || [])) {
+          if (!p?.text?.trim()) continue;
+          total++;
+          if (!(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
+        }
+      }
+      if (pending > 0) {
+        plan.push({
+          containerId: String(c._id),
+          title:       c.title || '(untitled)',
+          kcId:        c.kcId || null,
+          pending,
+          total,
+        });
+        totalPending += pending;
+      }
+    }
+    return res.json({ success: true, containers: plan, totalPending });
+  } catch (err) {
+    logger.error('[companyKnowledge] embed-plan error', { companyId, err: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to build embed plan' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /:companyId/knowledge/:id — Get single container
 // Accepts BOTH MongoDB _id (24-char ObjectId) AND kcId (e.g. "700c4-25").
 // If the param is not a valid ObjectId, falls back to kcId lookup.
@@ -2462,53 +2511,6 @@ router.post('/:companyId/knowledge/bulk-embed-phrases', async (req, res) => {
   } catch (err) {
     logger.error('[companyKnowledge] bulk-embed error', { companyId, err: err.message, stack: err.stack });
     return res.status(500).json({ success: false, error: 'Failed to backfill phrase embeddings' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /:companyId/knowledge/embed-plan
-// Fast (no embedding) — returns the list of containers with missing phrase vecs
-// so the client can iterate one container at a time and show live progress.
-// Lean query with +path to opt into select:false embedding, only projects the
-// fields we need to compute pending counts.
-// ─────────────────────────────────────────────────────────────────────────────
-router.get('/:companyId/knowledge/embed-plan', async (req, res) => {
-  const { companyId } = req.params;
-  if (!_validateCompanyAccess(req, res, companyId)) return;
-  try {
-    const containers = await CompanyKnowledgeContainer
-      .find({ companyId })
-      .select('_id title kcId priority +sections.callerPhrases.text +sections.callerPhrases.embedding')
-      .sort({ priority: 1, createdAt: 1 })
-      .lean();
-
-    const plan = [];
-    let totalPending = 0;
-    for (const c of containers) {
-      let pending = 0;
-      let total   = 0;
-      for (const s of (c.sections || [])) {
-        for (const p of (s.callerPhrases || [])) {
-          if (!p?.text?.trim()) continue;
-          total++;
-          if (!(Array.isArray(p.embedding) && p.embedding.length > 0)) pending++;
-        }
-      }
-      if (pending > 0) {
-        plan.push({
-          containerId: String(c._id),
-          title:       c.title || '(untitled)',
-          kcId:        c.kcId || null,
-          pending,
-          total,
-        });
-        totalPending += pending;
-      }
-    }
-    return res.json({ success: true, containers: plan, totalPending });
-  } catch (err) {
-    logger.error('[companyKnowledge] embed-plan error', { companyId, err: err.message });
-    return res.status(500).json({ success: false, error: 'Failed to build embed plan' });
   }
 });
 
