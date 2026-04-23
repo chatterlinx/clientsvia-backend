@@ -2157,22 +2157,37 @@
   margin: 8px 0 12px 0;
 }
 .fdn-strip-inner {
+  /* 2-row layout: row 1 = title + hint + severity + controls,
+                   row 2 = bars full-width.
+     Previously a single-row grid (auto 1fr auto auto auto) — long hint
+     text squeezed the bars column and pushed them to the right. Splitting
+     into 2 rows via named areas lets bars own the full width. */
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  gap: 18px;
+  grid-template-columns: 1fr auto auto auto;
+  grid-template-areas:
+    "title  severity refresh detail"
+    "bars   bars     bars    bars";
+  gap: 10px 14px;
   align-items: center;
 }
+.fdn-strip-title    { grid-area: title;    min-width: 0; }
+.fdn-strip-bars     { grid-area: bars; }
+.fdn-strip-severity { grid-area: severity; }
+.fdn-strip-refresh  { grid-area: refresh; }
+.fdn-strip-detail   { grid-area: detail; }
 .fdn-strip-title {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   font-size: 13px; font-weight: 600; color: #1e293b;
-  white-space: nowrap;
 }
 .fdn-strip-icon { font-size: 14px; }
 .fdn-strip-hint {
   font-weight: 400; font-size: 11px; color: #64748b; margin-left: 6px;
 }
 .fdn-strip-bars {
-  display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr));
+  /* 6 bars now (3 section-level + 3 phrase-level). Min 130px so the
+     phrase-level bars have room for the "7,172/7,191" fraction without
+     wrapping. Responsive down to ~780px viewport before stacking. */
+  display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr));
   gap: 14px;
 }
 .fdn-bar { font-size: 11px; }
