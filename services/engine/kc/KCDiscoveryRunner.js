@@ -1174,7 +1174,8 @@ class KCDiscoveryRunner {
     // ══════════════════════════════════════════════════════════════════════════
     // Extracts 8 structured cue fields from the caller utterance using pure
     // string matching: requestCue, permissionCue, infoCue, directiveCue,
-    // actionCore, urgencyCore, modifierCore, tradeCore (via section tradeTerms).
+    // actionCore, urgencyCore, modifierCore, tradeCore (via container
+    // tradeVocabularyKey → GlobalShare vocab; section-level routing removed).
     //
     // Always writes cueFrame to discoveryNotes (enrichment for downstream + Groq).
     //
@@ -1237,76 +1238,36 @@ class KCDiscoveryRunner {
         );
 
         if (fullContainer) {
-          // sectionIdx = -1 means container-level vocab link (no section targeting)
-          const isContainerLevel = bestTrade.sectionIdx === -1;
-          const targetSection = isContainerLevel
-            ? null
-            : (fullContainer.sections?.[bestTrade.sectionIdx] || null);
+          // Trade index is now container-level only (sectionIdx always = -1).
+          // Groq reads all sections of the container and synthesizes the answer.
+          // Section-level anchor check removed with section-level tradeTerms.
+          logger.info('[KC_ENGINE] CUE EXTRACT HIT — GATE 2.4b confirmed', {
+            companyId, callSid, turn,
+            fieldCount:      cueFrame.fieldCount,
+            tradeTerm:       bestTrade.term,
+            containerId:     bestTrade.containerId,
+            sectionIdx:      -1,
+            sectionLabel:    '(container-level)',
+            requestCue:      cueFrame.requestCue || null,
+            actionCore:      cueFrame.actionCore || null,
+            urgencyCore:     cueFrame.urgencyCore || null,
+          });
+          emit('KC_CUE_EXTRACT_HIT', {
+            companyId, callSid, turn,
+            fieldCount:   cueFrame.fieldCount,
+            tradeTerm:    bestTrade.term,
+            containerId:  bestTrade.containerId,
+            sectionIdx:   -1,
+          });
 
-          // ── Anchor confirmation (GATE 2.4b) ──────────────────────────
-          // For container-level trade matches (global vocab): skip anchor
-          // check — the field count + trade match is sufficient signal.
-          // Groq reads all sections and synthesizes the answer.
-          //
-          // For section-level trade matches (custom tradeTerms): check if
-          // ≥90% of any matching phrase's anchorWords appear in utterance.
-          let anchorConfirmed = true;  // default: trust cue extraction
-          if (targetSection) {
-            const sectionPhrases = targetSection.callerPhrases || [];
-            const phrasesWithAnchors = sectionPhrases.filter(p =>
-              p.anchorWords && p.anchorWords.length > 0
-            );
-
-            if (phrasesWithAnchors.length > 0) {
-              const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
-              const inputStems = new Set(rawWords.map(_stem));
-              const inputExact = new Set(rawWords);
-
-              anchorConfirmed = phrasesWithAnchors.some(phrase => {
-                const anchors = (phrase.anchorWords || []).map(w => (w || '').toLowerCase().trim()).filter(Boolean);
-                if (anchors.length === 0) return false;
-                const hits = anchors.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
-                return (hits / anchors.length) >= ANCHOR_MATCH_THRESHOLD;
-              });
-            }
-          }
-
-          if (anchorConfirmed) {
-            logger.info('[KC_ENGINE] CUE EXTRACT HIT — GATE 2.4b confirmed', {
-              companyId, callSid, turn,
-              fieldCount:      cueFrame.fieldCount,
-              tradeTerm:       bestTrade.term,
-              containerId:     bestTrade.containerId,
-              sectionIdx:      bestTrade.sectionIdx,
-              sectionLabel:    bestTrade.sectionLabel || '(container-level)',
-              requestCue:      cueFrame.requestCue || null,
-              actionCore:      cueFrame.actionCore || null,
-              urgencyCore:     cueFrame.urgencyCore || null,
-            });
-            emit('KC_CUE_EXTRACT_HIT', {
-              companyId, callSid, turn,
-              fieldCount:   cueFrame.fieldCount,
-              tradeTerm:    bestTrade.term,
-              containerId:  bestTrade.containerId,
-              sectionIdx:   bestTrade.sectionIdx,
-            });
-
-            match = {
-              container:        fullContainer,
-              score:            Math.round((cueFrame.fieldCount / 8) * 100),
-              matchSource:      'CUE_EXTRACT',
-              cueFrame,
-              targetSection,                                      // null for container-level → Groq reads all sections
-              targetSectionIdx: isContainerLevel ? null : bestTrade.sectionIdx,
-            };
-          } else {
-            logger.info('[KC_ENGINE] CUE EXTRACT — GATE 2.4b anchor fail, falling through', {
-              companyId, callSid, turn,
-              fieldCount:   cueFrame.fieldCount,
-              tradeTerm:    bestTrade.term,
-              sectionLabel: bestTrade.sectionLabel,
-            });
-          }
+          match = {
+            container:        fullContainer,
+            score:            Math.round((cueFrame.fieldCount / 8) * 100),
+            matchSource:      'CUE_EXTRACT',
+            cueFrame,
+            targetSection:    null,     // container-level → Groq reads all sections
+            targetSectionIdx: null,
+          };
         }
       } else if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length === 0) {
         // ── Strong cue signal but NO trade match ─────────────────────────

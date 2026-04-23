@@ -14,14 +14,15 @@
  *        requestCue, permissionCue, infoCue, directiveCue,
  *        actionCore, urgencyCore, modifierCore
  *
- *   8    Per-company trade terms (KC section.tradeTerms[]):
- *        tradeCore — maps utterance words to specific sections
+ *   8    Per-company trade terms (container.tradeVocabularyKey → GlobalShare):
+ *        tradeCore — maps utterance words to containers that own that trade
+ *        (Section-level tradeTerms removed — phrases+anchors handle section pick.)
  *
  * ARCHITECTURE:
  *   - Fields 1-7: loaded from PhraseReducerService.getCuePatterns() (5-min cache)
- *   - Field 8:    loaded from CompanyKnowledgeContainer sections, built into a
- *                 reverse index { term → { containerId, sectionIdx, sectionLabel } }
- *   - Trade index: Redis-cached per company, invalidated on KC section save
+ *   - Field 8:    container.tradeVocabularyKey → GlobalShare vocab, reverse-indexed
+ *                 { term → { containerId, sectionIdx: -1, sectionLabel: '' } }
+ *   - Trade index: Redis-cached per company, invalidated on KC container save
  *
  * OUTPUT:
  *   {
@@ -151,10 +152,12 @@ async function _getTradeIndex(companyId) {
 }
 
 /**
- * Build trade index from two sources:
- *   1. Global vocabularies (via container.tradeVocabularyKey → GlobalShare)
- *      Maps terms to container level (sectionIdx = -1, no section targeting).
- *   2. Per-section tradeTerms[] (custom overrides, maps to specific section).
+ * Build trade index from a single source:
+ *   - Global vocabularies (via container.tradeVocabularyKey → GlobalShare)
+ *     Maps terms to container level (sectionIdx = -1, no section targeting).
+ *
+ * Section-level tradeTerms[] was removed — phrases+anchors handle section pick,
+ * so section-level trade routing was redundant with per-phrase anchor routing.
  *
  * @param {string} companyId
  * @returns {Promise<Object>}
@@ -165,11 +168,10 @@ async function _buildTradeIndex(companyId) {
   try {
     const containers = await CompanyKnowledgeContainer
       .find({ companyId, isActive: true })
-      .select('_id title tradeVocabularyKey sections.label sections.isActive sections.tradeTerms sections.order')
+      .select('_id title tradeVocabularyKey')
       .sort({ priority: 1, createdAt: 1 })
       .lean();
 
-    // ── Source 1: Global vocabularies (container-level) ──────────────────
     // Build a map of tradeKey → terms[] from GlobalShare (cached, <1ms)
     let vocabMap = null;
     const hasLinkedContainers = containers.some(c => c.tradeVocabularyKey);
@@ -195,25 +197,6 @@ async function _buildTradeIndex(companyId) {
             containerId:  cId,
             sectionIdx:   -1,          // container-level — no section targeting
             sectionLabel: '',
-          });
-        }
-      }
-
-      // ── Source 2: Per-section tradeTerms[] (custom overrides) ──────────
-      const sections = c.sections || [];
-      for (let sIdx = 0; sIdx < sections.length; sIdx++) {
-        const section = sections[sIdx];
-        if (section.isActive === false) continue;
-
-        for (const term of (section.tradeTerms || [])) {
-          const norm = term.toLowerCase().trim();
-          if (!norm) continue;
-          if (!index[norm]) index[norm] = [];
-          index[norm].push({
-            term,
-            containerId:  cId,
-            sectionIdx:   sIdx,
-            sectionLabel: section.label || '',
           });
         }
       }
