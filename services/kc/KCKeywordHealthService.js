@@ -84,16 +84,25 @@ const GENERIC_SINGLE_WORDS = new Set([
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMBEDDING TEXT BUILDER
-// title + section content joined, capped for the 512-dim model
+// Section content only, capped for the 512-dim model.
+// ARCHITECTURAL RULE (locked April 2026): container.title + section.label are
+// ADMIN-ONLY metadata and must never enter embeddings, scoring, or LLM prompts.
+// Duplicate detection now compares section content + groqContent only — which
+// is what actually matters for semantic overlap between containers anyway.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _buildEmbeddingText(container) {
   const sectionText = (container.sections || [])
     .sort((a, b) => (a.order || 0) - (b.order || 0))
-    .map(s => `${s.label ? s.label + ': ' : ''}${s.content || ''}`.trim())
+    .map(s => {
+      const body = s.groqContent && s.groqContent.trim()
+        ? s.groqContent.trim()
+        : (s.content || '').trim();
+      return body;
+    })
     .filter(Boolean)
     .join('\n');
-  return `${container.title || ''}\n${sectionText}`.substring(0, 3000).trim();
+  return sectionText.substring(0, 3000).trim();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,12 +133,23 @@ async function _llmValidatePair(containerA, containerB) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
 
+  // ARCHITECTURAL RULE (locked April 2026): container.title + section.label
+  // are ADMIN-ONLY metadata — never fed to the LLM. The conflict classifier
+  // compares Groq against caller-facing body text (responses) + keywords
+  // (derived from content). Admin labels would prime the LLM with naming
+  // choices that have nothing to do with actual semantic overlap.
   const summarise = c => {
     const sections = (c.sections || [])
       .slice(0, 3)
-      .map(s => `  • ${s.label || 'Section'}: ${(s.content || '').substring(0, 200)}`)
+      .map(s => {
+        const body = s.groqContent && s.groqContent.trim()
+          ? s.groqContent.trim()
+          : (s.content || '');
+        return `  • ${body.substring(0, 200)}`;
+      })
+      .filter(line => line.length > 4)   // drop sections with no body
       .join('\n');
-    return `Title: "${c.title}"\nKeywords: ${(c.keywords || []).slice(0, 8).join(', ')}\nContent:\n${sections}`;
+    return `Keywords: ${(c.keywords || []).slice(0, 8).join(', ')}\nContent:\n${sections}`;
   };
 
   const prompt = `You are a knowledge-base quality auditor for a home-service phone AI.
@@ -502,10 +522,13 @@ async function _groqSuggestKeywords(container, qualityResult) {
   if (!apiKey) return [];
 
   try {
-    // Build content summary from sections
+    // Build content summary from sections.
+    // ARCHITECTURAL RULE (locked April 2026): section.label and container.title
+    // are ADMIN-ONLY metadata — never fed to the LLM. Groq sees only response
+    // text (content / groqContent).
     const contentSummary = (container.sections || [])
       .slice(0, 3)
-      .map(s => `${s.label ? s.label + ': ' : ''}${(s.content || '').substring(0, 180)}`)
+      .map(s => (s.content || '').substring(0, 180))
       .filter(Boolean)
       .join('\n');
 
@@ -519,8 +542,7 @@ async function _groqSuggestKeywords(container, qualityResult) {
 
     const prompt = `You are a knowledge-base keyword specialist for a phone AI used by home-service companies (HVAC, plumbing, electrical).
 
-CONTAINER TITLE: "${container.title}"
-CONTENT:
+CONTENT (caller-facing response text):
 ${contentSummary || '(no sections defined yet)'}
 
 WEAK KEYWORDS TO REPLACE (too generic — these cause the container to fire on wrong questions):
