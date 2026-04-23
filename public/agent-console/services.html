@@ -4500,25 +4500,42 @@ function _renderFoundationStrip(rep) {
   if (hintEl) {
     const ts      = rep?.generatedAt ? new Date(rep.generatedAt) : new Date();
     const cached  = rep?.cached ? ' · cached' : '';
-    const totals  = rep?.summary ? ` · ${rep.summary.totalContainers || 0} containers · ${rep.summary.activeSections || 0} active sections` : '';
+    const totPh   = Number(rep?.summary?.totalPhrases || 0);
+    const phTxt   = totPh ? ` · ${totPh.toLocaleString()} phrases` : '';
+    const totals  = rep?.summary ? ` · ${rep.summary.totalContainers || 0} containers · ${rep.summary.activeSections || 0} active sections${phTxt}` : '';
     hintEl.textContent = `scanned ${ts.toLocaleTimeString()}${cached}${totals}`;
   }
 
   if (barsEl) {
+    // Section-level vs phrase-level are DIFFERENT denominators.
+    // Section-level = activeSections. Phrase-level = totalPhrases.
+    // Phrase-level bars show the raw fraction (X/Y) because a 99.8% bar
+    // with 11 unscored phrases lurking would otherwise look identical
+    // to a truly 100% bar — exactly the false-confidence we want to kill.
+    const totPh = Number(rep?.summary?.totalPhrases || 0);
+    const frac  = (num) => totPh ? `${Number(num || 0).toLocaleString()}/${totPh.toLocaleString()}` : '';
+
     const bars = [
-      { lbl: 'tradeTerms',     pct: Number(cov.tradeTermsFilledPct       || 0) },
-      { lbl: 'phraseCore',     pct: Number(cov.phraseCoreFilledPct       || 0) },
-      { lbl: 'embeddings',     pct: Number(cov.phraseCoreEmbeddedPct     || 0) },
-      { lbl: 'anchorWords',    pct: Number(cov.anchorWordsFilledPct      || 0) },
+      // Section-level (no fraction — denominator is sections, shown in hint)
+      { lbl: 'tradeTerms',  pct: Number(cov.tradeTermsFilledPct   || 0) },
+      { lbl: 'phraseCore',  pct: Number(cov.phraseCoreFilledPct   || 0) },
+      { lbl: 'sect.embed',  pct: Number(cov.phraseCoreEmbeddedPct || 0) },
+      // Phrase-level (fraction shown alongside percentage)
+      { lbl: 'anchors',     pct: Number(cov.anchorWordsFilledPct  || 0), frac: frac(cov.phrasesAnchored) },
+      { lbl: 'scored',      pct: Number(cov.phrasesScoredPct      || 0), frac: frac(cov.phrasesScored)   },
+      { lbl: 'phraseVec',   pct: Number(cov.phrasesEmbeddedPct    || 0), frac: frac(cov.phrasesEmbedded) },
     ];
     barsEl.innerHTML = bars.map(b => {
-      const cls = b.pct >= 90 ? 'ok' : (b.pct >= 60 ? 'warn' : 'crit');
-      const w   = Math.max(0, Math.min(100, b.pct));
+      const cls  = b.pct >= 90 ? 'ok' : (b.pct >= 60 ? 'warn' : 'crit');
+      const w    = Math.max(0, Math.min(100, b.pct));
+      const pctT = Number.isFinite(b.pct) ? (Math.round(b.pct * 10) / 10) : 0;
+      const pctS = (pctT % 1 === 0) ? `${pctT}%` : `${pctT.toFixed(1)}%`;
+      const fracHtml = b.frac ? `<span class="fdn-bar-frac" style="font-size:10px;color:#6b7280;margin-right:6px;">${b.frac}</span>` : '';
       return `
         <div class="fdn-bar">
           <div class="fdn-bar-label">
             <span>${b.lbl}</span>
-            <span class="fdn-bar-pct">${Math.round(b.pct)}%</span>
+            <span>${fracHtml}<span class="fdn-bar-pct">${pctS}</span></span>
           </div>
           <div class="fdn-bar-track">
             <div class="fdn-bar-fill ${cls}" style="width:${w}%;"></div>
@@ -4596,10 +4613,12 @@ function _brsRenderDelta(pre, post) {
     <div class="brs-delta">
       <div class="brs-delta-section">
         <div class="brs-delta-h">Foundation Coverage — before → after</div>
-        ${_fdnCoverageDeltaRow('tradeTerms filled',       preCov.tradeTermsFilledPct,       postCov.tradeTermsFilledPct)}
-        ${_fdnCoverageDeltaRow('phraseCore filled',       preCov.phraseCoreFilledPct,       postCov.phraseCoreFilledPct)}
-        ${_fdnCoverageDeltaRow('phraseCore embedded',     preCov.phraseCoreEmbeddedPct,     postCov.phraseCoreEmbeddedPct)}
-        ${_fdnCoverageDeltaRow('anchorWords on phrases',  preCov.anchorWordsFilledPct,      postCov.anchorWordsFilledPct)}
+        ${_fdnCoverageDeltaRow('tradeTerms (sections)',    preCov.tradeTermsFilledPct,   postCov.tradeTermsFilledPct)}
+        ${_fdnCoverageDeltaRow('phraseCore (sections)',    preCov.phraseCoreFilledPct,   postCov.phraseCoreFilledPct)}
+        ${_fdnCoverageDeltaRow('phraseCoreEmb (sections)', preCov.phraseCoreEmbeddedPct, postCov.phraseCoreEmbeddedPct)}
+        ${_fdnCoverageDeltaRow('anchors (phrases)',        preCov.anchorWordsFilledPct,  postCov.anchorWordsFilledPct)}
+        ${_fdnCoverageDeltaRow('scored (phrases)',         preCov.phrasesScoredPct,      postCov.phrasesScoredPct)}
+        ${_fdnCoverageDeltaRow('phraseVec (phrases)',      preCov.phrasesEmbeddedPct,    postCov.phrasesEmbeddedPct)}
       </div>
       <div class="brs-delta-section">
         <div class="brs-delta-h">Outstanding Issues — before → after</div>

@@ -244,6 +244,8 @@ function _computeCoverage(containers) {
   let sectionsWithEmb       = 0;
   let totalPhrases          = 0;
   let phrasesWithAnchors    = 0;
+  let phrasesWithScore      = 0; // 3TSM-scored — p.score object populated
+  let phrasesWithEmbedding  = 0; // per-phrase vector present — GATE 2.8 eligible
   let metaContainers        = 0;
   let metaContainersCorrect = 0;
 
@@ -261,7 +263,9 @@ function _computeCoverage(containers) {
       if (s.phraseCoreScoredAt)               sectionsWithEmb++; // proxy — real embedding is select:false
       for (const p of (s.callerPhrases || [])) {
         totalPhrases++;
-        if ((p.anchorWords || []).length > 0) phrasesWithAnchors++;
+        if ((p.anchorWords || []).length > 0)    phrasesWithAnchors++;
+        if (p.score && typeof p.score === 'object') phrasesWithScore++;
+        if (Array.isArray(p.embedding) && p.embedding.length > 0) phrasesWithEmbedding++;
       }
     }
   }
@@ -270,10 +274,19 @@ function _computeCoverage(containers) {
     totalSections,
     activeSections,
     totalPhrases,
+    // ── Section-level coverage (denominator = activeSections) ──────────
     tradeTermsFilledPct:     _pct(sectionsWithTrade,  activeSections),
     phraseCoreFilledPct:     _pct(sectionsWithCore,   activeSections),
     phraseCoreEmbeddedPct:   _pct(sectionsWithEmb,    activeSections),
-    anchorWordsFilledPct:    _pct(phrasesWithAnchors, totalPhrases),
+    // ── Phrase-level coverage (denominator = totalPhrases) ─────────────
+    // Raw counts exposed so the UI can render honest "X/Y" fractions,
+    // not just rounded percentages that mask a handful of unscored phrases.
+    phrasesAnchored:         phrasesWithAnchors,
+    phrasesScored:           phrasesWithScore,
+    phrasesEmbedded:         phrasesWithEmbedding,
+    anchorWordsFilledPct:    _pct(phrasesWithAnchors,   totalPhrases),
+    phrasesScoredPct:        _pct(phrasesWithScore,     totalPhrases),
+    phrasesEmbeddedPct:      _pct(phrasesWithEmbedding, totalPhrases),
     noAnchorCorrectness:     `${metaContainersCorrect}/${metaContainers}`,
     metaContainers,
     metaContainersCorrect,
@@ -428,10 +441,17 @@ async function runHealthCheck(companyId) {
       totalPhrases:     coverage.totalPhrases,
       severityCounts,
       coverage: {
+        // Section-level (denominator = activeSections)
         tradeTermsFilledPct:   coverage.tradeTermsFilledPct,
         phraseCoreFilledPct:   coverage.phraseCoreFilledPct,
         phraseCoreEmbeddedPct: coverage.phraseCoreEmbeddedPct,
+        // Phrase-level (denominator = totalPhrases) — raw counts + percentages
         anchorWordsFilledPct:  coverage.anchorWordsFilledPct,
+        phrasesAnchored:       coverage.phrasesAnchored,
+        phrasesScored:         coverage.phrasesScored,
+        phrasesEmbedded:       coverage.phrasesEmbedded,
+        phrasesScoredPct:      coverage.phrasesScoredPct,
+        phrasesEmbeddedPct:    coverage.phrasesEmbeddedPct,
         noAnchorCorrectness:   coverage.noAnchorCorrectness,
         metaContainers:        coverage.metaContainers,
         metaContainersCorrect: coverage.metaContainersCorrect,
