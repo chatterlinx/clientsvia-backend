@@ -967,6 +967,9 @@ app.get('/healthz', (req, res) => res.json({ ok: true }));
 // Dedicated memory endpoint (lean platform telemetry)
 app.get('/health/memory', require('./utils/memoryMonitor').healthMemoryHandler);
 
+// Dedicated cuePhrases drift endpoint (UAP §29 — dictionary shape telemetry)
+app.get('/health/drift', require('./utils/cuePhrasesDriftMonitor').healthDriftHandler);
+
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);
@@ -1215,6 +1218,10 @@ async function startServer() {
             // Start daily memory heartbeat (platform telemetry)
             const { startDailyHeartbeat } = require('./utils/memoryMonitor');
             startDailyHeartbeat();
+
+            // Start daily cuePhrases drift monitor (UAP §29 — dictionary shape telemetry)
+            const { startDriftMonitor } = require('./utils/cuePhrasesDriftMonitor');
+            startDriftMonitor();
             console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);
