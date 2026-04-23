@@ -4471,8 +4471,57 @@ function _bulkRescoreUpdateBadge() {
 }
 
 /**
+ * _embedLastRunKey — localStorage key for the last embed-run outcome.
+ * Scoped by companyId so switching tenants doesn't leak state.
+ */
+function _embedLastRunKey() {
+  return S.companyId ? `embedLastRun:${S.companyId}` : null;
+}
+
+/** Read the persisted last-run outcome — { at, failed, embedded, circuit, aborted } or null. */
+function _embedReadLastRun() {
+  const key = _embedLastRunKey();
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object') return null;
+    return obj;
+  } catch (_) { return null; }
+}
+
+/** Persist last-run outcome (called on embed completion when there are failures). */
+function _embedPersistLastRun(data) {
+  const key = _embedLastRunKey();
+  if (!key) return;
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) {}
+}
+
+/** Clear last-run outcome (called on a clean run OR when operator dismisses). */
+function _embedClearLastRun() {
+  const key = _embedLastRunKey();
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch (_) {}
+}
+
+/** Operator dismissal from the amber badge. Confirms first. */
+function _embedDismissLastRun(ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const lr = _embedReadLastRun();
+  if (!lr) return;
+  if (!confirm(`Dismiss last-run warning?\n\n${lr.failed} phrase${lr.failed !== 1 ? 's' : ''} failed on ${new Date(lr.at).toLocaleString()}.\n\nThis only clears the reminder — it does NOT fix the missing vectors. Run Embed phrases again to retry.`)) return;
+  _embedClearLastRun();
+  _bulkEmbedUpdateBadge();
+  if (typeof _renderFoundationIssues === 'function' && _FDN && _FDN.last) {
+    _renderFoundationIssues(_FDN.last);
+  }
+}
+
+/**
  * _bulkEmbedUpdateBadge — refresh the pending count on the Embed phrases button.
- * Pending = totalPhrases - phrasesEmbedded (from the last Foundation strip scan).
+ * Pending (red)  = totalPhrases - phrasesEmbedded (from the last Foundation strip scan).
+ * Failed (amber) = from the last embed run's persisted outcome (_embedReadLastRun).
  * Call after _loadFoundationStrip resolves and after any save that may add phrases.
  */
 function _bulkEmbedUpdateBadge() {
@@ -4482,22 +4531,47 @@ function _bulkEmbedUpdateBadge() {
   const total   = Number(rep?.summary?.totalPhrases || 0);
   const covered = Number(rep?.summary?.coverage?.phrasesEmbedded || 0);
   const pending = Math.max(0, total - covered);
+
+  // Red pending badge
   let badge = btn.querySelector('.tb-embed-badge');
   if (pending === 0) {
     if (badge) badge.remove();
-    btn.title = total
-      ? 'All phrases have embeddings — phraseVec is clean.'
-      : 'Backfill missing per-phrase embeddings (phraseVec).';
-    return;
+  } else {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'tb-embed-badge';
+      badge.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;text-align:center;line-height:1.4;';
+      btn.appendChild(badge);
+    }
+    badge.textContent = pending;
   }
-  if (!badge) {
-    badge = document.createElement('span');
-    badge.className = 'tb-embed-badge';
-    badge.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#ef4444;color:#fff;font-size:10px;font-weight:700;min-width:18px;text-align:center;line-height:1.4;';
-    btn.appendChild(badge);
+
+  // Amber "failed last run" badge — sticks until next clean run or dismissal
+  const lastRun = _embedReadLastRun();
+  let errBadge = btn.querySelector('.tb-embed-badge-err');
+  if (lastRun && (Number(lastRun.failed) > 0 || lastRun.circuit)) {
+    if (!errBadge) {
+      errBadge = document.createElement('span');
+      errBadge.className = 'tb-embed-badge-err';
+      errBadge.style.cssText = 'display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#f59e0b;color:#000;font-size:10px;font-weight:700;min-width:18px;text-align:center;line-height:1.4;cursor:pointer;';
+      errBadge.title = 'Last embed run had failures — click to dismiss (does NOT fix).';
+      errBadge.addEventListener('click', _embedDismissLastRun);
+      btn.appendChild(errBadge);
+    }
+    const n = Number(lastRun.failed) || 0;
+    errBadge.textContent = lastRun.circuit ? `⛔ ${n}` : `⚠ ${n}`;
+  } else if (errBadge) {
+    errBadge.remove();
   }
-  badge.textContent = pending;
-  btn.title = `Embed phrases — ${pending.toLocaleString()} phrase${pending !== 1 ? 's' : ''} missing embeddings (GATE 2.8 Semantic Match skips these).`;
+
+  // Tooltip assembly
+  const parts = [];
+  if (pending > 0)                  parts.push(`${pending.toLocaleString()} pending`);
+  if (lastRun && Number(lastRun.failed) > 0) parts.push(`${lastRun.failed} failed last run (${new Date(lastRun.at).toLocaleString()})`);
+  if (lastRun && lastRun.circuit)   parts.push('circuit-broken on last run — check OPENAI_API_KEY / quota / outage');
+  btn.title = parts.length
+    ? `Embed phrases — ${parts.join(' · ')}`
+    : (total ? 'All phrases have embeddings — phraseVec is clean.' : 'Backfill missing per-phrase embeddings (phraseVec).');
 }
 
 /**
@@ -4722,7 +4796,23 @@ async function _embStart() {
   }
   _embShowPane('done');
 
-  // Refresh Foundation strip so phraseVec shows new reality
+  // Persist last-run outcome so operator still sees a signal after closing the modal.
+  // Clean run (no failures, not aborted) → clear any prior warning.
+  // Any failures OR circuit-breaker → stamp localStorage for the amber badge + inline issue row.
+  if (_EMB.failed > 0 || abortedReason === 'circuit_breaker') {
+    _embedPersistLastRun({
+      at:       new Date().toISOString(),
+      failed:   Number(_EMB.failed) || 0,
+      embedded: Number(_EMB.embedded) || 0,
+      circuit:  abortedReason === 'circuit_breaker',
+      aborted:  abortedReason === 'stopped_by_user',
+    });
+  } else if (abortedReason !== 'stopped_by_user') {
+    _embedClearLastRun();
+  }
+  _bulkEmbedUpdateBadge();
+
+  // Refresh Foundation strip so phraseVec + inline issues show new reality
   _loadFoundationStrip(true).catch(() => {});
 }
 
@@ -5117,6 +5207,28 @@ function _renderFoundationIssues(rep) {
       message:        chk.message || '',
       containerId:    null,
       containerTitle: 'Platform',
+      sectionLabel:   null,
+      isPlatform:     true,
+    });
+  }
+
+  // Synthesize an issue row from the last embed-run's persisted outcome so the
+  // operator sees the warning on the page even after closing the modal. Cleared
+  // on next clean run or via the amber badge × dismissal.
+  const lr = (typeof _embedReadLastRun === 'function') ? _embedReadLastRun() : null;
+  if (lr && (Number(lr.failed) > 0 || lr.circuit)) {
+    const whenTxt = (() => {
+      try { return new Date(lr.at).toLocaleString(); } catch (_) { return 'recently'; }
+    })();
+    const msg = lr.circuit
+      ? `Last embed run circuit-broke (${lr.failed} phrases unembedded). Check OPENAI_API_KEY / quota / outage, then re-run Embed phrases. (${whenTxt})`
+      : `Last embed run left ${lr.failed} phrase${lr.failed !== 1 ? 's' : ''} unembedded — these are dark to GATE 2.8 Semantic Match. Re-run Embed phrases to retry. (${whenTxt})`;
+    issues.push({
+      severity:       lr.circuit ? 'HIGH' : 'MED',
+      id:             'embed:last-run-failures',
+      message:        msg,
+      containerId:    null,
+      containerTitle: 'Embed phrases (last run)',
       sectionLabel:   null,
       isPlatform:     true,
     });
