@@ -855,21 +855,15 @@ function findContainer(containers, input, context = null) {
       }
     }
 
-    // ── Path B: Score container.title (implicit keywords) ────────────────
-    // Title match updates the container score (determines which CONTAINER wins),
-    // but does NOT reset bestSection/bestSIdx — those are preserved for Groq
-    // section targeting. Without this, a 204-section container sends ALL sections
-    // to Groq when the title wins, causing 5-8s latency instead of ~500ms.
-    if (container.title) {
-      const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
-      const titleScore = _scorePhrase(titleNorm, norm, inputWords);
-      const weighted = Math.round(titleScore * 0.8);
-      if (weighted > containerBestScore) {
-        containerBestScore = weighted;
-        // Preserve bestSection/bestSIdx from Path A for Groq targeting.
-        // Title winning = container-level match. Section = Groq focus hint.
-      }
-    }
+    // ── Path B REMOVED (April 2026) ──────────────────────────────────────
+    // Previously this block scored `container.title` at 0.8× and let an
+    // admin-chosen title influence which container won. That violated the
+    // locked architectural rule: container.title + section.label are
+    // ADMIN-ONLY organizational metadata. Routing matches ONLY against
+    // callerPhrases, anchorWords, contentKeywords (derived from content),
+    // and tradeTerms. If a container is losing matches it should rely on,
+    // the fix is to author better callerPhrases / contentKeywords — not
+    // to paper over it with title scoring.
 
     if (containerBestScore <= 0) continue;
 
@@ -939,24 +933,9 @@ function findContainer(containers, input, context = null) {
         }
       }
 
-      // Score title with augmented input
-      // Same principle as Path B: title updates container score but preserves
-      // any section found from keyword matching above for Groq targeting.
-      if (container.title) {
-        const titleNorm = container.title.toLowerCase().replace(/[^a-z\s]/g, ' ').trim();
-        const s = _scorePhrase(titleNorm, augNorm, augWords);
-        const weighted = Math.round(s * 0.8);
-        if (weighted > bestScore) {
-          bestScore = weighted;
-          bestMatch = {
-            container,
-            score: weighted,
-            bestSection:    bestMatch?.bestSection    || null,
-            bestSectionIdx: bestMatch?.bestSectionIdx ?? null,
-            contextAssisted: true,
-          };
-        }
-      }
+      // container.title scoring REMOVED (April 2026) — see Path B note above.
+      // Context fallback relies solely on contentKeywords + (caller-provided)
+      // callReason. Admin-chosen titles never influence which container wins.
     }
   }
 

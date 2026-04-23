@@ -386,11 +386,11 @@ function _scoreSectionsForGap(sections, userInput, cueFrame) {
     });
     if (negHit) continue;  // disqualified
 
-    // ── Label word overlap (×4) ──
-    const labelWords = (section.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
-    for (const lw of labelWords) {
-      if (inputWords.has(lw) || inputStems.has(_stem(lw))) score += 4;
-    }
+    // ── Label word overlap REMOVED (April 2026) ──
+    // Previously section.label words contributed ×4 to section scoring here.
+    // That violated the locked rule: section.label is admin-only metadata and
+    // must not influence routing. callerPhrases + contentKeywords + cues are
+    // the only legal signals in this gap-scoring path.
 
     // ── callerPhrase word overlap (best phrase × 3) ──
     let bestPhraseScore = 0;
