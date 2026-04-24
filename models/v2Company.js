@@ -1275,20 +1275,50 @@ const companySchema = new mongoose.Schema({
         // -------------------------------------------------------------------
         // Migrated from aiAgentSettings.voiceSettings (nuked 2025-11-20)
         voiceSettings: {
-            apiSource: { 
-                type: String, 
-                enum: ['clientsvia', 'own'], 
-                default: 'clientsvia' 
+            // -------------------------------------------------------------------
+            // PROVIDER SELECTION (Apr 2026) — Per-tenant default TTS provider.
+            // -------------------------------------------------------------------
+            // 'elevenlabs' = premium (requires apiKey below OR platform key)
+            // 'polly'      = standard, rendered by Twilio <Say voice="Polly.X"> —
+            //                no API key, no circuit breaker, ~100% reliable
+            //
+            // Polly is ALSO the universal fallback when ElevenLabs fails, regardless
+            // of which provider is primary. The tenant's pollyVoiceId below controls
+            // BOTH: the primary voice when provider='polly', AND the fallback voice
+            // when provider='elevenlabs' fails mid-call.
+            //
+            // Hardcoded default 'Polly.Matthew-Neural' is a last-resort safety net
+            // for pre-company-load crashes only — every runtime path reads pollyVoiceId.
+            // -------------------------------------------------------------------
+            provider: {
+                type: String,
+                enum: ['elevenlabs', 'polly'],
+                default: 'elevenlabs'
             },
-            apiKey: { 
-                type: String, 
-                trim: true, 
+            pollyVoiceId: {
+                type: String,
+                trim: true,
+                default: 'Polly.Matthew-Neural'
+            },
+            pollyEngine: {
+                type: String,
+                enum: ['neural', 'standard'],
+                default: 'neural'
+            },
+            apiSource: {
+                type: String,
+                enum: ['clientsvia', 'own'],
+                default: 'clientsvia'
+            },
+            apiKey: {
+                type: String,
+                trim: true,
                 default: null
             },
-            voiceId: { 
-                type: String, 
-                trim: true, 
-                default: null 
+            voiceId: {
+                type: String,
+                trim: true,
+                default: null
             },
             stability: { 
                 type: Number, 
