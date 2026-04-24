@@ -37,6 +37,7 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const ConfigResolver = require('./ConfigResolver');
 const VocabularyResolver = require('./VocabularyResolver');
 const DeepgramCircuitBreaker = require('./DeepgramCircuitBreaker');
+const MSHealth = require('../../utils/mediaStreamHealthMonitor');
 const TurnLifecycleAdapter = require('./TurnLifecycleAdapter');
 const OutboundAudioPlayer = require('./OutboundAudioPlayer');
 
@@ -255,11 +256,16 @@ async function _handleConnection(ws, req, dgClient) {
 
     const ctx = { remote: req.socket?.remoteAddress || 'unknown' };
     logger.info('[MS] Connection opened', ctx);
+    // C5 metric — increment platform-wide active WS count. Decrement in closeAll.
+    try { MSHealth.recordStreamOpened(); } catch (_e) { /* health never blocks */ }
 
     // Always define a single safe close path.
     const closeAll = (reason) => {
         if (state.closed) return;
         state.closed = true;
+        // C5 metric — always balance open/close. Done before dg.finish() so
+        // an exception mid-cleanup still updates the gauge.
+        try { MSHealth.recordStreamClosed(); } catch (_e) { /* noop */ }
         // Cancel any in-flight playback
         if (state.playbackCancel) state.playbackCancel.cancelled = true;
         try { state.dgLive?.finish(); } catch (_e) { /* noop */ }
@@ -294,6 +300,15 @@ async function _handleConnection(ws, req, dgClient) {
         _appendTrace(state.companyId, state.callSid, 'MS_MIDCALL_FALLBACK', {
             reason
         }, state.turnCount);
+        // C5 metric — ring-buffer the fallback so /health/media-streams can
+        // report 24h counts without reading CallTranscriptV2.
+        try {
+            MSHealth.recordMidcallFallback({
+                companyId: state.companyId,
+                callSid: state.callSid,
+                reason
+            });
+        } catch (_e) { /* noop */ }
         await _redirectCallToFallback(state.company, state.callSid, state.hostHint);
         closeAll(`fallback:${reason}`);
     };
@@ -430,6 +445,8 @@ async function _handleStart(msg, state, ws, dgClient, bailToFallback) {
     } catch (err) {
         logger.error('[MS] Failed to open Deepgram stream', { error: err.message });
         await DeepgramCircuitBreaker.recordFailure(`open_failed:${err.message}`);
+        // C5 metric — synchronous-open path failed.
+        try { MSHealth.recordDeepgramAttempt(false); } catch (_e) { /* noop */ }
         await bailToFallback(`dg_open_failed:${err.message}`);
         return;
     }
@@ -475,6 +492,8 @@ async function _handleStart(msg, state, ws, dgClient, bailToFallback) {
             language: state.config.language
         }, 0);
         await DeepgramCircuitBreaker.recordSuccess();
+        // C5 metric — live WebSocket handshake succeeded.
+        try { MSHealth.recordDeepgramAttempt(true); } catch (_e) { /* noop */ }
 
         // First-turn setup: init callState + play greeting via OutboundAudioPlayer
         try {
@@ -512,6 +531,12 @@ async function _handleStart(msg, state, ws, dgClient, bailToFallback) {
             error: err?.message || String(err)
         }, state.turnCount);
         await DeepgramCircuitBreaker.recordFailure(`dg_error:${err?.message || 'unknown'}`);
+        // C5 metric — count mid-stream error as a failed attempt for
+        // success-rate tracking. This biases the window a little pessimistic
+        // (it counts both "never connected" and "disconnected mid-call"),
+        // which matches the operational question we want to answer: how
+        // often is the DG path actually usable end-to-end?
+        try { MSHealth.recordDeepgramAttempt(false); } catch (_e) { /* noop */ }
         await bailToFallback(`dg_error:${err?.message || 'unknown'}`);
     });
 
@@ -721,6 +746,9 @@ async function _runTurn(state, ws, payload, callerPhone, bailToFallback) {
             callSid: state.callSid?.slice?.(-8),
             turnNumber
         });
+        // C5 metric — still record the engine-side latency; the caller just
+        // gets silence, but the turn itself completed.
+        try { MSHealth.recordTurnLatency(Date.now() - turnStart); } catch (_e) { /* noop */ }
         return;
     }
 
@@ -736,14 +764,18 @@ async function _runTurn(state, ws, payload, callerPhone, bailToFallback) {
             cancelToken: state.playbackCancel
         });
         const engineMs = Date.now() - turnStart - (playResult.synthMs || 0);
+        const totalMs = Date.now() - turnStart;
         logger.info('[MS] turn complete', {
             callSid: state.callSid?.slice?.(-8),
             turnNumber,
             engineMs,
             synthMs: playResult.synthMs,
             framesSent: playResult.framesSent,
-            totalMs: Date.now() - turnStart
+            totalMs
         });
+        // C5 metric — full turn latency including synth. This is what the
+        // caller actually perceives (DG final → caller hears agent).
+        try { MSHealth.recordTurnLatency(totalMs); } catch (_e) { /* noop */ }
     } catch (err) {
         logger.error('[MS] play response failed', {
             callSid: state.callSid?.slice?.(-8),

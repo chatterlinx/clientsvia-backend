@@ -5,6 +5,71 @@ Each entry is dated and ties to a commit range when possible.
 
 ---
 
+## v1.2.0 — 2026-04-23
+
+**Media Streams + Deepgram Nova-3 Direct STT — §30 shipped.**
+
+Platform-wide STT upgrade replacing Twilio `<Gather>` for opted-in
+tenants. Feature-flagged OFF by default. Gather path preserved as the
+universal fallback — any tenant, any call, can always reach it. Five
+commits, 8 test suites, 101 tests passing.
+
+- **C1 — Scrub hardcoded tenant data from STT services.** Removed the
+  HVAC keyword block from `services/stt/DeepgramService.js`
+  (L198-219). `model` param now required; no hardcoded default.
+  `DeepgramFallback.js` audited for same. Shipped `d3fd0bfd3`.
+- **C2 — Platform vocab + config resolvers + schema.** New
+  `services/mediaStream/VocabularyResolver.js` (per-tenant keywords +
+  `AdminSettings.globalHub.tradeVocabularies[]` + platform-global
+  first names, deduped, sorted by boost DESC). New
+  `ConfigResolver.js` (tenant → platform → fallback). Schema
+  additions: `company.aiAgentSettings.agent2.mediaStreams.{enabled,
+  model, endpointingMs, utteranceEndMs, languageOverride}` and
+  `AdminSettings.globalHub.mediaStreams.{defaultModel,
+  defaultEndpointingMs, defaultUtteranceEndMs, defaultLanguage}`
+  (defaults: `nova-3`, `300`, `1000`, `en-US`). Shipped `538af2a62`.
+- **C3 — WebSocket server + circuit breaker + turn adapter.** New
+  `services/mediaStream/MediaStreamServer.js` (mirrors
+  `services/stt/TestConsoleASRServer.js` upgrade pattern).
+  `DeepgramCircuitBreaker` — Redis-backed, platform-wide key
+  (`deepgram:ms:circuit:global`), 3 consecutive failures in 5-min
+  window → opens for 1h. `TurnLifecycleAdapter` aggregates DG
+  interim → final → UtteranceEnd → emits turn payload matching the
+  existing engine contract. Shipped `2cd9fbac1`.
+- **C4 — Wire Media Streams as primary STT, gated by per-company
+  flag.** New `routes/mediaStream.js` (bootstrap + fallback
+  endpoints). `/voice` handler checks `mediaStreams.enabled &&
+  !circuit.open` → emits `<Connect><Stream>` TwiML with
+  CustomParameters, else existing Gather path runs unchanged. Mid-call
+  failures trigger `bailToFallback()` (Twilio REST `calls(sid).update`
+  redirect to `/api/twilio/media-stream/:companyId/fallback`). New
+  `OutboundAudioPlayer.js` (ElevenLabs `output_format: 'ulaw_8000'` →
+  160-byte frames → base64 media events + mark events for playback
+  completion + barge-in cancelToken). Admin UI adds "Speech Pipeline"
+  card to `agent-console/agent2.html` with read-only resolved preview.
+  Shipped `146967ba1`.
+- **C5 — Observability, health endpoint, architecture docs.** New
+  `utils/mediaStreamHealthMonitor.js` — ring-buffered platform
+  telemetry (active WS count, DG connect success rate, turn latency
+  p50/p95/p99, 24h mid-call fallback count, circuit state). Wired
+  `record*()` calls into `MediaStreamServer`. `GET
+  /health/media-streams` + daily heartbeat (pattern mirrors
+  `utils/memoryMonitor.js`). 13 new `MS_*` kinds catalogued in
+  `CallTranscriptV2.TraceSchema` comment. §30 architecture doc with
+  11 sub-sections covering flow diagram, platform principles,
+  constants table, rollback levers, rollout protocol. Shipped
+  `44b1d3b73`.
+
+**Rollout:** Deploy with all tenants OFF. Flip flag per-tenant via
+admin UI Speech Pipeline card after dev validation. Platform kill
+switch: `DeepgramCircuitBreaker.forceOpen()` in Render Shell — every
+tenant instantly falls back to Gather for 1h.
+
+Commits: `d3fd0bfd3`, `538af2a62`, `2cd9fbac1`, `146967ba1`,
+`44b1d3b73`. Architecture: §30 (11 sub-sections).
+
+---
+
 ## v1.1.0 — 2026-04-23
 
 **UAP 7+1 Cue + Anchor Hardening — §23 through §29 shipped.**

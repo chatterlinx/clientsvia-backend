@@ -29,7 +29,30 @@ const TraceSchema = new mongoose.Schema(
   {
     traceKey: { type: String, required: true }, // stable dedupe key (e.g. `${turnNumber}:${kind}`)
     turnNumber: { type: Number, default: null },
-    kind: { type: String, required: true }, // matcher / router / greeting / finalize
+    // kind: free-form string. kept un-enumerated so new event types don't
+    // require a schema migration. Catalog of well-known kinds below — keep
+    // it in sync when new ones are introduced.
+    //
+    //   Gather / engine (original):
+    //     ROUTE_DECISION, KC_MATCH, UAP_PARSE, BK_*, TR_*, LAP_*,
+    //     KC_SECTION_GAP, KC_LLM_FALLBACK, KC_ACK, WEBHOOK_TIMING,
+    //     COMPUTE_CRASH, ROUTE_CRASH, ...
+    //
+    //   Media Streams (C4/5 + C5/5):
+    //     MS_STREAM_OPENED         — Twilio WS handshake done
+    //     MS_STREAM_CLOSED         — WS torn down (any reason)
+    //     MS_DEEPGRAM_CONNECTED    — DG live socket up
+    //     MS_DEEPGRAM_DISCONNECTED — DG live socket closed cleanly
+    //     MS_DEEPGRAM_ERROR        — DG live socket emitted an error
+    //     MS_DEEPGRAM_TRANSCRIPT   — DG final or interim-committed transcript
+    //     MS_DEEPGRAM_VAD          — DG speech-started / utterance-end signal
+    //     MS_TURN_EMITTED          — adapter emitted a turn payload to engine
+    //     MS_GREETING_PLAYED       — greeting TTS finished streaming
+    //     MS_ENGINE_ERROR          — CallRuntime.processTurn threw or timed out
+    //     MS_MIDCALL_FALLBACK      — REST redirect into Gather path fired
+    //     MS_CIRCUIT_OPENED        — DG circuit breaker tripped
+    //     MS_CIRCUIT_CLOSED        — DG circuit breaker manually cleared
+    kind: { type: String, required: true },
     ts: { type: Date, required: true },
     payload: { type: mongoose.Schema.Types.Mixed, default: {} }
   },

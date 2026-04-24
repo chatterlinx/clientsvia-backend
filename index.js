@@ -979,6 +979,10 @@ app.get('/health/memory', require('./utils/memoryMonitor').healthMemoryHandler);
 // Dedicated cuePhrases drift endpoint (UAP §29 — dictionary shape telemetry)
 app.get('/health/drift', require('./utils/cuePhrasesDriftMonitor').healthDriftHandler);
 
+// Media Streams health — active WS count, DG success rate, turn latency
+// percentiles, circuit state, 24h mid-call-fallback count. (C5/5)
+app.get('/health/media-streams', require('./utils/mediaStreamHealthMonitor').healthMediaStreamsHandler);
+
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);
@@ -1231,6 +1235,14 @@ async function startServer() {
             // Start daily cuePhrases drift monitor (UAP §29 — dictionary shape telemetry)
             const { startDriftMonitor } = require('./utils/cuePhrasesDriftMonitor');
             startDriftMonitor();
+
+            // Start daily Media Streams health heartbeat (C5/5)
+            try {
+                const { startDailyHeartbeat: startMsHeartbeat } = require('./utils/mediaStreamHealthMonitor');
+                startMsHeartbeat();
+            } catch (err) {
+                console.error('[Server] ⚠️ Media Streams heartbeat failed to start:', err.message);
+            }
             console.log(`🌐 Admin dashboard listening at http://0.0.0.0:${PORT}`);
             console.log(`📊 Node environment: ${process.env.NODE_ENV || 'development'}`);
             console.log(`🎯 Server ready to accept connections on port ${PORT}`);
