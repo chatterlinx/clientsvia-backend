@@ -149,6 +149,31 @@ async function _loadTenantContext(companyId) {
 }
 
 /**
+ * Persist a conversation turn (caller or agent) to CallTranscriptV2.
+ * Fire-and-forget; mirrors the shape the Gather path writes at
+ * routes/v2twilio.js so Call Intelligence renders MS turns identically.
+ *
+ * Caller turns carry `trace.inputTextSource: 'deepgram_live'` — the Call
+ * Intelligence API derives a per-turn STT provider from this, which the
+ * UI uses to render a green DEEPGRAM pill on the caller row.
+ */
+function _appendConversationTurn(companyId, callSid, turn) {
+    const CallTranscriptV2 = _loadCallTranscriptV2();
+    if (!CallTranscriptV2 || !companyId || !callSid || !turn) return;
+    try {
+        CallTranscriptV2.appendTurns(companyId, callSid, [turn])
+            .catch((err) => {
+                logger.warn('[MS] appendTurns failed (non-blocking)', {
+                    callSid: `${callSid}`.slice(-8),
+                    speaker: turn.speaker,
+                    turnNumber: turn.turnNumber,
+                    error: err.message
+                });
+            });
+    } catch (_e) { /* never block */ }
+}
+
+/**
  * Persist a single trace entry to CallTranscriptV2. Fire-and-forget;
  * never blocks the call. Matches the shape used by the Gather path.
  */
@@ -676,6 +701,27 @@ async function _runTurn(state, ws, payload, callerPhone, bailToFallback) {
         confidence: payload.confidence
     }, turnNumber);
 
+    // Persist the caller's transcribed utterance as a CONVERSATION_CALLER turn
+    // so Call Intelligence renders it identically to Gather-path caller rows.
+    // `trace.inputTextSource = 'deepgram_live'` tells the API + UI that this
+    // turn was transcribed by Deepgram (drives the green DEEPGRAM badge).
+    const callerTurnText = typeof payload.text === 'string' ? payload.text.trim() : '';
+    if (callerTurnText) {
+        _appendConversationTurn(state.companyId, state.callSid, {
+            speaker:    'caller',
+            kind:       'CONVERSATION_CALLER',
+            text:       callerTurnText,
+            turnNumber,
+            ts:         new Date(),
+            sourceKey:  'stt',
+            trace: {
+                inputTextSource: 'deepgram_live',
+                dgConfidence:    typeof payload.confidence === 'number' ? payload.confidence : null,
+                dgReason:        payload.reason || null
+            }
+        });
+    }
+
     logger.info('[MS] 🎤 Turn finalised', {
         callSid: state.callSid?.slice?.(-8),
         companyId: state.companyId,
@@ -811,6 +857,31 @@ async function _runTurn(state, ws, payload, callerPhone, bailToFallback) {
             framesSent: playResult.framesSent,
             totalMs
         });
+
+        // Persist the agent's response as a CONVERSATION_AGENT turn so Call
+        // Intelligence's transcript + pipeline trace render identically to the
+        // Gather path (same kcCard resolution, same provenance fields).
+        _appendConversationTurn(state.companyId, state.callSid, {
+            speaker:    'agent',
+            kind:       'CONVERSATION_AGENT',
+            text:       responseText.trim(),
+            turnNumber,
+            ts:         new Date(),
+            sourceKey:  runtimeResult?.matchSource || 'MEDIA_STREAMS',
+            trace: {
+                provenance:  runtimeResult?.provenance || null,
+                matchSource: runtimeResult?.matchSource || null,
+                lane:        runtimeResult?.lane || null,
+                kcTrace:     runtimeResult?.kcTrace || null,
+                // Mark this agent turn as served via Media Streams so the UI
+                // can distinguish MS-delivered audio from <Play>/TwiML paths.
+                deliveredVia: 'media-streams',
+                synthMs:     typeof playResult.synthMs === 'number' ? playResult.synthMs : null,
+                totalMs:     totalMs,
+                framesSent:  typeof playResult.framesSent === 'number' ? playResult.framesSent : null
+            }
+        });
+
         // C5 metric — full turn latency including synth. This is what the
         // caller actually perceives (DG final → caller hears agent).
         try { MSHealth.recordTurnLatency(totalMs); } catch (_e) { /* noop */ }

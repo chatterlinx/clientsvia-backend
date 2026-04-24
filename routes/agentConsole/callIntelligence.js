@@ -1910,6 +1910,29 @@ function fmtDuration(seconds) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+// ── Per-turn STT provider inference ──────────────────────────────────────
+// Caller turns carry `trace.inputTextSource` written by whichever pipeline
+// transcribed the utterance:
+//
+//   'deepgram_live'     — Media Streams path (MediaStreamServer._runTurn)
+//   'deepgram_fallback' — DeepgramFallback rescue on low-confidence Gather
+//   'speechResult'      — Twilio <Gather speechModel="auto"> (default)
+//   null / undefined    — legacy transcripts before the field existed
+//
+// The UI uses this to render a green DEEPGRAM pill on caller rows whenever
+// Deepgram did the STT — giving an at-a-glance view of which specific turns
+// benefited from Nova-3 acoustic quality vs Twilio's managed STT.
+function derivePerTurnSttProvider(turn) {
+  if (!turn || turn.speaker !== 'caller') return null;
+  const src = turn?.trace?.inputTextSource;
+  if (src === 'deepgram_live')     return 'deepgram-live';
+  if (src === 'deepgram_fallback') return 'deepgram-fallback';
+  if (src === 'speechResult')      return 'gather';
+  // null / undefined / unknown → leave unset so the UI can hide the pill
+  // rather than assert a provider we aren't sure about.
+  return null;
+}
+
 // ── Source key → provenanceType inference ──────────────────────────────────
 // When trace.provenance.type is absent from the transcript (older calls, or
 // paths that don't write it explicitly), infer from the sourceKey.
@@ -2618,6 +2641,11 @@ function buildConversationTurns(rawTurns, kcMap, discoveryNotes, startedAt) {
       ts: t.ts || null,
       kind: t.kind || null,
       sourceKey: srcKey,
+      // Per-turn STT provider: drives the green DEEPGRAM pill on caller
+      // rows when the utterance was transcribed by Deepgram (either live
+      // via Media Streams or rescued via DeepgramFallback). Null for agent
+      // turns and for legacy transcripts with no inputTextSource.
+      sttProvider: derivePerTurnSttProvider(t),
       provenanceType: provType,
       provenanceLabel: provenanceLabel(provType, srcKey, provPath),
       provenancePath: provPath,

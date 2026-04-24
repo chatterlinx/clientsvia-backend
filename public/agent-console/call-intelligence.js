@@ -1748,6 +1748,20 @@ function renderTurnBlock(t, companyId, turnFlowMap = {}) {
   const speakerChip = isCaller
     ? `<span class="spk-chip spk-caller">C</span>`
     : `<span class="spk-chip spk-agent">A</span>`;
+
+  // Per-turn STT provider badge — green DEEPGRAM pill when Deepgram
+  // transcribed this caller utterance (Nova-3 live WS or fallback rescue).
+  // Omitted for Twilio Gather (the neutral default) and all agent turns.
+  let sttBadge = '';
+  if (isCaller && t.sttProvider && t.sttProvider !== 'gather') {
+    const isFallback = t.sttProvider === 'deepgram-fallback';
+    const title = isFallback
+      ? 'Transcribed by Deepgram (low-confidence Gather rescue)'
+      : 'Transcribed by Deepgram Nova-3 (live stream)';
+    const label = isFallback ? 'DEEPGRAM · RESCUE' : 'DEEPGRAM';
+    sttBadge = `<span class="stt-pill-turn stt-${t.sttProvider}" title="${title}">${label}</span>`;
+  }
+
   const textPreview = t.text?.substring(0, 110) || '';
   const isLong = (t.text?.length || 0) > 110;
   const speakerPrefix = isCaller ? 'C:' : 'A:';
@@ -2006,6 +2020,7 @@ function renderTurnBlock(t, companyId, turnFlowMap = {}) {
         <span class="turn-num-badge">${t.displayIndex ?? t.turnNumber}</span>
         <span class="turn-ts">${t.elapsed || '—'}</span>
         ${latLabel ? `<span class="latency-pill ${latCls}">${latLabel}</span>` : ''}
+        ${sttBadge}
         <div class="turn-dialogue">${dialLine}</div>
         ${isAgent ? `<span class="prov-badge ${provClass}">${esc(provLabel)}</span>` : ''}
         ${hasFlags ? `<div class="turn-flags-row">${flagsHtml}</div>` : ''}
