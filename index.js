@@ -603,6 +603,10 @@ function registerRoutes(routes) {
     // app.use('/api/alerts', routes.alertRoutes);
     // V2 DELETED: Legacy integrations route mount - Google Calendar integration eliminated
     app.use('/api/tts', routes.v2TtsRoutes);
+    // Apr 24, 2026 — AWS Polly preview endpoint (admin voice picker in AI Voice Settings tab).
+    // Graceful-degrades to 503 if AWS creds not set; live call path (Twilio-rendered Polly)
+    // is independent and unaffected.
+    app.use('/api/voice', require('./routes/voicePreview'));
     // V2 DELETED: Legacy external AI routes - violates 100% in-house AI system
     app.use('/api/elevenlabs', routes.v2ElevenLabsRoutes);
     // V2 DELETED: Legacy upload routes - file upload functionality eliminated

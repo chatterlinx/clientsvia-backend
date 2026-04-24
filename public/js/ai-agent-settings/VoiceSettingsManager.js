@@ -397,27 +397,33 @@ class VoiceSettingsManager {
     }
 
     _bindProviderCards() {
-        const cards = document.querySelectorAll('.voice-provider-card');
-        cards.forEach(card => {
-            const provider = card.dataset.provider;
-            // Click anywhere on card → select that provider as default
-            card.addEventListener('click', (e) => {
-                // Don't hijack clicks on the polly voice <select> — that's its own widget
-                if (e.target.tagName === 'SELECT' || e.target.closest('select')) return;
-                this._setProvider(provider);
-            });
-            card.addEventListener('keydown', (e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                    e.preventDefault();
-                    this._setProvider(provider);
-                }
+        // ── 1. Radio toggles — native change event when user clicks the label/toggle
+        document.querySelectorAll('.voice-provider-radio').forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) this._setProvider(radio.value);
             });
         });
 
-        // Polly voice dropdown → saves pollyVoiceId
+        // ── 2. EL card header — clicking anywhere in the header flips to ElevenLabs default
+        const elHeader = document.getElementById('el-card-header');
+        if (elHeader) {
+            const flipToEL = (e) => {
+                // Don't hijack the toggle label itself (native radio handles that)
+                if (e.target.closest('label')) return;
+                this._setProvider('elevenlabs');
+            };
+            elHeader.addEventListener('click', flipToEL);
+            elHeader.addEventListener('keydown', (e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    this._setProvider('elevenlabs');
+                }
+            });
+        }
+
+        // ── 3. Polly voice dropdown — populate + save on change
         const pollySelect = document.getElementById('polly-voice-select');
         if (pollySelect) {
-            // Populate options from catalog
             pollySelect.innerHTML = this._pollyCatalog
                 .map(v => `<option value="${v.id}">${this._esc(v.label)} — ${this._esc(v.gender)}, ${this._esc(v.accent)} (${this._esc(v.desc)})</option>`)
                 .join('');
@@ -425,25 +431,37 @@ class VoiceSettingsManager {
                 this._savePollyVoice(pollySelect.value);
             });
         }
+
+        // ── 4. Polly engine dropdown — save on change
+        const engineSelect = document.getElementById('polly-engine-select');
+        if (engineSelect) {
+            engineSelect.addEventListener('change', () => {
+                this._savePollyEngine(engineSelect.value);
+            });
+        }
+
+        // ── 5. Polly preview button — synthesize + play
+        const previewBtn = document.getElementById('polly-preview-btn');
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => this._previewPolly());
+        }
     }
 
     _renderProviderCards() {
         const provider = this.currentSettings?.provider || 'elevenlabs';
         const pollyVoiceId = this.currentSettings?.pollyVoiceId || 'Polly.Matthew-Neural';
+        const pollyEngine = this.currentSettings?.pollyEngine || 'neural';
 
-        // Update label pill in card header
+        // Banner label — "Current default: …"
         const labelPill = document.getElementById('voice-provider-current-label');
         if (labelPill) {
-            labelPill.textContent = provider === 'polly'
-                ? 'Default: Twilio (Polly)'
-                : 'Default: ElevenLabs';
+            labelPill.textContent = provider === 'polly' ? 'Twilio (Polly)' : 'ElevenLabs';
         }
 
         // Update cards: highlight the active one + toggle radio + show DEFAULT badge
         document.querySelectorAll('.voice-provider-card').forEach(card => {
             const isActive = card.dataset.provider === provider;
             card.classList.toggle('border-indigo-600', isActive);
-            card.classList.toggle('bg-indigo-50', isActive);
             card.classList.toggle('border-gray-200', !isActive);
             const radio = card.querySelector('.voice-provider-radio');
             if (radio) radio.checked = isActive;
@@ -451,9 +469,11 @@ class VoiceSettingsManager {
             if (badge) badge.classList.toggle('hidden', !isActive);
         });
 
-        // Sync Polly dropdown to saved value
+        // Sync Polly dropdowns to saved values
         const pollySelect = document.getElementById('polly-voice-select');
         if (pollySelect) pollySelect.value = pollyVoiceId;
+        const engineSelect = document.getElementById('polly-engine-select');
+        if (engineSelect) engineSelect.value = pollyEngine;
 
         // EL voice label — show current configured EL voice name
         const elVoiceLbl = document.getElementById('voice-provider-el-voice');
@@ -482,6 +502,79 @@ class VoiceSettingsManager {
         await this._saveProviderField({ pollyVoiceId });
         if (this.currentSettings) this.currentSettings.pollyVoiceId = pollyVoiceId;
         this._renderProviderCards();
+    }
+
+    async _savePollyEngine(engine) {
+        if (!['neural', 'standard'].includes(engine)) return;
+        if (this.currentSettings?.pollyEngine === engine) return;
+        await this._saveProviderField({ pollyEngine: engine });
+        if (this.currentSettings) this.currentSettings.pollyEngine = engine;
+        this._renderProviderCards();
+    }
+
+    async _previewPolly() {
+        const btn       = document.getElementById('polly-preview-btn');
+        const btnLabel  = document.getElementById('polly-preview-btn-label');
+        const audioEl   = document.getElementById('polly-preview-audio');
+        const statusEl  = document.getElementById('polly-preview-status');
+        const textEl    = document.getElementById('polly-preview-text');
+        const voiceSel  = document.getElementById('polly-voice-select');
+        const engineSel = document.getElementById('polly-engine-select');
+
+        const text    = (textEl?.value || '').trim() || 'Hi, thanks for calling. How can I help you today?';
+        const voiceId = voiceSel?.value || 'Polly.Matthew-Neural';
+        const engine  = engineSel?.value || 'neural';
+
+        if (statusEl) {
+            statusEl.textContent = 'Synthesizing…';
+            statusEl.className = 'text-xs text-gray-500';
+        }
+        if (btn) btn.disabled = true;
+        if (btnLabel) btnLabel.textContent = 'Synthesizing…';
+
+        // Clean up previous blob URL
+        if (this._pollyPreviewBlobUrl) {
+            try { URL.revokeObjectURL(this._pollyPreviewBlobUrl); } catch (_) {}
+            this._pollyPreviewBlobUrl = null;
+        }
+
+        try {
+            const res = await this._fetch('/api/voice/polly-preview', {
+                method: 'POST',
+                headers: { ...this._authHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voiceId, engine, text })
+            }, 20000);
+
+            if (!res.ok) {
+                let detail;
+                try { const j = await res.json(); detail = j.message || j.error || `HTTP ${res.status}`; }
+                catch (_) { detail = `HTTP ${res.status}`; }
+                throw new Error(detail);
+            }
+
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            this._pollyPreviewBlobUrl = url;
+
+            if (audioEl) {
+                audioEl.src = url;
+                audioEl.classList.remove('hidden');
+                try { await audioEl.play(); } catch (_) { /* user gesture may be required */ }
+            }
+            if (statusEl) {
+                statusEl.textContent = `Playing ${voiceId.replace('Polly.', '').replace('-Neural', '').replace('-Standard', '')} (${engine}).`;
+                statusEl.className = 'text-xs text-green-700';
+            }
+        } catch (err) {
+            console.error('[VoiceSettingsManager] Polly preview failed:', err.message);
+            if (statusEl) {
+                statusEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i>Preview failed: ${this._esc(err.message)}`;
+                statusEl.className = 'text-xs text-red-700';
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+            if (btnLabel) btnLabel.textContent = 'Play Sample';
+        }
     }
 
     async _saveProviderField(patch) {
