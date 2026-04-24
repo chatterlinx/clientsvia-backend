@@ -69,7 +69,14 @@ const CallTranscriptV2Schema = new mongoose.Schema(
       to: { type: String, default: null },
       startedAt: { type: Date, default: null },
       endedAt: { type: Date, default: null },
-      twilioDurationSeconds: { type: Number, default: null }
+      twilioDurationSeconds: { type: Number, default: null },
+      // Which STT pipeline handled the call.
+      //   null            — legacy / not yet stamped (read as 'gather' in UI)
+      //   'gather'        — Twilio <Gather speechModel="auto"> (current default)
+      //   'media-streams' — Deepgram Nova-3 live WS (opt-in, C4+)
+      //   'mixed'         — started on media-streams, fell back mid-call to gather
+      // Stamped by MediaStreamServer on DG Open, flipped to 'mixed' in bailToFallback.
+      sttProvider: { type: String, default: null }
     },
 
     firstTurnTs: { type: Date, default: null, index: true },
@@ -221,6 +228,41 @@ CallTranscriptV2Schema.statics.appendTrace = async function appendTrace(companyI
   if (maxTs) update.$max = { ...(update.$max || {}), lastTurnTs: maxTs };
 
   await this.updateOne({ companyId, callSid }, update, { upsert: true });
+};
+
+const VALID_STT_PROVIDERS = new Set(['gather', 'media-streams', 'mixed']);
+
+/**
+ * Stamp the STT pipeline used for this call.
+ *
+ * Writes `callMeta.sttProvider` with a narrow state machine:
+ *   (null | 'gather') + 'media-streams' → 'media-streams'
+ *   'media-streams'   + 'mixed'         → 'mixed'   (mid-call fallback)
+ *   'mixed'           + anything        → 'mixed'   (sticky — fallback occurred)
+ *
+ * Safe to call repeatedly; safe under concurrent writers. Never downgrades
+ * 'mixed' back to 'media-streams'.
+ */
+CallTranscriptV2Schema.statics.setSttProvider = async function setSttProvider(companyId, callSid, provider) {
+  if (!companyId || !callSid) return;
+  if (!VALID_STT_PROVIDERS.has(provider)) return;
+
+  if (provider === 'mixed') {
+    // Sticky upgrade — only apply if currently 'media-streams'. If it's null
+    // or 'gather' the call never used Media Streams, so 'mixed' is wrong.
+    await this.updateOne(
+      { companyId, callSid, 'callMeta.sttProvider': 'media-streams' },
+      { $set: { 'callMeta.sttProvider': 'mixed', updatedAt: new Date() } }
+    );
+    return;
+  }
+
+  // 'media-streams' or 'gather' — only stamp if not already 'mixed'
+  await this.updateOne(
+    { companyId, callSid, 'callMeta.sttProvider': { $ne: 'mixed' } },
+    { $set: { 'callMeta.sttProvider': provider, updatedAt: new Date() } },
+    { upsert: true }
+  );
 };
 
 /**

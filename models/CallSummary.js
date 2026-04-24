@@ -1014,6 +1014,25 @@ const CallSummarySchema = new mongoose.Schema({
     enum: ['pending', 'complete', 'error'],
     default: 'pending'
   },
+
+  /**
+   * STT pipeline that handled this call.
+   *   null            — legacy / not yet stamped (read as 'gather' in UI)
+   *   'gather'        — Twilio <Gather speechModel="auto">
+   *   'media-streams' — Deepgram Nova-3 live WebSocket (C4+)
+   *   'mixed'         — started media-streams, fell back mid-call to gather
+   *
+   * Indexed for fleet-level rollout dashboards ("how many of yesterday's
+   * calls went through Media Streams?"). Source of truth for per-call UI
+   * badge in Call Intelligence list.
+   */
+  sttProvider: {
+    type: String,
+    enum: ['gather', 'media-streams', 'mixed', null],
+    default: null,
+    index: true,
+    sparse: true
+  },
   
   /**
    * If there was an error, what was it?
@@ -1605,6 +1624,38 @@ CallSummarySchema.statics.getIntentDistribution = async function(companyId, star
   return result;
 };
 
+
+/**
+ * Stamp the STT pipeline used for this call.
+ *
+ * State machine (matches CallTranscriptV2.setSttProvider):
+ *   null | 'gather'  + 'media-streams' → 'media-streams'
+ *   'media-streams'  + 'mixed'         → 'mixed' (mid-call fallback)
+ *   'mixed'          + anything        → 'mixed' (sticky — fallback occurred)
+ *
+ * Identifies the call by twilioSid (Media Streams has the Twilio SID, not
+ * the internal callId). No-op if no matching record — called
+ * fire-and-forget from the MS path.
+ */
+CallSummarySchema.statics.setSttProvider = async function setSttProvider(twilioSid, provider) {
+  if (!twilioSid || !provider) return;
+  if (!['gather', 'media-streams', 'mixed'].includes(provider)) return;
+
+  if (provider === 'mixed') {
+    // Sticky upgrade from 'media-streams' only. Never flip gather → mixed.
+    await this.updateOne(
+      { twilioSid, sttProvider: 'media-streams' },
+      { $set: { sttProvider: 'mixed' } }
+    );
+    return;
+  }
+
+  // 'media-streams' or 'gather' — never downgrade a 'mixed' stamp.
+  await this.updateOne(
+    { twilioSid, sttProvider: { $ne: 'mixed' } },
+    { $set: { sttProvider: provider } }
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INSTANCE METHODS

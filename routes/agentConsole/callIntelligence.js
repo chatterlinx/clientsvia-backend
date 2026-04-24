@@ -1356,7 +1356,7 @@ router.get('/company/:companyId/list', async (req, res) => {
         .sort({ startedAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
-        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns hasRecording recordingUrl recordingSid recordingDuration')
+        .select('callId twilioSid startedAt endedAt phone toPhone durationSeconds turnCount routingTier events turns hasRecording recordingUrl recordingSid recordingDuration sttProvider')
         .lean(),
       CallSummary.countDocuments(summaryQuery)
     ]);
@@ -1475,7 +1475,9 @@ router.get('/company/:companyId/list', async (req, res) => {
         turns: summary.turnCount || 0,
         fromPhone: summary.phone,
         startTime: summary.startedAt,
-        routingTier: summary.routingTier || null
+        routingTier: summary.routingTier || null,
+        // C6 — which STT pipeline ran this call. Null = legacy / gather.
+        sttProvider: summary.sttProvider || null
       };
 
       if (intel) {

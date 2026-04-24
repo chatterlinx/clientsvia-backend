@@ -277,7 +277,22 @@ function normalizeListItem(c) {
     llmCost:         c.llmCost        ?? null,
     hasRecording:    rec.hasRecording ?? c.hasRecording ?? false,
     recordingUrl:    rec.url          || c.recordingUrl || null,
+    // C6 — which STT pipeline handled this call. Null = legacy / gather.
+    sttProvider:     meta.sttProvider || c.sttProvider || null,
   };
+}
+
+// C6 — render the STT pipeline pill for the calls table.
+// null/unknown → gather (the default historical path).
+function renderSttPill(sttProvider) {
+  const provider = sttProvider || 'gather';
+  const labels = {
+    'gather':        { text: 'Gather',  title: 'Twilio <Gather> STT (default)' },
+    'media-streams': { text: 'DG N-3',  title: 'Deepgram Nova-3 live (Media Streams)' },
+    'mixed':         { text: 'Mixed',   title: 'Started on Media Streams, fell back to Gather mid-call' }
+  };
+  const cfg = labels[provider] || labels.gather;
+  return `<span class="stt-pill stt-${provider}" title="${esc(cfg.title)}">${esc(cfg.text)}</span>`;
 }
 
 function renderCallsList({ items = [], total = 0, pages = 1 }) {
@@ -290,7 +305,7 @@ function renderCallsList({ items = [], total = 0, pages = 1 }) {
 
   if (!items.length) {
     tbody.innerHTML = `
-      <tr><td colspan="10">
+      <tr><td colspan="11">
         <div class="empty-state">
           <div class="empty-state-icon">📞</div>
           <h3>No calls found</h3>
@@ -316,6 +331,7 @@ function renderCallsList({ items = [], total = 0, pages = 1 }) {
         <td class="td-dur">${fmtDur(c.durationSeconds)}</td>
         <td class="td-turns">${c.turnCount ?? '—'}</td>
         <td>${tierBadge}</td>
+        <td class="td-stt">${renderSttPill(c.sttProvider)}</td>
         <td><span class="outcome-badge ${outClass}">${esc(outcomeRaw.replace(/_/g, ' '))}</span></td>
         <td class="td-cost">${c.llmCost ? `$${Number(c.llmCost).toFixed(4)}` : '—'}</td>
         <td>${c.hasRecording ? `<a class="recording-link" href="${esc(c.recordingUrl || '#')}" target="_blank">▶ Play</a>` : '—'}</td>
@@ -342,7 +358,7 @@ function renderCallsList({ items = [], total = 0, pages = 1 }) {
 
 function renderCallsError(msg) {
   $('calls-tbody').innerHTML = `
-    <tr><td colspan="10" style="padding:32px; text-align:center; color:var(--c-fail);">
+    <tr><td colspan="11" style="padding:32px; text-align:center; color:var(--c-fail);">
       Failed to load calls: ${esc(msg)}
     </td></tr>`;
 }

@@ -178,3 +178,78 @@ describe('_appendTrace', () => {
         expect(typeof entries[0].ts).toBe('string');
     });
 });
+
+// ----------------------------------------------------------------
+// _stampSttProvider — C6 STT observability (dual-write)
+// ----------------------------------------------------------------
+describe('_stampSttProvider', () => {
+    beforeEach(() => {
+        jest.resetModules();
+        jest.clearAllMocks();
+        process.env.DEEPGRAM_API_KEY = 'test_only';
+    });
+
+    test('no-op when callSid missing (CallSummary keys by twilioSid)', () => {
+        const mockTranscript = jest.fn().mockResolvedValue({});
+        const mockSummary = jest.fn().mockResolvedValue({});
+        jest.doMock('../../models/CallTranscriptV2', () => ({ setSttProvider: mockTranscript }));
+        jest.doMock('../../models/CallSummary', () => ({ setSttProvider: mockSummary }));
+
+        const { _internals } = require('../../services/mediaStream/MediaStreamServer');
+        _internals._stampSttProvider('c-1', null, 'media-streams');
+
+        // Transcript requires both IDs; Summary requires callSid. Both skip.
+        expect(mockTranscript).not.toHaveBeenCalled();
+        expect(mockSummary).not.toHaveBeenCalled();
+    });
+
+    test('no-op when companyId missing (transcript needs it; summary gated too)', () => {
+        const mockTranscript = jest.fn().mockResolvedValue({});
+        const mockSummary = jest.fn().mockResolvedValue({});
+        jest.doMock('../../models/CallTranscriptV2', () => ({ setSttProvider: mockTranscript }));
+        jest.doMock('../../models/CallSummary', () => ({ setSttProvider: mockSummary }));
+
+        const { _internals } = require('../../services/mediaStream/MediaStreamServer');
+        _internals._stampSttProvider(null, 'CA-999', 'media-streams');
+
+        expect(mockTranscript).not.toHaveBeenCalled();
+        // Summary still runs — it only needs twilioSid.
+        expect(mockSummary).toHaveBeenCalledWith('CA-999', 'media-streams');
+    });
+
+    test('dual-writes both models with the same provider value', () => {
+        const mockTranscript = jest.fn().mockResolvedValue({});
+        const mockSummary = jest.fn().mockResolvedValue({});
+        jest.doMock('../../models/CallTranscriptV2', () => ({ setSttProvider: mockTranscript }));
+        jest.doMock('../../models/CallSummary', () => ({ setSttProvider: mockSummary }));
+
+        const { _internals } = require('../../services/mediaStream/MediaStreamServer');
+        _internals._stampSttProvider('c-1', 'CA-abc', 'media-streams');
+
+        expect(mockTranscript).toHaveBeenCalledWith('c-1', 'CA-abc', 'media-streams');
+        expect(mockSummary).toHaveBeenCalledWith('CA-abc', 'media-streams');
+    });
+
+    test('passes "mixed" through unchanged for the sticky-flip case', () => {
+        const mockTranscript = jest.fn().mockResolvedValue({});
+        const mockSummary = jest.fn().mockResolvedValue({});
+        jest.doMock('../../models/CallTranscriptV2', () => ({ setSttProvider: mockTranscript }));
+        jest.doMock('../../models/CallSummary', () => ({ setSttProvider: mockSummary }));
+
+        const { _internals } = require('../../services/mediaStream/MediaStreamServer');
+        _internals._stampSttProvider('c-1', 'CA-abc', 'mixed');
+
+        expect(mockTranscript).toHaveBeenCalledWith('c-1', 'CA-abc', 'mixed');
+        expect(mockSummary).toHaveBeenCalledWith('CA-abc', 'mixed');
+    });
+
+    test('swallows model-side rejections (never blocks the call)', () => {
+        const mockTranscript = jest.fn().mockRejectedValue(new Error('mongo down'));
+        const mockSummary = jest.fn().mockRejectedValue(new Error('mongo down'));
+        jest.doMock('../../models/CallTranscriptV2', () => ({ setSttProvider: mockTranscript }));
+        jest.doMock('../../models/CallSummary', () => ({ setSttProvider: mockSummary }));
+
+        const { _internals } = require('../../services/mediaStream/MediaStreamServer');
+        expect(() => _internals._stampSttProvider('c-1', 'CA-x', 'media-streams')).not.toThrow();
+    });
+});

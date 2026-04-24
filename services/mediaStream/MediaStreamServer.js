@@ -73,6 +73,36 @@ function _loadCallTranscriptV2() {
         return null;
     }
 }
+function _loadCallSummary() {
+    try {
+        return require('../../models/CallSummary');
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * Stamp the STT provider on both CallTranscriptV2 and CallSummary.
+ * Fire-and-forget; never blocks the call.
+ *
+ * @param {string} provider — 'media-streams' | 'mixed'
+ */
+function _stampSttProvider(companyId, callSid, provider) {
+    const CallTranscriptV2 = _loadCallTranscriptV2();
+    const CallSummary = _loadCallSummary();
+    if (CallTranscriptV2 && companyId && callSid) {
+        try {
+            CallTranscriptV2.setSttProvider(companyId, callSid, provider)
+                .catch(() => { /* advisory — never block */ });
+        } catch (_e) { /* noop */ }
+    }
+    if (CallSummary && callSid) {
+        try {
+            CallSummary.setSttProvider(callSid, provider)
+                .catch(() => { /* advisory — never block */ });
+        } catch (_e) { /* noop */ }
+    }
+}
 
 // Path Twilio will stream to (emitted by /voice TwiML branch + route).
 const MS_PATH = '/api/twilio/media-stream';
@@ -309,6 +339,10 @@ async function _handleConnection(ws, req, dgClient) {
                 reason
             });
         } catch (_e) { /* noop */ }
+        // C6 observability — sticky flip to 'mixed' (only takes effect if
+        // sttProvider was already 'media-streams' — if we failed before DG
+        // Open fired, this is a no-op and Gather takes the call cleanly).
+        _stampSttProvider(state.companyId, state.callSid, 'mixed');
         await _redirectCallToFallback(state.company, state.callSid, state.hostHint);
         closeAll(`fallback:${reason}`);
     };
@@ -494,6 +528,10 @@ async function _handleStart(msg, state, ws, dgClient, bailToFallback) {
         await DeepgramCircuitBreaker.recordSuccess();
         // C5 metric — live WebSocket handshake succeeded.
         try { MSHealth.recordDeepgramAttempt(true); } catch (_e) { /* noop */ }
+        // C6 observability — this call is now officially on Media Streams.
+        // Stamp both CallTranscriptV2 and CallSummary so Call Intelligence
+        // UI can badge the row without scanning trace[].
+        _stampSttProvider(state.companyId, state.callSid, 'media-streams');
 
         // First-turn setup: init callState + play greeting via OutboundAudioPlayer
         try {
@@ -821,6 +859,7 @@ module.exports = {
         _loadTenantContext,
         _runTurn,
         _redirectCallToFallback,
-        _appendTrace
+        _appendTrace,
+        _stampSttProvider
     }
 };

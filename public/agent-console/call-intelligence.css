@@ -866,6 +866,22 @@ button { cursor: pointer; font-family: inherit; }
 .outcome-booking { background: var(--c-ok-bg);   color: var(--c-ok);   border: 1px solid var(--c-ok-border); }
 .outcome-other   { background: var(--surface-2); color: var(--tx-muted); border: 1px solid var(--border); }
 
+/* STT provider pill — which pipeline ran the call.
+   - gather          (Twilio <Gather>)                 — neutral gray
+   - media-streams   (Deepgram Nova-3 live WS)         — green (primary path)
+   - mixed           (MS → fell back to Gather mid-call) — amber (degraded)
+*/
+.stt-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.02em; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.stt-pill.stt-gather        { background: var(--surface-2); color: var(--tx-muted); border-color: var(--border); }
+.stt-pill.stt-media-streams { background: var(--c-ok-bg);   color: var(--c-ok);     border-color: var(--c-ok-border); }
+.stt-pill.stt-mixed         { background: var(--c-warn-bg); color: var(--c-warn);   border-color: var(--c-warn-border); }
+
 /* Pipeline trace: code tags inside detail */
 .pipe-row code {
   font-family: 'JetBrains Mono', monospace; font-size: 11px;
