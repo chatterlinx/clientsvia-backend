@@ -1989,7 +1989,82 @@ router.post('/voice', async (req, res) => {
       }
     }
     // ════════════════════════════════════════════════════════════════════════════
-    
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 🌊 MEDIA STREAMS BRANCH (C4/5) — Direct Deepgram Nova-3 live STT
+    // ────────────────────────────────────────────────────────────────────────────
+    // Per-tenant flag at company.aiAgentSettings.agent2.mediaStreams.enabled.
+    // When true AND the platform circuit breaker is closed, we emit
+    // <Connect><Stream> TwiML pointing at /api/twilio/media-stream (the
+    // WebSocket endpoint mounted by services/mediaStream/MediaStreamServer).
+    // That path bypasses Twilio Gather entirely — audio flows through the WS
+    // and turns are driven by Deepgram live events, not Gather completions.
+    //
+    // Fail-safe: ANY error in this block falls through to the standard Gather
+    // path below. No tenant can end up in a broken state because Media Streams
+    // setup threw. Same contract as the rest of /voice — the call lives on.
+    // ════════════════════════════════════════════════════════════════════════════
+    try {
+      const { isMediaStreamsEnabled } = require('../services/mediaStream/ConfigResolver');
+      const DeepgramCircuitBreaker = require('../services/mediaStream/DeepgramCircuitBreaker');
+
+      if (isMediaStreamsEnabled(company)) {
+        const circuitOpen = await DeepgramCircuitBreaker.isOpen();
+        if (!circuitOpen) {
+          logger.info(`[MS] 🌊 Routing call to Media Streams (companyId=${company._id}, callSid=${req.body.CallSid?.slice?.(-8) || 'none'})`);
+
+          // Fire a flow checkpoint so Call Console + Black Box can see the
+          // STT path decision. Same shape used by Gather-path checkpoints.
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'MS_STREAM_ROUTED',
+              turn: 0,
+              data: {
+                reason: 'mediaStreams.enabled=true && circuit=closed',
+                wssPath: '/api/twilio/media-stream'
+              }
+            }).catch(() => {});
+          }
+
+          const msTwiml = new twilio.twiml.VoiceResponse();
+          const connect = msTwiml.connect();
+          const stream = connect.stream({
+            url: `wss://${req.get('host')}/api/twilio/media-stream`
+          });
+          stream.parameter({ name: 'companyId', value: company._id.toString() });
+          stream.parameter({ name: 'callSid', value: req.body.CallSid || '' });
+          stream.parameter({ name: 'from', value: callerNumber || '' });
+          stream.parameter({ name: 'to', value: calledNumber || '' });
+
+          res.type('text/xml');
+          res.send(msTwiml.toString());
+          return;
+        } else {
+          logger.warn(`[MS] Circuit breaker OPEN — falling back to Gather for companyId=${company._id}`);
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'MS_CIRCUIT_OPEN_FALLBACK',
+              turn: 0,
+              data: { reason: 'DeepgramCircuitBreaker.isOpen() === true' }
+            }).catch(() => {});
+          }
+          // Fall through to Gather path below.
+        }
+      }
+    } catch (msErr) {
+      // Any failure in the Media Streams branch is non-fatal — caller still
+      // gets the standard Gather path. Log loudly so we notice if this regresses.
+      logger.error('[MS] branch threw — falling through to Gather', {
+        error: msErr.message,
+        stack: msErr.stack,
+        companyId: company._id?.toString?.()
+      });
+    }
+
     // 🚀 USE NEW V2 AI AGENT SYSTEM
     try {
       // Import V2 AI Agent Runtime - BRAND NEW SYSTEM
@@ -3004,10 +3079,13 @@ router.post('/handle-speech', async (req, res) => {
             const recordingUrl = req.body.RecordingUrl || null;
             
             if (recordingUrl) {
-              // TODO(C4): Replace hardcoded model with ConfigResolver.resolveMediaStreamConfig(company).model
-              // Preserves legacy behaviour (was DG_DEFAULTS.model = 'nova-2-phonecall').
+              // Per-tenant Deepgram model via ConfigResolver — no hardcoded model.
+              // Falls through to platform default (AdminSettings.globalHub.mediaStreams.defaultModel)
+              // then to 'nova-3' hardcoded last-resort if neither is set.
+              const { resolveMediaStreamConfig } = require('../services/mediaStream/ConfigResolver');
+              const _resolvedModel = resolveMediaStreamConfig(company).model;
               const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl, {
-                model: 'nova-2-phonecall'
+                model: _resolvedModel
               });
               
               if (dgResult && dgResult.transcript) {

@@ -80,15 +80,18 @@ class Tier3LLMFallback {
    */
   async analyze({ callerInput, scenarios, context = {} }) {
     const startTime = Date.now();
-    const { 
-      companyName, 
-      categoryName, 
+    const {
+      companyName,
+      categoryName,
       channel = 'voice',
       // Deepgram integration context
       sttConfidence = null,       // 0-100 from Twilio
       recordingUrl = null,        // For Deepgram re-transcription
       companyId = null,
-      callId = null
+      callId = null,
+      // Optional full company doc for ConfigResolver (per-tenant model override).
+      // If not provided, ConfigResolver falls back to platform defaults.
+      company = null
     } = context;
 
     // GUARD: Empty input
@@ -150,10 +153,15 @@ class Tier3LLMFallback {
         }
         
         try {
-          // TODO(C4): Replace hardcoded model with ConfigResolver.resolveMediaStreamConfig(company).model
-          // Preserves legacy behaviour (was DG_DEFAULTS.model = 'nova-2-phonecall').
+          // Per-tenant Deepgram model via ConfigResolver — no hardcoded model.
+          // ConfigResolver handles the case where company is null by falling
+          // back to AdminSettings.globalHub.mediaStreams.defaultModel, then to
+          // 'nova-3' hardcoded last-resort. Callers that pass company get
+          // tenant override respected.
+          const { resolveMediaStreamConfig } = require('./mediaStream/ConfigResolver');
+          const _resolvedModel = resolveMediaStreamConfig(company).model;
           const dgResult = await DeepgramFallback.transcribeWithDeepgram(recordingUrl, {
-            model: 'nova-2-phonecall'
+            model: _resolvedModel
           });
           
           if (dgResult && dgResult.transcript && dgResult.confidencePercent >= 80) {

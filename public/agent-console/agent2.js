@@ -177,6 +177,18 @@
     speechImpactTotal: document.getElementById('preview-total'),
     speechImpactTip: document.getElementById('preview-tip'),
 
+    // Speech Pipeline (Media Streams — C4/5)
+    inputMediaStreamsOff: document.getElementById('input-media-streams-off'),
+    inputMediaStreamsOn:  document.getElementById('input-media-streams-on'),
+    msPreviewModel:            document.getElementById('ms-preview-model'),
+    msPreviewModelSource:      document.getElementById('ms-preview-model-source'),
+    msPreviewLanguage:         document.getElementById('ms-preview-language'),
+    msPreviewLanguageSource:   document.getElementById('ms-preview-language-source'),
+    msPreviewEndpointing:      document.getElementById('ms-preview-endpointing'),
+    msPreviewEndpointingSource:document.getElementById('ms-preview-endpointing-source'),
+    msPreviewUtteranceEnd:     document.getElementById('ms-preview-utterance-end'),
+    msPreviewUtteranceEndSource:document.getElementById('ms-preview-utterance-end-source'),
+
     // Bridge (Latency Filler)
     inputBridgeEnabled: document.getElementById('input-bridge-enabled'),
     inputBridgeThreshold: document.getElementById('input-bridge-threshold'),
@@ -268,6 +280,7 @@
     setupEventListeners();
     setupGreetingsEventListeners();
     initSpeechDetectionListeners();
+    initMediaStreamsListeners();
     setupUnsavedChangesProtection();
     loadGreetings();
     if (state.embedMode !== 'greetings') {
@@ -555,6 +568,13 @@
     updateEnhancedStateForProvider(); // dim checkbox if Deepgram is active
     updateSpeechImpactPreview();
 
+    // Speech Pipeline (Media Streams — C4/5)
+    const ms = config.mediaStreams || {};
+    const msEnabled = ms.enabled === true;
+    if (DOM.inputMediaStreamsOff) DOM.inputMediaStreamsOff.checked = !msEnabled;
+    if (DOM.inputMediaStreamsOn)  DOM.inputMediaStreamsOn.checked  = msEnabled;
+    updateMediaStreamsPreview(ms, config.__mediaStreamsResolved);
+
     // Consent phrases
     const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
     renderPhraseList('consent', consentPhrases);
@@ -723,6 +743,63 @@
     }
   }
 
+  /* --------------------------------------------------------------------------
+     SPEECH PIPELINE (Media Streams — C4/5)
+     --------------------------------------------------------------------------
+     The radio flips `mediaStreams.enabled`. The preview shows the resolved
+     config (tenant override → platform default → hardcoded fallback).
+     Resolver output is optional — if the GET payload doesn't include
+     `__mediaStreamsResolved`, fall back to tenant values merged with
+     HARDCODED_FALLBACKS shape so the preview never reads "—" after save.
+     -------------------------------------------------------------------------- */
+  const MS_HARDCODED_FALLBACKS = {
+    model: 'nova-3',
+    endpointingMs: 300,
+    utteranceEndMs: 1000,
+    language: 'en-US'
+  };
+
+  function _msSourceLabel(source) {
+    // source: 'tenant' | 'platform' | 'fallback' | null/undefined
+    if (source === 'tenant')   return '(tenant override)';
+    if (source === 'platform') return '(platform default)';
+    if (source === 'fallback') return '(hardcoded fallback)';
+    return '';
+  }
+
+  function updateMediaStreamsPreview(tenantMs, resolved) {
+    // Prefer resolver output (authoritative) when the API surfaces it.
+    // Otherwise fall back to the same precedence client-side.
+    const t = tenantMs || {};
+    const r = resolved || null;
+
+    const model = r?.model ?? t.model ?? MS_HARDCODED_FALLBACKS.model;
+    const lang  = r?.language ?? t.languageOverride ?? MS_HARDCODED_FALLBACKS.language;
+    const ep    = r?.endpointingMs ?? t.endpointingMs ?? MS_HARDCODED_FALLBACKS.endpointingMs;
+    const ue    = r?.utteranceEndMs ?? t.utteranceEndMs ?? MS_HARDCODED_FALLBACKS.utteranceEndMs;
+
+    const modelSrc = r?.sources?.model ?? (t.model ? 'tenant' : 'fallback');
+    const langSrc  = r?.sources?.language ?? (t.languageOverride ? 'tenant' : 'fallback');
+    const epSrc    = r?.sources?.endpointingMs ?? (t.endpointingMs != null ? 'tenant' : 'fallback');
+    const ueSrc    = r?.sources?.utteranceEndMs ?? (t.utteranceEndMs != null ? 'tenant' : 'fallback');
+
+    if (DOM.msPreviewModel)        DOM.msPreviewModel.textContent = model;
+    if (DOM.msPreviewLanguage)     DOM.msPreviewLanguage.textContent = lang;
+    if (DOM.msPreviewEndpointing)  DOM.msPreviewEndpointing.textContent = ep + 'ms';
+    if (DOM.msPreviewUtteranceEnd) DOM.msPreviewUtteranceEnd.textContent = ue + 'ms';
+
+    if (DOM.msPreviewModelSource)        DOM.msPreviewModelSource.textContent = _msSourceLabel(modelSrc);
+    if (DOM.msPreviewLanguageSource)     DOM.msPreviewLanguageSource.textContent = _msSourceLabel(langSrc);
+    if (DOM.msPreviewEndpointingSource)  DOM.msPreviewEndpointingSource.textContent = _msSourceLabel(epSrc);
+    if (DOM.msPreviewUtteranceEndSource) DOM.msPreviewUtteranceEndSource.textContent = _msSourceLabel(ueSrc);
+  }
+
+  function initMediaStreamsListeners() {
+    const markDirty = () => { state.isDirty = true; };
+    if (DOM.inputMediaStreamsOff) DOM.inputMediaStreamsOff.addEventListener('change', markDirty);
+    if (DOM.inputMediaStreamsOn)  DOM.inputMediaStreamsOn.addEventListener('change', markDirty);
+  }
+
   function resetSpeechToDefaults() {
     const d = OPTIMAL_DEFAULTS.speech;
     if (DOM.inputSpeechTimeout)       DOM.inputSpeechTimeout.value         = d.speechTimeout;
@@ -794,6 +871,14 @@
         bargeIn: DOM.inputSpeechBargeIn?.checked || false,
         enhancedRecognition: DOM.inputSpeechEnhanced?.checked !== false,
         speechModel: DOM.inputSpeechModel?.value || 'phone_call'
+      },
+      // Speech Pipeline (Media Streams — C4/5)
+      // Only the enabled flag is saved from the UI; model/endpointing/utteranceEnd/language
+      // come from platform AdminSettings.globalHub.mediaStreams.* (tenant overrides set
+      // via admin-only route, not surfaced in this UI).
+      mediaStreams: {
+        ...(state.config.mediaStreams || {}),
+        enabled: !!DOM.inputMediaStreamsOn?.checked
       },
       consentPhrases: state.config.consentPhrases,
       escalationPhrases: state.config.escalationPhrases

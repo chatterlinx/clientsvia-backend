@@ -579,6 +579,15 @@ function registerRoutes(routes) {
     
     // Twilio webhooks must bypass JWT-protected tenant routes, so register them first
     app.use('/api/twilio', twilioRequestLogger);
+    // Media Streams bootstrap + fallback TwiML (C4/5) — mounted BEFORE
+    // v2TwilioRoutes so its /api/twilio/media-stream/:companyId/* handlers
+    // are reached. The WebSocket endpoint at /api/twilio/media-stream itself
+    // is attached to the http.Server upgrade event (see attachMediaStreamServer).
+    try {
+        app.use('/api/twilio/media-stream', require('./routes/mediaStream'));
+    } catch (err) {
+        console.error('[INIT] ⚠️ Failed to mount mediaStream route:', err.message);
+    }
     app.use('/api/twilio', routes.v2TwilioRoutes);
 
     // PUBLIC HEALTH/VERSION ROUTES - Must be before auth-protected routes

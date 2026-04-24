@@ -470,6 +470,68 @@
           </div>
         </div>
 
+        <!-- Speech Pipeline (Media Streams) — C4/5 -->
+        <div class="card" id="card-speech-pipeline">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">🌊 Speech Pipeline</h2>
+              <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">
+                Chooses the STT path this company uses on every call.
+                <strong>Media Streams</strong> sends audio directly to Deepgram Nova-3 over WebSocket — faster, lower word-error-rate, especially for elderly/accented callers.
+                If anything fails (WS error, Deepgram circuit open, engine timeout) the call automatically falls back to Gather mid-call — caller experience is never broken.
+              </p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group mb-0" style="margin-bottom: 16px;">
+              <label class="form-label">Primary STT Pipeline</label>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+                <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 10px 12px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 6px;">
+                  <input type="radio" name="input-media-streams-enabled" id="input-media-streams-off" value="off" style="margin-top: 3px;">
+                  <div>
+                    <div style="font-weight: 600;">Twilio Gather (default)</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                      Current production path. Uses <code>&lt;Gather speechModel="auto"&gt;</code> with Deepgram Nova-2 or Google as failover. Reliable but higher word error rate and ~600-1000ms extra latency per turn.
+                    </div>
+                  </div>
+                </label>
+                <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 10px 12px; border: 1px solid var(--border-color, #e5e7eb); border-radius: 6px;">
+                  <input type="radio" name="input-media-streams-enabled" id="input-media-streams-on" value="on" style="margin-top: 3px;">
+                  <div>
+                    <div style="font-weight: 600;">Media Streams + Deepgram Nova-3 <span style="font-size: 0.7rem; font-weight: 500; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; margin-left: 6px;">BETA</span></div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                      Direct live streaming to Deepgram Nova-3. Significantly better accuracy on accented and elderly speech. Supports 100+ weighted keyword boosts and acoustic endpointing. Falls back to Gather automatically on any failure.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Resolved config preview (read-only, updated on save) -->
+            <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-color, #e5e7eb);">
+              <p style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0 0 10px 0;">Resolved Configuration <span style="font-weight: 400; text-transform: none; letter-spacing: 0;">(tenant → platform default → fallback)</span></p>
+              <div id="media-streams-config-preview" style="
+                background: var(--bg-secondary, #f8fafc);
+                border: 1px solid var(--border-color, #e5e7eb);
+                border-radius: 6px;
+                padding: 10px 12px;
+                font-size: 0.8rem;
+                line-height: 1.7;
+                color: var(--text-secondary, #4b5563);
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              ">
+                <div>model: <strong id="ms-preview-model">—</strong> <span id="ms-preview-model-source" style="color: var(--text-muted); font-weight: 400; font-style: italic;"></span></div>
+                <div>language: <strong id="ms-preview-language">—</strong> <span id="ms-preview-language-source" style="color: var(--text-muted); font-weight: 400; font-style: italic;"></span></div>
+                <div>endpointing: <strong id="ms-preview-endpointing">—</strong> <span id="ms-preview-endpointing-source" style="color: var(--text-muted); font-weight: 400; font-style: italic;"></span></div>
+                <div>utterance-end: <strong id="ms-preview-utterance-end">—</strong> <span id="ms-preview-utterance-end-source" style="color: var(--text-muted); font-weight: 400; font-style: italic;"></span></div>
+              </div>
+              <p class="form-hint" style="margin-top: 8px;">
+                <em>Tenant overrides live at <code>aiAgentSettings.agent2.mediaStreams.{model,endpointingMs,utteranceEndMs,languageOverride}</code>. Platform defaults live at <code>AdminSettings.globalHub.mediaStreams.default*</code>.</em>
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Bridge (Latency Filler) -->
         <div class="card" id="card-bridge">
           <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
