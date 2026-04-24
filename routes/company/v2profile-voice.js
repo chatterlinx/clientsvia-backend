@@ -535,6 +535,19 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
             version: '2.0'
         };
 
+        // ─────────────────────────────────────────────────────────────────────
+        // PROVIDER SELECTION PRESERVATION (Apr 2026)
+        // This POST handler does `$set: {'aiAgentSettings.voiceSettings': ...}`
+        // which REPLACES the entire subdoc. The provider/pollyVoiceId/pollyEngine
+        // fields are saved via a separate UI flow (PATCH + provider cards) and
+        // MUST NOT be clobbered by an ElevenLabs voice-id POST from the same tab.
+        // Read existing values, then let the POST body override if explicitly set.
+        // ─────────────────────────────────────────────────────────────────────
+        const existingVs = company.aiAgentSettings?.voiceSettings || {};
+        newVoiceSettings.provider = pick(b.provider, existingVs.provider, 'elevenlabs');
+        newVoiceSettings.pollyVoiceId = pick(b.pollyVoiceId, existingVs.pollyVoiceId, 'Polly.Matthew-Neural');
+        newVoiceSettings.pollyEngine = pick(b.pollyEngine, existingVs.pollyEngine, 'neural');
+
         logger.info(`🔍 [SAVE-13] Voice settings to save:`, JSON.stringify(newVoiceSettings, null, 2));
         
         // Save using Mongoose (normal approach)
@@ -588,7 +601,12 @@ router.post('/:companyId/v2-voice-settings', async (req, res) => {
                     `voice:company:${companyId}`,
                     `ai-agent:${companyId}`
                 ];
-                
+                // Also bust the phone-keyed cache the live /voice route reads —
+                // missing this was the root cause of "save succeeded but next call
+                // still used old voice" (learned Apr 24, 2026).
+                const phone = company.twilioConfig?.phoneNumber;
+                if (phone) cacheKeys.push(`company-phone:${phone}`);
+
                 await Promise.all(cacheKeys.map(key => redisClient.del(key).catch(err => {
                     logger.warn(`⚠️ Failed to delete cache key ${key}:`, err.message);
                     return null;
@@ -710,8 +728,33 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
         const allowedFields = [
             'apiSource', 'apiKey', 'voiceId', 'stability', 'similarityBoost',
             'styleExaggeration', 'speakerBoost', 'aiModel', 'outputFormat',
-            'streamingLatency', 'enabled'
+            'streamingLatency', 'enabled',
+            // Apr 2026 — provider selection (per-tenant default TTS + Polly fallback voice)
+            'provider', 'pollyVoiceId', 'pollyEngine'
         ];
+
+        // Validate provider selection fields before applying
+        if ('provider' in updates && !['elevenlabs', 'polly'].includes(updates.provider)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid provider: '${updates.provider}'. Must be 'elevenlabs' or 'polly'.`
+            });
+        }
+        if ('pollyVoiceId' in updates) {
+            const { isValidPollyVoice } = require('../../config/pollyVoiceCatalog');
+            if (!isValidPollyVoice(updates.pollyVoiceId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid pollyVoiceId: '${updates.pollyVoiceId}'. Not in catalog.`
+                });
+            }
+        }
+        if ('pollyEngine' in updates && !['neural', 'standard'].includes(updates.pollyEngine)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid pollyEngine: '${updates.pollyEngine}'. Must be 'neural' or 'standard'.`
+            });
+        }
 
         let hasChanges = false;
         allowedFields.forEach(field => {
@@ -725,10 +768,18 @@ router.patch('/:companyId/v2-voice-settings', async (req, res) => {
             company.aiAgentSettings.voiceSettings.lastUpdated = new Date();
             await company.save();
 
-            // Clear cache
+            // Clear cache — ALL keys the live call path may read from.
+            // company-phone:{number} is what routes/v2twilio.js /voice reads;
+            // missing it here is why voice-settings edits sometimes don't take
+            // effect on the very next call (learned Apr 24, 2026).
             if (redisClient) {
                 await redisClient.del(`company:${companyId}`);
                 await redisClient.del(`voice:company:${companyId}`);
+                const phone = company.twilioConfig?.phoneNumber;
+                if (phone) {
+                    await redisClient.del(`company-phone:${phone}`);
+                    logger.info(`[Voice Settings] Cleared company-phone:${phone} cache`);
+                }
             }
 
             logger.info(`✅ V2 Voice settings updated for company ${companyId}`);

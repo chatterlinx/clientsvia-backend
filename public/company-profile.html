@@ -1008,6 +1008,111 @@
                                 <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Latest ElevenLabs API</span>
                             </h2>
 
+                            <!-- ================================================================= -->
+                            <!-- VOICE PROVIDER SELECTION (Apr 2026)                               -->
+                            <!-- Pick which voice API is the DEFAULT for this tenant's calls.      -->
+                            <!-- Amazon Polly (via Twilio) is ALWAYS the fallback, regardless.     -->
+                            <!-- ================================================================= -->
+                            <div id="voice-provider-section" class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+                                <div class="border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 rounded-t-lg">
+                                    <h3 class="text-lg font-medium text-gray-800 flex items-center">
+                                        <i class="fas fa-exchange-alt mr-2 text-indigo-600"></i>Voice Provider
+                                        <span class="ml-2 text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full" id="voice-provider-current-label">Loading…</span>
+                                    </h3>
+                                    <p class="text-xs text-gray-600 mt-1">
+                                        Choose which TTS service handles your calls. Amazon Polly via Twilio is
+                                        always the safety-net fallback — no matter which provider you pick here,
+                                        Polly takes over if the primary fails.
+                                    </p>
+                                </div>
+                                <div class="p-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="voice-provider-cards">
+                                        <!-- Card: ElevenLabs -->
+                                        <div
+                                            class="voice-provider-card relative border-2 border-gray-200 rounded-lg p-5 transition-all hover:border-indigo-400 cursor-pointer"
+                                            data-provider="elevenlabs"
+                                            role="button"
+                                            tabindex="0"
+                                        >
+                                            <!-- Left-side toggle -->
+                                            <div class="absolute top-4 left-4">
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="radio" name="voice-provider-toggle" value="elevenlabs" class="sr-only voice-provider-radio">
+                                                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                                </label>
+                                            </div>
+                                            <!-- Default badge -->
+                                            <span class="voice-provider-default-badge hidden absolute top-4 right-4 text-[10px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded uppercase tracking-wide">Default</span>
+
+                                            <div class="pl-16 pr-4">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 rounded bg-purple-100 flex items-center justify-center mr-2">
+                                                        <i class="fas fa-wave-square text-purple-600"></i>
+                                                    </div>
+                                                    <h4 class="text-base font-semibold text-gray-900">ElevenLabs</h4>
+                                                    <span class="ml-2 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold">PREMIUM</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">
+                                                    High-quality neural voices. Uses the ElevenLabs voice configured below.
+                                                </p>
+                                                <p class="text-xs text-gray-700 mt-3">
+                                                    Current voice: <span id="voice-provider-el-voice" class="font-medium">—</span>
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Card: Twilio (Polly) -->
+                                        <div
+                                            class="voice-provider-card relative border-2 border-gray-200 rounded-lg p-5 transition-all hover:border-indigo-400 cursor-pointer"
+                                            data-provider="polly"
+                                            role="button"
+                                            tabindex="0"
+                                        >
+                                            <div class="absolute top-4 left-4">
+                                                <label class="relative inline-flex items-center cursor-pointer">
+                                                    <input type="radio" name="voice-provider-toggle" value="polly" class="sr-only voice-provider-radio">
+                                                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                                                </label>
+                                            </div>
+                                            <span class="voice-provider-default-badge hidden absolute top-4 right-4 text-[10px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded uppercase tracking-wide">Default</span>
+
+                                            <div class="pl-16 pr-4">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 rounded bg-red-100 flex items-center justify-center mr-2">
+                                                        <i class="fas fa-phone-volume text-red-600"></i>
+                                                    </div>
+                                                    <h4 class="text-base font-semibold text-gray-900">Twilio Voice</h4>
+                                                    <span class="ml-2 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">STANDARD · FALLBACK</span>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-1">
+                                                    Amazon Polly Neural voices rendered by Twilio. Always active as
+                                                    the universal fallback.
+                                                </p>
+
+                                                <!-- Polly voice picker -->
+                                                <label for="polly-voice-select" class="block text-xs font-medium text-gray-700 mt-3 mb-1">
+                                                    Polly voice <span class="text-gray-400">(also used as fallback when ElevenLabs is primary)</span>
+                                                </label>
+                                                <select id="polly-voice-select" class="w-full text-sm border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="">Loading voices…</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-start">
+                                        <i class="fas fa-shield-alt mt-0.5 mr-2"></i>
+                                        <span>
+                                            <strong>Polly is always the safety net.</strong> If your default provider
+                                            fails mid-call (quota, network, API outage), the call seamlessly switches
+                                            to the Polly voice selected above — no dropped calls, ever.
+                                        </span>
+                                    </div>
+
+                                    <div id="voice-provider-save-indicator" class="mt-3 text-xs hidden"></div>
+                                </div>
+                            </div>
+
                             <!-- API Configuration Section -->
                             <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
                                 <div class="border-b border-gray-200 bg-gray-50 px-6 py-4 rounded-t-lg">

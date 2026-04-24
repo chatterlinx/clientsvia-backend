@@ -75,6 +75,12 @@ try {
 const fs = require('fs');
 const path = require('path');
 const { synthesizeSpeech } = require('../services/v2elevenLabsService');
+// Apr 2026 — TTS provider router (per-tenant default TTS with Polly safety net).
+// Routes synthesis through the tenant's chosen provider, auto-falls-through
+// EL→Polly on failure using the tenant's chosen pollyVoiceId. Used by greeting
+// path below; other synthesis sites migrate in C3.
+const TTSProviderRouter = require('../services/tts/TTSProviderRouter');
+const { getPollyFallbackVoice } = require('../services/tts/pollyHelpers');
 const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const crypto = require('crypto');
@@ -2393,36 +2399,39 @@ router.post('/voice', async (req, res) => {
 
               if (!greetFallbackPlayed) {
               const ttsStartTime = Date.now();
-              const _vs = company.aiAgentSettings?.voiceSettings || {};
-              const buffer = await synthesizeSpeech({
+
+              // Apr 2026: Route through TTSProviderRouter — respects tenant's
+              // chosen provider (elevenlabs | polly) and auto-falls-through to
+              // Polly (with tenant's chosen voice) if EL fails. The router
+              // never throws on provider failure; only bugs reach the outer catch.
+              const tts = await TTSProviderRouter.synthesize({
                 text: greetingText,
-                voiceId: elevenLabsVoice,
-                stability: _vs.stability,
-                similarity_boost: _vs.similarityBoost,
-                style: _vs.styleExaggeration,
-                use_speaker_boost: _vs.speakerBoost,
-                model_id: _vs.aiModel,
-                output_format: _vs.outputFormat,
-                optimize_streaming_latency: _vs.streamingLatency,
                 company,
                 callSid,
                 ttsSource: 'greeting_initial'
               });
 
               const ttsTime = Date.now() - ttsStartTime;
-              logger.info(`[GREETING] ✅ TTS fallback completed in ${ttsTime}ms`);
+              logger.info(`[GREETING] ✅ TTS routed via ${tts.sourceProvider} in ${ttsTime}ms${tts.fallbackReason ? ` (fallback: ${tts.fallbackReason})` : ''}`);
 
-              const fileName = `ai_greet_fallback_${Date.now()}.mp3`;
-              const audioDir = path.join(__dirname, '../public/audio');
-              if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
-              const greetFallbackPath = path.join(audioDir, fileName);
-              await fs.promises.writeFile(greetFallbackPath, buffer);
-              scheduleTempAudioDelete(greetFallbackPath);
-              gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+              if (tts.kind === 'buffer') {
+                // ElevenLabs path — write buffer to disk + play via /audio/
+                const fileName = `ai_greet_fallback_${Date.now()}.mp3`;
+                const audioDir = path.join(__dirname, '../public/audio');
+                if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
+                const greetFallbackPath = path.join(audioDir, fileName);
+                await fs.promises.writeFile(greetFallbackPath, tts.audio);
+                scheduleTempAudioDelete(greetFallbackPath);
+                gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+              } else {
+                // Polly path (primary OR EL-fallback) — Twilio renders server-side
+                gather.say({ voice: tts.voice }, escapeTwiML(cleanTextForTTS(stripMarkdown(greetingText))));
+              }
               }
             } catch (ttsErr) {
-              logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
-              gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+              logger.error(`[GREETING] ❌ TTS routing failed: ${ttsErr.message}`);
+              // Last-resort: tenant's chosen Polly fallback voice (or platform default).
+              gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
             }
           } else if (fallbackText) {
             gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackText))));
@@ -2547,24 +2556,18 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {});
           }
 
-          const _vs2 = company.aiAgentSettings?.voiceSettings || {};
-          const buffer = await synthesizeSpeech({
+          // Apr 2026: Route through TTSProviderRouter — respects tenant's
+          // provider choice (elevenlabs | polly) with auto-fallback to Polly
+          // on any EL failure. See services/tts/TTSProviderRouter.js.
+          const tts = await TTSProviderRouter.synthesize({
             text: greetingText,
-            voiceId: elevenLabsVoice,
-            stability: _vs2.stability,
-            similarity_boost: _vs2.similarityBoost,
-            style: _vs2.styleExaggeration,
-            use_speaker_boost: _vs2.speakerBoost,
-            model_id: _vs2.aiModel,
-            output_format: _vs2.outputFormat,
-            optimize_streaming_latency: _vs2.streamingLatency,
             company,
             callSid,
             ttsSource: 'greeting'
           });
 
           const ttsTime = Date.now() - ttsStartTime;
-          logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms (source: ${greetingSource})`);
+          logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting via ${tts.sourceProvider} in ${ttsTime}ms (source: ${greetingSource})${tts.fallbackReason ? ` — fallback: ${tts.fallbackReason}` : ''}`);
           
           // 📼 CALL CONSOLE VISUAL TRACE: Log TTS greeting generation
           if (CallLogger) {
@@ -2602,16 +2605,23 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {});
           }
           
-          const fileName = `ai_greet_${Date.now()}.mp3`;
-          const audioDir = path.join(__dirname, '../public/audio');
-          if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
-          const filePath = path.join(audioDir, fileName);
-          await fs.promises.writeFile(filePath, buffer);
-          // 🧹 STAGE 2 (R5): Schedule disk cleanup for per-call temp greeting (was leaking to disk forever).
-          // 📌 STAGE 2 (Y3): `/audio/` (not `/audio-safe/`) is INTENTIONAL here — this is ephemeral per-call TTS,
-          //                  not meant to survive deploys. Deleted ~2min after Twilio fetches it.
-          scheduleTempAudioDelete(filePath);
-          gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+          if (tts.kind === 'buffer') {
+            // ElevenLabs path — write MP3 to disk + play via /audio/
+            const fileName = `ai_greet_${Date.now()}.mp3`;
+            const audioDir = path.join(__dirname, '../public/audio');
+            if (!fs.existsSync(audioDir)) {fs.mkdirSync(audioDir, { recursive: true });}
+            const filePath = path.join(audioDir, fileName);
+            await fs.promises.writeFile(filePath, tts.audio);
+            // 🧹 STAGE 2 (R5): Schedule disk cleanup for per-call temp greeting (was leaking to disk forever).
+            // 📌 STAGE 2 (Y3): `/audio/` (not `/audio-safe/`) is INTENTIONAL here — this is ephemeral per-call TTS,
+            //                  not meant to survive deploys. Deleted ~2min after Twilio fetches it.
+            scheduleTempAudioDelete(filePath);
+            gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+          } else {
+            // Polly path (primary OR EL-fallback) — Twilio renders server-side.
+            // No disk write, no cleanup, zero cost until spoken.
+            gather.say({ voice: tts.voice }, escapeTwiML(cleanTextForTTS(stripMarkdown(greetingText))));
+          }
           
           // 📼 BLACK BOX: Log greeting sent
           if (CallLogger) {
@@ -2657,7 +2667,7 @@ router.post('/voice', async (req, res) => {
           } // end if (!_greetCacheHit)
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
-          
+
           // 📼 BLACK BOX: Log TTS failure
           if (CallLogger) {
             CallLogger.QuickLog.ttsFailed(
@@ -2668,8 +2678,9 @@ router.post('/voice', async (req, res) => {
               'twilio_say'
             ).catch(() => {});
           }
-          
-          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+
+          // Last-resort: tenant's chosen Polly fallback voice (default Matthew).
+          gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
         }
       } else {
         // Fallback to Say if no voice or greeting

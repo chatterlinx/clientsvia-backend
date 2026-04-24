@@ -28,7 +28,10 @@ class VoiceSettingsManager {
         console.debug('[VoiceSettingsManager] Initializing for company:', this.companyId);
         this._bindElements();
         this._bindEvents();
+        this._bindProviderCards();
         await Promise.all([this._loadSettings(), this._loadVoices()]);
+        // Settings have loaded — now render provider cards
+        this._renderProviderCards();
     }
 
     // Fetch with timeout and abort support
@@ -367,6 +370,148 @@ class VoiceSettingsManager {
         return String(str)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;')
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // PROVIDER SELECTION (Apr 2026)
+    // Per-tenant default TTS provider (ElevenLabs | Polly via Twilio) with
+    // Polly as the universal safety-net fallback. Renders 2 cards with
+    // toggle semantics (radio — only one is "Default"). Polly voice is
+    // selectable via dropdown; same voice drives both the Polly-primary
+    // case AND the EL-fallback case.
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Static catalog — mirrors server-side config/pollyVoiceCatalog.js.
+    // Kept tiny and inline so we don't need a separate fetch for it.
+    get _pollyCatalog() {
+        return [
+            { id: 'Polly.Matthew-Neural',  label: 'Matthew',  gender: 'male',   accent: 'en-US', desc: 'Warm, conversational — platform default' },
+            { id: 'Polly.Joanna-Neural',   label: 'Joanna',   gender: 'female', accent: 'en-US', desc: 'Clear, professional' },
+            { id: 'Polly.Stephen-Neural',  label: 'Stephen',  gender: 'male',   accent: 'en-US', desc: 'Authoritative, deeper' },
+            { id: 'Polly.Ruth-Neural',     label: 'Ruth',     gender: 'female', accent: 'en-US', desc: 'Confident, authoritative' },
+            { id: 'Polly.Danielle-Neural', label: 'Danielle', gender: 'female', accent: 'en-US', desc: 'Friendly, youthful' },
+            { id: 'Polly.Gregory-Neural',  label: 'Gregory',  gender: 'male',   accent: 'en-US', desc: 'Mature, older' },
+            { id: 'Polly.Ivy-Neural',      label: 'Ivy',      gender: 'female', accent: 'en-US', desc: 'Youthful, bright' },
+            { id: 'Polly.Kajal-Neural',    label: 'Kajal',    gender: 'female', accent: 'en-IN', desc: 'Indian-English' }
+        ];
+    }
+
+    _bindProviderCards() {
+        const cards = document.querySelectorAll('.voice-provider-card');
+        cards.forEach(card => {
+            const provider = card.dataset.provider;
+            // Click anywhere on card → select that provider as default
+            card.addEventListener('click', (e) => {
+                // Don't hijack clicks on the polly voice <select> — that's its own widget
+                if (e.target.tagName === 'SELECT' || e.target.closest('select')) return;
+                this._setProvider(provider);
+            });
+            card.addEventListener('keydown', (e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    this._setProvider(provider);
+                }
+            });
+        });
+
+        // Polly voice dropdown → saves pollyVoiceId
+        const pollySelect = document.getElementById('polly-voice-select');
+        if (pollySelect) {
+            // Populate options from catalog
+            pollySelect.innerHTML = this._pollyCatalog
+                .map(v => `<option value="${v.id}">${this._esc(v.label)} — ${this._esc(v.gender)}, ${this._esc(v.accent)} (${this._esc(v.desc)})</option>`)
+                .join('');
+            pollySelect.addEventListener('change', () => {
+                this._savePollyVoice(pollySelect.value);
+            });
+        }
+    }
+
+    _renderProviderCards() {
+        const provider = this.currentSettings?.provider || 'elevenlabs';
+        const pollyVoiceId = this.currentSettings?.pollyVoiceId || 'Polly.Matthew-Neural';
+
+        // Update label pill in card header
+        const labelPill = document.getElementById('voice-provider-current-label');
+        if (labelPill) {
+            labelPill.textContent = provider === 'polly'
+                ? 'Default: Twilio (Polly)'
+                : 'Default: ElevenLabs';
+        }
+
+        // Update cards: highlight the active one + toggle radio + show DEFAULT badge
+        document.querySelectorAll('.voice-provider-card').forEach(card => {
+            const isActive = card.dataset.provider === provider;
+            card.classList.toggle('border-indigo-600', isActive);
+            card.classList.toggle('bg-indigo-50', isActive);
+            card.classList.toggle('border-gray-200', !isActive);
+            const radio = card.querySelector('.voice-provider-radio');
+            if (radio) radio.checked = isActive;
+            const badge = card.querySelector('.voice-provider-default-badge');
+            if (badge) badge.classList.toggle('hidden', !isActive);
+        });
+
+        // Sync Polly dropdown to saved value
+        const pollySelect = document.getElementById('polly-voice-select');
+        if (pollySelect) pollySelect.value = pollyVoiceId;
+
+        // EL voice label — show current configured EL voice name
+        const elVoiceLbl = document.getElementById('voice-provider-el-voice');
+        if (elVoiceLbl) {
+            const vid = this.currentSettings?.voiceId;
+            if (vid) {
+                const match = (this.voices || []).find(v => (v.voice_id || v.id) === vid);
+                elVoiceLbl.textContent = match ? (match.name || match.displayName || vid) : vid;
+            } else {
+                elVoiceLbl.textContent = 'Not configured';
+            }
+        }
+    }
+
+    async _setProvider(provider) {
+        if (!['elevenlabs', 'polly'].includes(provider)) return;
+        if (this.currentSettings?.provider === provider) return; // no-op if unchanged
+        await this._saveProviderField({ provider });
+        if (this.currentSettings) this.currentSettings.provider = provider;
+        this._renderProviderCards();
+    }
+
+    async _savePollyVoice(pollyVoiceId) {
+        if (!pollyVoiceId) return;
+        if (this.currentSettings?.pollyVoiceId === pollyVoiceId) return;
+        await this._saveProviderField({ pollyVoiceId });
+        if (this.currentSettings) this.currentSettings.pollyVoiceId = pollyVoiceId;
+        this._renderProviderCards();
+    }
+
+    async _saveProviderField(patch) {
+        const indicator = document.getElementById('voice-provider-save-indicator');
+        try {
+            const res = await this._fetch(`/api/company/${this.companyId}/v2-voice-settings`, {
+                method: 'PATCH',
+                headers: this._authHeaders(),
+                body: JSON.stringify(patch)
+            }, 10000);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || `HTTP ${res.status}`);
+            }
+            if (indicator) {
+                indicator.innerHTML = `<i class="fas fa-check-circle text-green-600 mr-1"></i>Saved — effective on next call.`;
+                indicator.className = 'mt-3 text-xs text-green-700';
+                indicator.classList.remove('hidden');
+                clearTimeout(this._providerSaveTimer);
+                this._providerSaveTimer = setTimeout(() => indicator.classList.add('hidden'), 3500);
+            }
+            console.debug('[VoiceSettingsManager] Provider field saved:', patch);
+        } catch (err) {
+            console.error('[VoiceSettingsManager] Provider save failed:', err.message);
+            if (indicator) {
+                indicator.innerHTML = `<i class="fas fa-exclamation-triangle text-red-600 mr-1"></i>Save failed: ${this._esc(err.message)}`;
+                indicator.className = 'mt-3 text-xs text-red-700';
+                indicator.classList.remove('hidden');
+            }
+        }
     }
 }
 
