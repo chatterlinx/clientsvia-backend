@@ -80,7 +80,7 @@ const { synthesizeSpeech } = require('../services/v2elevenLabsService');
 // EL→Polly on failure using the tenant's chosen pollyVoiceId. Used by greeting
 // path below; other synthesis sites migrate in C3.
 const TTSProviderRouter = require('../services/tts/TTSProviderRouter');
-const { getPollyFallbackVoice } = require('../services/tts/pollyHelpers');
+const { getPollyFallbackVoice, getPrimaryProvider } = require('../services/tts/pollyHelpers');
 const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const crypto = require('crypto');
@@ -3361,49 +3361,48 @@ router.post('/handle-speech', async (req, res) => {
       // Use ElevenLabs TTS if configured
       const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
 
-      if (elevenLabsVoice) {
-        try {
-          const retryMsgClean = cleanTextForTTS(stripMarkdown(retryMsg));
-          const _vs3 = company.aiAgentSettings?.voiceSettings || {};
+      // C3 Apr 2026: Provider-aware retry synthesis. Cache lookup gated on
+      // EL primary (Polly tenants always render live via <Say>). Router handles
+      // EL → Polly fallback automatically.
+      try {
+        const retryMsgClean = cleanTextForTTS(stripMarkdown(retryMsg));
+        const _vs3 = company.aiAgentSettings?.voiceSettings || {};
+        const _isElPrimary = getPrimaryProvider(company) === 'elevenlabs';
 
-          // ── Check InstantAudioService cache — retry messages are near-static ──
-          const _retryIAS = require('../services/instantAudio/InstantAudioService');
-          const _retryStatus = _retryIAS.getStatus({
-            companyId: companyID, kind: 'RETRY_PROMPT', text: retryMsgClean, voiceSettings: _vs3,
-          });
-          if (_retryStatus.exists) {
-            gather.play(`${getSecureBaseUrl(req)}${_retryStatus.url.replace('/audio/', '/audio-safe/')}`);
-          } else {
-          const buffer = await synthesizeSpeech({
+        // getStatus is pure (file-system check). Always call to get filePath
+        // for caching after synthesis. Cache HIT only honored when EL primary.
+        const _retryIAS = require('../services/instantAudio/InstantAudioService');
+        const _retryStatus = (_isElPrimary && elevenLabsVoice) ? _retryIAS.getStatus({
+          companyId: companyID, kind: 'RETRY_PROMPT', text: retryMsgClean, voiceSettings: _vs3,
+        }) : null;
+
+        if (_retryStatus && _retryStatus.exists) {
+          // Cache hit — play prebuilt EL audio
+          gather.play(`${getSecureBaseUrl(req)}${_retryStatus.url.replace('/audio/', '/audio-safe/')}`);
+        } else {
+          // Cache miss OR Polly primary — route through TTSProviderRouter
+          const tts = await TTSProviderRouter.synthesize({
             text: retryMsgClean,
-            voiceId: elevenLabsVoice,
-            stability: _vs3.stability,
-            similarity_boost: _vs3.similarityBoost,
-            style: _vs3.styleExaggeration,
-            use_speaker_boost: _vs3.speakerBoost,
-            model_id: _vs3.aiModel,
-            output_format: _vs3.outputFormat,
-            optimize_streaming_latency: _vs3.streamingLatency,
             company,
             callSid,
             ttsSource: 'retry'
           });
 
-          // Cache for next retry — same text, pays ElevenLabs once
-          try { fs.writeFileSync(_retryStatus.filePath, buffer); } catch (_) {}
-
-          const audioKey = `audio:retry:${callSid}`;
-          if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
-
-          const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
-          gather.play(audioUrl);
+          if (tts.kind === 'buffer') {
+            // EL produced audio — cache to disk + serve via redis streaming endpoint
+            if (_retryStatus) { try { fs.writeFileSync(_retryStatus.filePath, tts.audio); } catch (_) {} }
+            const audioKey = `audio:retry:${callSid}`;
+            if (redisClient) await redisClient.setEx(audioKey, 300, tts.audio.toString('base64'));
+            const audioUrl = `https://${req.get('host')}/api/twilio/audio/retry/${callSid}`;
+            gather.play(audioUrl);
+          } else {
+            // Polly path (primary OR EL-fallback) — Twilio renders server-side via <Say>
+            gather.say({ voice: tts.voice }, escapeTwiML(retryMsgClean));
           }
-        } catch (err) {
-          logger.error('[LOW CONFIDENCE] ElevenLabs TTS failed, falling back to <Say>:', err);
-          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
         }
-      } else {
-        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
+      } catch (err) {
+        logger.error('[LOW CONFIDENCE] TTS routing failed, last-resort Polly Say:', err);
+        gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cleanTextForTTS(stripMarkdown(retryMsg))));
       }
 
       res.type('text/xml');
@@ -3494,37 +3493,29 @@ router.post('/handle-speech', async (req, res) => {
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
       });
 
-      const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
-      
-      if (elevenLabsVoice) {
-        try {
-          const _vs4 = company.aiAgentSettings?.voiceSettings || {};
-          const buffer = await synthesizeSpeech({
-            text: cachedAnswer,
-            voiceId: elevenLabsVoice,
-            stability: _vs4.stability,
-            similarity_boost: _vs4.similarityBoost,
-            style: _vs4.styleExaggeration,
-            use_speaker_boost: _vs4.speakerBoost,
-            model_id: _vs4.aiModel,
-            output_format: _vs4.outputFormat,
-            optimize_streaming_latency: _vs4.streamingLatency,
-            company,
-            callSid,
-            ttsSource: 'cached_answer'
-          });
-          
+      // C3 Apr 2026: Note — this branch is currently unreachable on V2
+      // (cachedAnswer is forced to null above for V2 migration). Migrating
+      // anyway so if the legacy Q&A path is ever re-enabled, it routes
+      // through TTSProviderRouter and respects the tenant's provider choice.
+      try {
+        const tts = await TTSProviderRouter.synthesize({
+          text: cachedAnswer,
+          company,
+          callSid,
+          ttsSource: 'cached_answer'
+        });
+
+        if (tts.kind === 'buffer') {
           const audioKey = `audio:qa:${callSid}`;
-          if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
-          
+          if (redisClient) await redisClient.setEx(audioKey, 300, tts.audio.toString('base64'));
           const audioUrl = `https://${req.get('host')}/api/twilio/audio/qa/${callSid}`;
           gather.play(audioUrl);
-        } catch (err) {
-          logger.error('ElevenLabs TTS failed, falling back to <Say>:', err);
-          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cachedAnswer));
+        } else {
+          gather.say({ voice: tts.voice }, escapeTwiML(cachedAnswer));
         }
-      } else {
-        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cachedAnswer));
+      } catch (err) {
+        logger.error('[Q&A CACHED] TTS routing failed, last-resort Polly Say:', err);
+        gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cachedAnswer));
       }
 
       // Add to conversation history
@@ -3611,65 +3602,56 @@ router.post('/handle-speech', async (req, res) => {
     });
 
     const strippedAnswer = cleanTextForTTS(stripMarkdown(answerObj.text));
-    const elevenLabsVoice = company.aiAgentSettings?.voiceSettings?.voiceId;
-    // TTS without artificial timeouts - let it complete naturally
-    if (elevenLabsVoice) {
-      try {
-        logger.debug(`[TTS START] [TTS] Starting ElevenLabs synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
-        const ttsStartTime = Date.now();
-        
-        // Direct TTS call without timeout interference
-        const _vsLegacy = company.aiAgentSettings?.voiceSettings || company.aiSettings?.elevenLabs || {};
-        const buffer = await synthesizeSpeech({
-          text: strippedAnswer,
-          voiceId: elevenLabsVoice,
-          stability: _vsLegacy.stability,
-          similarity_boost: _vsLegacy.similarityBoost || _vsLegacy.similarity_boost,
-          style: _vsLegacy.styleExaggeration || _vsLegacy.style,
-          use_speaker_boost: _vsLegacy.speakerBoost,
-          model_id: _vsLegacy.aiModel || _vsLegacy.modelId,
-          output_format: _vsLegacy.outputFormat,
-          optimize_streaming_latency: _vsLegacy.streamingLatency,
-          company,
-          callSid,
-          ttsSource: 'answer_legacy'
-        });
-        
-        const ttsTime = Date.now() - ttsStartTime;
-        logger.info(`[TTS COMPLETE] [OK] ElevenLabs synthesis completed in ${ttsTime}ms`);
+    // C3 Apr 2026: Route through TTSProviderRouter — respects tenant provider.
+    // EL → Polly auto-fallback handled inside the router. No-voiceId case is
+    // handled inside the router too (returns Polly descriptor with tenant's
+    // chosen voice or platform default).
+    try {
+      logger.debug(`[TTS START] [TTS] Starting synthesis for: "${strippedAnswer.substring(0, 50)}..."`);
+      const ttsStartTime = Date.now();
 
+      const tts = await TTSProviderRouter.synthesize({
+        text: strippedAnswer,
+        company,
+        callSid,
+        ttsSource: 'answer_legacy'
+      });
+
+      const ttsTime = Date.now() - ttsStartTime;
+      logger.info(`[TTS COMPLETE] via ${tts.sourceProvider} in ${ttsTime}ms${tts.fallbackReason ? ` (fallback: ${tts.fallbackReason})` : ''}`);
+
+      let audioUrl = null;
+      if (tts.kind === 'buffer') {
         // Store audio in Redis for fast serving
         const audioKey = `audio:ai:${callSid}`;
-        if (redisClient) await redisClient.setEx(audioKey, 300, buffer.toString('base64'));
-        
-        const audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
+        if (redisClient) await redisClient.setEx(audioKey, 300, tts.audio.toString('base64'));
+        audioUrl = `https://${req.get('host')}/api/twilio/audio/ai/${callSid}`;
         gather.play(audioUrl);
-        
-        // 📼 BLACK BOX: Log TTS generation
-        if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId,
-            type: 'TTS_GENERATED',
-            data: {
-              engine: 'ElevenLabs',
-              ms: ttsTime,
-              textLength: strippedAnswer.length,
-              audioUrl
-            }
-          }).catch(() => {});
-        }
-
-      } catch (err) {
-        logger.error('ElevenLabs synthesis failed, falling back to native TTS:', err.message);
-        // Use Twilio's enhanced TTS with voice settings to maintain consistency
-        const voice = company.aiSettings?.twilioVoice || TWILIO_FALLBACK_VOICE;
-        gather.say({ voice }, escapeTwiML(strippedAnswer));
+      } else {
+        // Polly path — Twilio renders <Say> server-side
+        gather.say({ voice: tts.voice }, escapeTwiML(strippedAnswer));
       }
-    } else {
-      // Use consistent voice even when ElevenLabs is not configured
-      const voice = company.aiSettings?.twilioVoice || TWILIO_FALLBACK_VOICE;
-      gather.say({ voice }, escapeTwiML(strippedAnswer));
+
+      // 📼 BLACK BOX: Log TTS generation
+      if (CallLogger) {
+        CallLogger.logEvent({
+          callId: callSid,
+          companyId,
+          type: 'TTS_GENERATED',
+          data: {
+            engine: tts.sourceProvider,
+            ms: ttsTime,
+            textLength: strippedAnswer.length,
+            audioUrl,
+            twilioSayVoice: tts.kind === 'polly' ? tts.voice : null,
+            fallbackReason: tts.fallbackReason || null
+          }
+        }).catch(() => {});
+      }
+
+    } catch (err) {
+      logger.error('TTS routing failed, last-resort Polly Say:', err.message);
+      gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(strippedAnswer));
     }
 
     res.type('text/xml');
@@ -4028,38 +4010,39 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     const elevenLabsVoice = voiceSettings.voiceId || null;
 
     /**
-     * Attempt bounded ElevenLabs synthesis for bridge delivery paths.
-     * Returns an absolute audio URL on success, null on failure.
-     * Used by cached-result, streaming-result, partial, and T3 fallback paths
-     * to avoid falling through to Twilio <Say>.
+     * Attempt bounded synthesis for bridge delivery paths.
+     * Returns a descriptor for the caller to act on:
+     *   { kind: 'play', url }   — caller does .play(url)
+     *   { kind: 'say', voice, text } — caller does .say({voice}, text)
+     *   null                    — synthesis failed (caller falls back)
+     *
+     * C3 Apr 2026: Routes through TTSProviderRouter so tenant provider is
+     * respected. Polly tenants get a 'say' descriptor (no buffer to disk).
      */
     async function synthesizeForBridge(text, { timeoutMs = 4000 } = {}) {
-      if (!text || !elevenLabsVoice) return null;
+      if (!text) return null;
       try {
-        const buffer = await Promise.race([
-          synthesizeSpeech({
+        const tts = await Promise.race([
+          TTSProviderRouter.synthesize({
             text,
-            voiceId: elevenLabsVoice,
-            stability: voiceSettings.stability,
-            similarity_boost: voiceSettings.similarityBoost,
-            style: voiceSettings.styleExaggeration,
-            use_speaker_boost: voiceSettings.speakerBoost,
-            model_id: voiceSettings.aiModel,
-            output_format: voiceSettings.outputFormat,
-            optimize_streaming_latency: voiceSettings.streamingLatency,
             company,
             callSid,
             ttsSource: 'bridge_primary'
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('BRIDGE_TTS_TIMEOUT')), timeoutMs))
         ]);
-        const fileName = `bridge_synth_${callSid}_${Date.now()}.mp3`;
-        const audioDir = path.join(__dirname, '../public/audio');
-        if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-        const bridgeSynthPath = path.join(audioDir, fileName);
-        await fs.promises.writeFile(bridgeSynthPath, buffer);
-        scheduleTempAudioDelete(bridgeSynthPath);
-        return `https://${hostHeader}/audio/${fileName}`;
+        if (tts.kind === 'buffer') {
+          const fileName = `bridge_synth_${callSid}_${Date.now()}.mp3`;
+          const audioDir = path.join(__dirname, '../public/audio');
+          if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+          const bridgeSynthPath = path.join(audioDir, fileName);
+          await fs.promises.writeFile(bridgeSynthPath, tts.audio);
+          scheduleTempAudioDelete(bridgeSynthPath);
+          return { kind: 'play', url: `https://${hostHeader}/audio/${fileName}`, sourceProvider: tts.sourceProvider };
+        } else {
+          // Polly path — caller emits Say with tenant's chosen voice
+          return { kind: 'say', voice: tts.voice, text, sourceProvider: tts.sourceProvider, fallbackReason: tts.fallbackReason || null };
+        }
       } catch (err) {
         logger.warn('[V2 BRIDGE CONTINUE] synthesizeForBridge failed', {
           callSid: callSid?.slice(-8),
@@ -4123,14 +4106,19 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       if (cached.audioUrl) {
         twiml.play(cached.audioUrl);
       } else if (cached.responseText) {
-        // V-FIX: Attempt ElevenLabs synthesis instead of falling back to Twilio <Say>
-        const synthUrl = await synthesizeForBridge(cached.responseText);
-        if (synthUrl) {
-          twiml.play(synthUrl);
+        // C3 Apr 2026: Route through TTSProviderRouter — Polly tenants get
+        // {kind:'say'} descriptor and we emit Twilio Say with their voice.
+        const synthRes = await synthesizeForBridge(cached.responseText);
+        if (synthRes && synthRes.kind === 'play') {
+          twiml.play(synthRes.url);
           voiceProviderUsed = 'elevenlabs';
+        } else if (synthRes && synthRes.kind === 'say') {
+          twiml.say({ voice: synthRes.voice }, escapeTwiML(cached.responseText, _mt_cached));
+          voiceProviderUsed = synthRes.fallbackReason ? 'polly_fallback' : 'polly';
         } else {
-          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cached.responseText, _mt_cached));
-          voiceProviderUsed = 'twilio_say';
+          // Synthesis failed entirely — last-resort tenant Polly Say
+          twiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cached.responseText, _mt_cached));
+          voiceProviderUsed = 'polly_fallback';
         }
       } else {
         const playUrlMatch = cached.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
@@ -4138,14 +4126,17 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         if (playUrlMatch) {
           twiml.play(playUrlMatch[1]);
         } else if (sayMatch) {
-          // V-FIX: Attempt ElevenLabs synthesis for extracted <Say> content
-          const synthUrl = await synthesizeForBridge(sayMatch[1]);
-          if (synthUrl) {
-            twiml.play(synthUrl);
+          // C3 Apr 2026: Route through TTSProviderRouter
+          const synthRes = await synthesizeForBridge(sayMatch[1]);
+          if (synthRes && synthRes.kind === 'play') {
+            twiml.play(synthRes.url);
             voiceProviderUsed = 'elevenlabs';
+          } else if (synthRes && synthRes.kind === 'say') {
+            twiml.say({ voice: synthRes.voice }, sayMatch[1]);
+            voiceProviderUsed = synthRes.fallbackReason ? 'polly_fallback' : 'polly';
           } else {
-            twiml.say({ voice: TWILIO_FALLBACK_VOICE }, sayMatch[1]); // Emergency fallback only
-            voiceProviderUsed = 'twilio_say';
+            twiml.say({ voice: getPollyFallbackVoice(company) }, sayMatch[1]);
+            voiceProviderUsed = 'polly_fallback';
           }
         } else {
           twimlString = cached.twimlString;
@@ -4374,14 +4365,18 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       // Scale at 15 ms/char — Turn 2 (~560 chars) gets ~8.4 s instead of 4 s.
       const elBridgeTimeoutMs = Math.min(Math.max(5000, deliverTextClean.length * 15), 15000);
 
-      // V-FIX: Attempt ElevenLabs synthesis before falling back to Twilio <Say>
-      const synthUrl = await synthesizeForBridge(deliverTextClean, { timeoutMs: elBridgeTimeoutMs });
-      if (synthUrl) {
-        twiml.play(synthUrl);
+      // C3 Apr 2026: Route through TTSProviderRouter — Polly tenants get
+      // {kind:'say'} descriptor and we emit Twilio Say with their chosen voice.
+      const synthRes = await synthesizeForBridge(deliverTextClean, { timeoutMs: elBridgeTimeoutMs });
+      if (synthRes && synthRes.kind === 'play') {
+        twiml.play(synthRes.url);
         voiceProviderUsed = 'elevenlabs';
+      } else if (synthRes && synthRes.kind === 'say') {
+        twiml.say({ voice: synthRes.voice }, escapeTwiML(deliverTextClean, _mt_stream));
+        voiceProviderUsed = synthRes.fallbackReason ? 'polly_fallback' : 'polly';
       } else {
-        twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(deliverTextClean, _mt_stream));
-        voiceProviderUsed = 'twilio_say';
+        twiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(deliverTextClean, _mt_stream));
+        voiceProviderUsed = 'polly_fallback';
       }
 
       // ── ACTUAL DELIVERY: record what the caller will actually hear ──────
@@ -4518,14 +4513,17 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
         const twiml = new twilio.twiml.VoiceResponse();
         const _mt_partial = {};
 
-        // V-FIX: Attempt ElevenLabs synthesis for partial text
-        const synthUrl = await synthesizeForBridge(partialText);
-        if (synthUrl) {
-          twiml.play(synthUrl);
+        // C3 Apr 2026: Route through TTSProviderRouter
+        const synthRes = await synthesizeForBridge(partialText);
+        if (synthRes && synthRes.kind === 'play') {
+          twiml.play(synthRes.url);
           voiceProviderUsed = 'elevenlabs';
+        } else if (synthRes && synthRes.kind === 'say') {
+          twiml.say({ voice: synthRes.voice }, escapeTwiML(partialText, _mt_partial));
+          voiceProviderUsed = synthRes.fallbackReason ? 'polly_fallback' : 'polly';
         } else {
-          twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(partialText, _mt_partial));
-          voiceProviderUsed = 'twilio_say';
+          twiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(partialText, _mt_partial));
+          voiceProviderUsed = 'polly_fallback';
         }
 
         // ── ACTUAL DELIVERY: record what the caller will actually hear ──────
@@ -4617,18 +4615,22 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       const twiml = new twilio.twiml.VoiceResponse();
       const fallbackText = "I'm sorry about the wait. Could you tell me a bit more about what you need help with?";
 
-      // V-FIX: Use BridgeAudioService cache or ElevenLabs synthesis for T3 fallback
+      // C3 Apr 2026: Cache lookup gated by provider — Polly tenants skip
+      // the EL-cached audio entirely (it's the wrong voice for their call).
       const BridgeAudioServiceT3 = require('../services/bridgeAudio/BridgeAudioService');
-      const t3AudioUrl = BridgeAudioServiceT3.getAudioUrl({
+      const _isElPrimaryT3 = getPrimaryProvider(company) === 'elevenlabs';
+      const t3AudioUrl = _isElPrimaryT3 ? BridgeAudioServiceT3.getAudioUrl({
         companyId: companyID,
         text: fallbackText,
         voiceSettings,
         hostHeader
-      });
+      }) : null;
 
-      let t3PlayUrl = t3AudioUrl || null;
-      if (!t3PlayUrl && elevenLabsVoice) {
-        t3PlayUrl = await synthesizeForBridge(fallbackText, { timeoutMs: 3000 });
+      let t3PlayUrl = t3AudioUrl || null;     // URL string (cached EL audio)
+      let t3SynthRes = null;                   // descriptor from synthesizeForBridge
+      if (!t3PlayUrl) {
+        t3SynthRes = await synthesizeForBridge(fallbackText, { timeoutMs: 3000 });
+        if (t3SynthRes && t3SynthRes.kind === 'play') t3PlayUrl = t3SynthRes.url;
       }
 
       const gather = twiml.gather({
@@ -4643,9 +4645,12 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       if (t3PlayUrl) {
         gather.play(t3PlayUrl);
         voiceProviderUsed = t3AudioUrl ? 'elevenlabs_cached' : 'elevenlabs';
+      } else if (t3SynthRes && t3SynthRes.kind === 'say') {
+        gather.say({ voice: t3SynthRes.voice }, escapeTwiML(fallbackText));
+        voiceProviderUsed = t3SynthRes.fallbackReason ? 'polly_fallback' : 'polly';
       } else {
-        gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(fallbackText)); // Emergency fallback only
-        voiceProviderUsed = 'twilio_say';
+        gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(fallbackText));
+        voiceProviderUsed = 'polly_fallback';
       }
       twimlString = twiml.toString();
 
@@ -4754,19 +4759,21 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     const lineIdx = (attempt - 1) % (usableLines.length || 1);
     const holdLine = lanePhrase || usableLines[lineIdx] || 'One moment please.';
 
-    // Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies
+    // Use BridgeAudioService cached ElevenLabs audio; never <Say> for ElevenLabs companies.
+    // Apr 2026: Polly-primary tenants skip the EL cache entirely → always Say with their voice.
     const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
-    const holdAudioUrl = BridgeAudioService.getAudioUrl({
+    const _isElPrimaryBridge = getPrimaryProvider(company) === 'elevenlabs';
+    const holdAudioUrl = _isElPrimaryBridge ? BridgeAudioService.getAudioUrl({
       companyId: companyID,
       text: holdLine,
       voiceSettings,
       hostHeader
-    });
+    }) : null;
 
     if (holdAudioUrl) {
       twiml.play(holdAudioUrl);
       voiceProviderUsed = 'elevenlabs_cached';
-    } else if (elevenLabsVoice) {
+    } else if (_isElPrimaryBridge && elevenLabsVoice) {
       // Cache miss but ElevenLabs configured — silence is better than wrong voice
       logger.warn('[V2 BRIDGE CONTINUE] No cached bridge audio — using <Pause>', {
         callSid: callSid?.slice(-8),
@@ -4777,9 +4784,10 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
       twiml.pause({ length: 1 });
       voiceProviderUsed = 'silence';
     } else {
-      // No ElevenLabs configured — Twilio <Say> is the correct voice for this company
-      twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(holdLine));
-      voiceProviderUsed = 'twilio_say';
+      // Either Polly primary OR no ElevenLabs configured —
+      // <Say> with the tenant's chosen Polly voice.
+      twiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(holdLine));
+      voiceProviderUsed = _isElPrimaryBridge ? 'twilio_say' : 'polly';
     }
 
     // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
@@ -4925,41 +4933,43 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
     let   sAudioUrl = redis ? await redis.get(sAudioKey).catch(() => null) : null;
 
     // ── If audio not ready yet, poll briefly ─────────────────────────────
+    let sSayPolly = null; // set when provider is Polly — emit Say with sentence text
     if (!sAudioUrl && attempt < MAX_POLL_TRIES) {
       // Check if sentence text exists (being synthesized)
       const sTextKey  = `a2sentence:${callSid}:${turn}:${idx}`;
       const sText     = redis ? await redis.get(sTextKey).catch(() => null) : null;
 
-      if (sText && voiceId) {
-        // Sentence text arrived but audio isn't ready — synthesize now
+      if (sText) {
+        // Load company to determine provider
+        const company = await require('../models/v2Company').findById(companyID).lean();
+
+        // C3 Apr 2026: Route through TTSProviderRouter. If Polly primary OR
+        // EL falls back to Polly, the descriptor's `voice` lets us emit Say
+        // directly — no file write, no Redis URL. Faster + correct.
         try {
-          const company = await require('../models/v2Company').findById(companyID).lean();
-          const buf     = await synthesizeSpeech({
-            text:                       sText,
-            voiceId,
-            stability:                  voiceSettings.stability,
-            similarity_boost:           voiceSettings.similarityBoost,
-            style:                      voiceSettings.styleExaggeration,
-            use_speaker_boost:          voiceSettings.speakerBoost,
-            model_id:                   voiceSettings.aiModel,
-            output_format:              voiceSettings.outputFormat,
-            optimize_streaming_latency: voiceSettings.streamingLatency,
+          const tts = await TTSProviderRouter.synthesize({
+            text:    sText,
             company,
             callSid,
-            ttsSource:                  'sentence_stream_seed',
+            ttsSource: 'sentence_stream_seed'
           });
-          const sFile     = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
-          const sFilePath = path.join(__dirname, '../public/audio', sFile);
-          await fs.promises.writeFile(sFilePath, buf);
-          scheduleTempAudioDelete(sFilePath);
-          sAudioUrl = `https://${hostHeader}/audio/${sFile}`;
-          await redis.set(sAudioKey, sAudioUrl, { EX: 60 }).catch(() => {});
+          if (tts.kind === 'buffer') {
+            const sFile     = `s${idx}_${callSid}_${turn}_${Date.now()}.mp3`;
+            const sFilePath = path.join(__dirname, '../public/audio', sFile);
+            await fs.promises.writeFile(sFilePath, tts.audio);
+            scheduleTempAudioDelete(sFilePath);
+            sAudioUrl = `https://${hostHeader}/audio/${sFile}`;
+            await redis.set(sAudioKey, sAudioUrl, { EX: 60 }).catch(() => {});
+          } else {
+            // Polly path — capture voice + sentence text for direct Say emission below
+            sSayPolly = { voice: tts.voice, text: sText };
+          }
         } catch (synthErr) {
           logger.warn('[SENTENCE_CONTINUE] Synthesis failed for idx=' + idx, { error: synthErr.message, callSid: callSid?.slice(-8) });
         }
       }
 
-      if (!sAudioUrl) {
+      if (!sAudioUrl && !sSayPolly) {
         // Not ready — self-redirect to poll again after brief pause
         const twiml    = new twilio.twiml.VoiceResponse();
         const nextTry  = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-sentence-continue/${companyID}?turn=${turn}&token=${encodeURIComponent(token)}&idx=${idx}&callSid=${encodeURIComponent(callSid)}&attempt=${attempt + 1}`;
@@ -4969,10 +4979,19 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
       }
     }
 
-    if (sAudioUrl) {
-      // Sentence audio ready — play it and redirect for next
+    if (sAudioUrl || sSayPolly) {
+      // Sentence ready — play (EL) or say (Polly), then redirect for next
       const twiml   = new twilio.twiml.VoiceResponse();
       const isLast  = !!fullResult && !(redis ? await redis.get(`a2sentence:${callSid}:${turn}:${idx + 1}`).catch(() => null) : null);
+
+      // C3 Apr 2026: Helper to emit either Play or Say based on what we have
+      const emitSentence = (target) => {
+        if (sAudioUrl) {
+          target.play(sAudioUrl);
+        } else if (sSayPolly) {
+          target.say({ voice: sSayPolly.voice }, escapeTwiML(sSayPolly.text));
+        }
+      };
 
       if (isLast) {
         // Last sentence — final gather
@@ -4989,10 +5008,10 @@ router.post('/v2-agent-sentence-continue/:companyID', async (req, res) => {
           partialResultCallback:    `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
           partialResultCallbackMethod: 'POST',
         });
-        gather.play(sAudioUrl);
+        emitSentence(gather);
       } else {
         const nextUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-sentence-continue/${companyID}?turn=${turn}&token=${encodeURIComponent(token)}&idx=${idx + 1}&callSid=${encodeURIComponent(callSid)}&attempt=0`;
-        twiml.play(sAudioUrl);
+        emitSentence(twiml);
         twiml.redirect({ method: 'POST' }, nextUrl);
       }
       return res.send(twiml.toString());
@@ -5382,65 +5401,79 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           const lapActionUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`;
           let   lapResponseText = null;
 
-          // ── Audio helper — pre-cached LAPResponseAudio → InstantAudio → TTS → Say ──
+          // ── Audio helper — pre-cached LAPResponseAudio → InstantAudio → router → Say ──
+          // C3 Apr 2026: Cache layers gated by provider (EL primary only — Polly
+          // tenants render live via <Say>). Synthesis path routes through
+          // TTSProviderRouter so provider toggle is respected.
           const lapSayOrPlay = async (text) => {
             if (!text) return;
             const cleanText = cleanTextForTTS(stripMarkdown(text));
             const _vs = company.aiAgentSettings?.voiceSettings || {};
+            const _isElPrimaryLAP = getPrimaryProvider(company) === 'elevenlabs';
 
-            // ── 1. Check LAPResponseAudio (MongoDB-backed, deploy-proof) ──
-            try {
-              const LAPResponseAudio = require('../models/LAPResponseAudio');
-              const textHash = LAPResponseAudio.hashText(cleanText);
-              const fileHash = textHash.substring(textHash.length - 16);
-              const audioDoc = await LAPResponseAudio.findAudioDataByHash(companyID, fileHash);
-              if (audioDoc?.audioUrl) {
-                // Ensure file on disk (restore from MongoDB if missing)
-                const diskPath = require('path').join(__dirname, '..', 'public', audioDoc.audioUrl);
-                if (!fs.existsSync(diskPath) && audioDoc.audioData) {
-                  const dir = require('path').dirname(diskPath);
-                  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                  fs.writeFileSync(diskPath, audioDoc.audioData);
-                }
-                lapTwiml.play(`${getSecureBaseUrl(req)}${audioDoc.audioUrl}`);
-                return;
-              }
-            } catch (_lapAudioErr) { /* fall through to InstantAudio / TTS */ }
-
-            // ── 2. InstantAudioService cache (disk-based, fast) ──
-            if (_vs.voiceId) {
+            // ── 1. Check LAPResponseAudio (MongoDB-backed, EL audio — only valid for EL primary) ──
+            if (_isElPrimaryLAP) {
               try {
-                const _lapIAS = require('../services/instantAudio/InstantAudioService');
-                const _lapStatus = _lapIAS.getStatus({
-                  companyId: companyID, kind: 'LAP_RESPONSE', text: cleanText, voiceSettings: _vs,
-                });
-                if (_lapStatus.exists) {
-                  lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
+                const LAPResponseAudio = require('../models/LAPResponseAudio');
+                const textHash = LAPResponseAudio.hashText(cleanText);
+                const fileHash = textHash.substring(textHash.length - 16);
+                const audioDoc = await LAPResponseAudio.findAudioDataByHash(companyID, fileHash);
+                if (audioDoc?.audioUrl) {
+                  // Ensure file on disk (restore from MongoDB if missing)
+                  const diskPath = require('path').join(__dirname, '..', 'public', audioDoc.audioUrl);
+                  if (!fs.existsSync(diskPath) && audioDoc.audioData) {
+                    const dir = require('path').dirname(diskPath);
+                    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                    fs.writeFileSync(diskPath, audioDoc.audioData);
+                  }
+                  lapTwiml.play(`${getSecureBaseUrl(req)}${audioDoc.audioUrl}`);
                   return;
                 }
-                const lapBuf = await synthesizeSpeech({
-                  text:                       cleanText,
-                  voiceId:                    _vs.voiceId,
-                  stability:                  _vs.stability,
-                  similarity_boost:           _vs.similarityBoost,
-                  style:                      _vs.styleExaggeration,
-                  use_speaker_boost:          _vs.speakerBoost,
-                  model_id:                   _vs.aiModel,
-                  output_format:              _vs.outputFormat,
-                  optimize_streaming_latency: _vs.streamingLatency,
-                  company,
-                  callSid,
-                  ttsSource:                  'lap_patience',
-                });
-                try { fs.writeFileSync(_lapStatus.filePath, lapBuf); } catch (_) {}
-                lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
-                return;
-              } catch (ttsErr) {
-                logger.warn('[LAP GATE] ElevenLabs TTS failed, falling back to Twilio say', { error: ttsErr.message });
-              }
+              } catch (_lapAudioErr) { /* fall through to InstantAudio / TTS */ }
             }
-            // ── 3. Polly fallback ──
-            lapTwiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanText));
+
+            // ── 2. InstantAudioService cache (EL audio only — gated on provider) ──
+            const _lapIAS = require('../services/instantAudio/InstantAudioService');
+            const _lapStatus = (_isElPrimaryLAP && _vs.voiceId) ? _lapIAS.getStatus({
+              companyId: companyID, kind: 'LAP_RESPONSE', text: cleanText, voiceSettings: _vs,
+            }) : null;
+
+            if (_lapStatus && _lapStatus.exists) {
+              lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
+              return;
+            }
+
+            // ── 3. Synthesize via TTSProviderRouter ──
+            try {
+              const tts = await TTSProviderRouter.synthesize({
+                text:    cleanText,
+                company,
+                callSid,
+                ttsSource: 'lap_patience'
+              });
+              if (tts.kind === 'buffer') {
+                if (_lapStatus) {
+                  try { fs.writeFileSync(_lapStatus.filePath, tts.audio); } catch (_) {}
+                  lapTwiml.play(`${getSecureBaseUrl(req)}${_lapStatus.url.replace('/audio/', '/audio-safe/')}`);
+                } else {
+                  // No cache target (Polly tenant) — write ephemeral file
+                  const fileName = `lap_${callSid}_${Date.now()}.mp3`;
+                  const filePath = require('path').join(__dirname, '../public/audio', fileName);
+                  await fs.promises.writeFile(filePath, tts.audio);
+                  scheduleTempAudioDelete(filePath);
+                  lapTwiml.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+                }
+              } else {
+                // Polly path — emit Say with tenant's chosen voice
+                lapTwiml.say({ voice: tts.voice }, escapeTwiML(cleanText));
+              }
+              return;
+            } catch (ttsErr) {
+              logger.warn('[LAP GATE] TTS routing failed, falling back to Polly Say', { error: ttsErr.message });
+            }
+
+            // ── 4. Last-resort Polly fallback (tenant's chosen voice) ──
+            lapTwiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(cleanText));
           };
 
           // ── action: hold — play hold message, enter hold loop ───────────────
@@ -6028,36 +6061,43 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         });
         
         const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
-        const elevenLabsVoice = voiceSettings.voiceId;
-        
-        if (elevenLabsVoice) {
-          try {
-            // ── Check cache — patience check-in text is static per company ──
-            const _pIAS = require('../services/instantAudio/InstantAudioService');
-            const _pClean = cleanTextForTTS(checkinText);
-            const _pStatus = _pIAS.getStatus({
-              companyId: companyID, kind: 'PATIENCE_CHECKIN', text: _pClean, voiceSettings,
-            });
-            if (_pStatus.exists) {
-              gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
-            } else {
-            const buffer = await synthesizeSpeech({
-              text: checkinText, voiceId: elevenLabsVoice,
-              stability: voiceSettings.stability, similarity_boost: voiceSettings.similarityBoost,
-              style: voiceSettings.styleExaggeration, use_speaker_boost: voiceSettings.speakerBoost,
-              model_id: voiceSettings.aiModel, output_format: voiceSettings.outputFormat,
-              optimize_streaming_latency: voiceSettings.streamingLatency, company,
-              callSid, ttsSource: 'checkin'
-            });
-            // Cache for next patience cycle
-            try { fs.writeFileSync(_pStatus.filePath, buffer); } catch (__) {}
+
+        // C3 Apr 2026: Cache lookup gated on EL primary (Polly tenants render
+        // live via <Say>). Synthesis routes through TTSProviderRouter.
+        try {
+          const _pClean = cleanTextForTTS(checkinText);
+          const _isElPrimaryPC = getPrimaryProvider(company) === 'elevenlabs';
+          const _pIAS = require('../services/instantAudio/InstantAudioService');
+          const _pStatus = (_isElPrimaryPC && voiceSettings.voiceId) ? _pIAS.getStatus({
+            companyId: companyID, kind: 'PATIENCE_CHECKIN', text: _pClean, voiceSettings,
+          }) : null;
+
+          if (_pStatus && _pStatus.exists) {
             gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
+          } else {
+            const tts = await TTSProviderRouter.synthesize({
+              text: checkinText, company, callSid, ttsSource: 'checkin'
+            });
+            if (tts.kind === 'buffer') {
+              if (_pStatus) {
+                // Cache for next patience cycle (EL primary)
+                try { fs.writeFileSync(_pStatus.filePath, tts.audio); } catch (__) {}
+                gather.play(`https://${hostHeader}${_pStatus.url.replace('/audio/', '/audio-safe/')}`);
+              } else {
+                // Polly tenant whose EL fallback returned a buffer — write ephemeral
+                const fileName = `checkin_${callSid}_${Date.now()}.mp3`;
+                const filePath = require('path').join(__dirname, '../public/audio', fileName);
+                await fs.promises.writeFile(filePath, tts.audio);
+                scheduleTempAudioDelete(filePath);
+                gather.play(`https://${hostHeader}/audio/${fileName}`);
+              }
+            } else {
+              // Polly path — emit Say with tenant's chosen voice
+              gather.say({ voice: tts.voice }, escapeTwiML(checkinText));
             }
-          } catch (_) {
-            gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(checkinText));
           }
-        } else {
-          gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(checkinText));
+        } catch (_) {
+          gather.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(checkinText));
         }
         
         return {
@@ -6385,6 +6425,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }), { EX: 120 }).catch(() => {});
       }
 
+      // C3 Apr 2026: Determine provider once for the whole turn.
+      // Polly tenants skip pre-synthesis entirely — sentence-continue will
+      // route through the same TTSProviderRouter and emit Say with sentence
+      // text directly (see L4938 area). Avoids wasted Polly API calls and
+      // ensures voice consistency across the turn.
+      const _isElPrimarySentence = getPrimaryProvider(company) === 'elevenlabs';
+
       const onSentence = async (sentence, idx) => {
         try {
           // Write ALL sentences to Redis for sentence-continue endpoint
@@ -6396,61 +6443,64 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             ).catch(() => {});
           }
 
-          // ALL idx>0: synthesize in background so sentence-continue finds audio ready
-          if (idx > 0 && _sentenceElevenLabsVoice) {
+          // ALL idx>0: pre-synthesize ONLY for EL primary tenants
+          if (idx > 0 && _isElPrimarySentence && _sentenceElevenLabsVoice) {
             (async () => {
               try {
-                const buf2    = await synthesizeSpeech({
-                  text: sentence, voiceId: _sentenceElevenLabsVoice,
-                  stability:                  _sentenceVoiceSettings.stability,
-                  similarity_boost:           _sentenceVoiceSettings.similarityBoost,
-                  style:                      _sentenceVoiceSettings.styleExaggeration,
-                  use_speaker_boost:          _sentenceVoiceSettings.speakerBoost,
-                  model_id:                   _sentenceVoiceSettings.aiModel,
-                  output_format:              _sentenceVoiceSettings.outputFormat,
-                  optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
+                const tts = await TTSProviderRouter.synthesize({
+                  text: sentence,
                   company,
                   callSid,
-                  ttsSource:                  'sentence_batch',
+                  ttsSource: 'sentence_batch'
                 });
-                const sFile     = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
-                const sFilePath = path.join(__dirname, '../public/audio', sFile);
-                await fs.promises.writeFile(sFilePath, buf2);
-                scheduleTempAudioDelete(sFilePath);
-                const sUrl = `https://${_sentenceHostHeader}/audio/${sFile}`;
-                if (redis && callSid) {
-                  await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:${idx}`, sUrl, { EX: 60 }).catch(() => {});
+                if (tts.kind === 'buffer') {
+                  const sFile     = `s${idx}_${callSid}_${turnNumber}_${Date.now()}.mp3`;
+                  const sFilePath = path.join(__dirname, '../public/audio', sFile);
+                  await fs.promises.writeFile(sFilePath, tts.audio);
+                  scheduleTempAudioDelete(sFilePath);
+                  const sUrl = `https://${_sentenceHostHeader}/audio/${sFile}`;
+                  if (redis && callSid) {
+                    await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:${idx}`, sUrl, { EX: 60 }).catch(() => {});
+                  }
                 }
+                // If kind === 'polly' (EL fell back mid-stream), don't cache —
+                // sentence-continue will see no URL and emit Say with sentence text.
               } catch { /* non-fatal — sentence-continue will synthesize on demand */ }
             })();
           }
 
           // idx=0: synthesize immediately → fire firstSentenceAudioPromise
-          if (idx === 0 && _sentenceElevenLabsVoice && mayBridge) {
-            const buf = await synthesizeSpeech({
-              text:                       sentence,
-              voiceId:                    _sentenceElevenLabsVoice,
-              stability:                  _sentenceVoiceSettings.stability,
-              similarity_boost:           _sentenceVoiceSettings.similarityBoost,
-              style:                      _sentenceVoiceSettings.styleExaggeration,
-              use_speaker_boost:          _sentenceVoiceSettings.speakerBoost,
-              model_id:                   _sentenceVoiceSettings.aiModel,
-              output_format:              _sentenceVoiceSettings.outputFormat,
-              optimize_streaming_latency: _sentenceVoiceSettings.streamingLatency,
-              company,
-              callSid,
-              ttsSource:                  'sentence_first',
-            });
-            const s0FileName = `s0_${callSid}_${turnNumber}_${Date.now()}.mp3`;
-            const s0Path     = path.join(__dirname, '../public/audio', s0FileName);
-            await fs.promises.writeFile(s0Path, buf);
-            scheduleTempAudioDelete(s0Path);
-            const s0Url = `https://${_sentenceHostHeader}/audio/${s0FileName}`;
-            // Write s0 audio URL to Redis so sentence-continue can pick it up
-            if (redis && callSid) {
-              await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:0`, s0Url, { EX: 60 }).catch(() => {});
+          // For Polly tenants: resolve immediately with null so bridge falls
+          // through to the Polly Say path (no pre-synth needed for one-shot Say).
+          if (idx === 0 && mayBridge) {
+            if (!_isElPrimarySentence) {
+              // Polly primary — no pre-synth, signal bridge to take Polly Say path
+              _firstSentenceAudioResolve(null);
+              return;
             }
-            _firstSentenceAudioResolve({ audioUrl: s0Url, sentence });
+            if (_sentenceElevenLabsVoice) {
+              const tts = await TTSProviderRouter.synthesize({
+                text:    sentence,
+                company,
+                callSid,
+                ttsSource: 'sentence_first'
+              });
+              if (tts.kind === 'buffer') {
+                const s0FileName = `s0_${callSid}_${turnNumber}_${Date.now()}.mp3`;
+                const s0Path     = path.join(__dirname, '../public/audio', s0FileName);
+                await fs.promises.writeFile(s0Path, tts.audio);
+                scheduleTempAudioDelete(s0Path);
+                const s0Url = `https://${_sentenceHostHeader}/audio/${s0FileName}`;
+                // Write s0 audio URL to Redis so sentence-continue can pick it up
+                if (redis && callSid) {
+                  await redis.set(`a2sentence:audio:${callSid}:${turnNumber}:0`, s0Url, { EX: 60 }).catch(() => {});
+                }
+                _firstSentenceAudioResolve({ audioUrl: s0Url, sentence });
+              } else {
+                // EL → Polly fallback mid-call — bridge will take Polly Say path
+                _firstSentenceAudioResolve(null);
+              }
+            }
           }
         } catch (err) {
           logger.warn('[SENTENCE_STREAM] onSentence synthesis failed (non-fatal)', {
@@ -6749,9 +6799,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       let ttsLatencyMs = null;
       const T_audioBlock = Date.now();
 
+      // Apr 2026: Cache layers (InstantAudioService, BridgeAudioService) hold
+      // ElevenLabs-rendered MP3s. When a tenant flips primary provider to Polly,
+      // a cache hit would play the *old* EL audio with the wrong voice — wrong.
+      // Gate every cache lookup on EL primary so Polly tenants always cache-miss,
+      // routing through TTSProviderRouter → emit Say with the tenant's Polly voice.
+      const _isElPrimaryCache = getPrimaryProvider(company) === 'elevenlabs';
+
       try {
         const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR' || runtimeResult?.matchSource === 'GREETING';
-        if (!audioUrl && isGreetingIntercept && elevenLabsVoice && responseText) {
+        if (!audioUrl && _isElPrimaryCache && isGreetingIntercept && elevenLabsVoice && responseText) {
           const status = InstantAudioService.getStatus({
             companyId: companyID,
             kind: 'GREETING_RULE',
@@ -6792,9 +6849,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
 
       // ── INSTANT AUDIO: Pre-cached trigger response (disk, fastest path) ──
+      // Gated on EL primary — Polly tenants skip cache so they don't play stale EL audio.
       try {
         const isTriggerHit = runtimeResult?.triggerCard && runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
-        if (!audioUrl && isTriggerHit && responseText) {
+        if (!audioUrl && _isElPrimaryCache && isTriggerHit && responseText) {
           const InstantAudioService = require('../services/instantAudio/InstantAudioService');
           const iaStatus = InstantAudioService.getStatus({
             companyId: companyID,
@@ -6866,7 +6924,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           'BOOKING_LOGIC_ENGINE',
           'TURN1_ENGINE',
         ].includes(runtimeResult?.matchSource) && responseText;
-        if (!audioUrl && isPreCachedAudioCandidate) {
+        // Gated on EL primary — Polly tenants skip cache (would play stale EL audio).
+        if (!audioUrl && _isElPrimaryCache && isPreCachedAudioCandidate) {
           const InstantAudioService = require('../services/instantAudio/InstantAudioService');
           const audioHashText = runtimeResult?.audioHintText || responseText;
           const kcStatus = InstantAudioService.getStatus({
@@ -6906,7 +6965,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       try {
         const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
         const agent2AudioUrl = runtimeResult?.audioUrl;
-        if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
+        // Gated on EL primary — agent2 audio URL was synthesized with EL voice
+        // at admin-save time; Polly tenants skip it and re-route through the router.
+        if (!audioUrl && _isElPrimaryCache && isAgent2Discovery && agent2AudioUrl) {
           vd_audioUrlPresent = true;
           let audioFileExists = false;
 
@@ -7013,13 +7074,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.warn('[V2 RESPOND] Agent2 instant audio check failed', { error: e.message });
       }
 
+      // ── Provider-aware say voice (computed once for this turn) ──────────
+      // Apr 2026: tenant chooses Polly voice in admin UI; respect it on every
+      // <Say> fallback path. getPollyFallbackVoice handles null company / stale
+      // voiceId / unset preference and returns the platform default last-resort.
+      const _localSayVoice = getPollyFallbackVoice(company);
+      const _isElPrimaryFinal = getPrimaryProvider(company) === 'elevenlabs';
+
       // ── Time-budget guard: skip ElevenLabs if webhook time nearly blown ──
       // Twilio hard-kills webhooks at 15s. ElevenLabs typically takes 2-5s.
       // If we've already burned 12s+ on company load + LLM + events, attempting
       // TTS will almost certainly push us past 15s → "application error".
-      // Fall through to the Polly <Say> fallback instead.
+      // Fall through to the tenant's Polly <Say> fallback instead.
+      // (Polly-primary tenants always skip the EL synth too — the router is
+      //  the source of truth for "is EL even being attempted on this call".)
       const _elapsedBeforeTts = Date.now() - T0;
-      if (!audioUrl && elevenLabsVoice && responseText && _elapsedBeforeTts >= 12000) {
+      if (!audioUrl && _isElPrimaryFinal && elevenLabsVoice && responseText && _elapsedBeforeTts >= 12000) {
         logger.warn('[V2 RESPOND] Time-budget guard: skipping ElevenLabs TTS', {
           callSid, turn: turnNumber, elapsedMs: _elapsedBeforeTts,
           reason: 'Webhook time budget nearly exhausted (>=12s). Falling back to Polly <Say>.'
@@ -7028,16 +7098,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           CallLogger.logEvent({
             callId: callSid, companyId: companyID, type: 'TTS_SKIPPED_TIME_BUDGET',
             turn: turnNumber,
-            data: { elapsedMs: _elapsedBeforeTts, threshold: 12000 }
+            data: { elapsedMs: _elapsedBeforeTts, threshold: 12000, sayVoice: _localSayVoice }
           }).catch(() => {});
         }
         localVoiceProviderUsed = 'polly_time_budget_guard';
         vd_elevenLabsAttempted = false;
-        // audioUrl stays null → falls through to <Say> with Polly.Matthew-Neural
+        // audioUrl stays null → falls through to <Say> with tenant's Polly voice
       }
 
-      if (!audioUrl && elevenLabsVoice && responseText && localVoiceProviderUsed !== 'polly_time_budget_guard') {
-        vd_elevenLabsAttempted = true;
+      if (!audioUrl && responseText && localVoiceProviderUsed !== 'polly_time_budget_guard') {
+        // Apr 2026: route through TTSProviderRouter — single source of truth
+        // for tenant-chosen provider. Polly-primary tenants get Polly directly;
+        // EL-primary tenants attempt EL and the router auto-falls-through to
+        // Polly on any classified failure (timeout/circuit_open/quota/etc.).
+        // Forensic accuracy: localVoiceProviderUsed reflects what the caller
+        // actually heard — never lies about which provider rendered the audio.
+        vd_elevenLabsAttempted = _isElPrimaryFinal;
         const ttsStartTime = Date.now();
         try {
           if (CallLogger) {
@@ -7046,20 +7122,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               companyId: companyID,
               type: 'TTS_STARTED',
               turn: turnNumber,
-              data: { voiceId: elevenLabsVoice, textLength: responseText.length }
+              data: {
+                primaryProvider: _isElPrimaryFinal ? 'elevenlabs' : 'polly',
+                voiceId: _isElPrimaryFinal ? (elevenLabsVoice || null) : null,
+                pollySayVoice: _localSayVoice,
+                textLength: responseText.length
+              }
             }).catch(() => {});
           }
 
-          const buffer = await synthesizeSpeech({
+          const tts = await TTSProviderRouter.synthesize({
             text: responseText,
-            voiceId: elevenLabsVoice,
-            stability: voiceSettings.stability,
-            similarity_boost: voiceSettings.similarityBoost,
-            style: voiceSettings.styleExaggeration,
-            use_speaker_boost: voiceSettings.speakerBoost,
-            model_id: voiceSettings.aiModel,
-            output_format: voiceSettings.outputFormat,
-            optimize_streaming_latency: voiceSettings.streamingLatency,
             company,
             callSid,
             ttsSource: 'answer_fallback'
@@ -7067,28 +7140,67 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
           ttsLatencyMs = Date.now() - ttsStartTime;
 
-          const fileName       = `ai_respond_${callSid}_${Date.now()}.mp3`;
-          const audioDir       = path.join(__dirname, '../public/audio');
-          await fs.promises.mkdir(audioDir, { recursive: true });  // no-op if already exists
-          const aiRespondPath  = path.join(audioDir, fileName);
-          await fs.promises.writeFile(aiRespondPath, buffer);
-          scheduleTempAudioDelete(aiRespondPath);
+          if (tts && tts.kind === 'buffer') {
+            // ElevenLabs success — write file, emit <Play>.
+            const fileName       = `ai_respond_${callSid}_${Date.now()}.mp3`;
+            const audioDir       = path.join(__dirname, '../public/audio');
+            await fs.promises.mkdir(audioDir, { recursive: true });  // no-op if already exists
+            const aiRespondPath  = path.join(audioDir, fileName);
+            await fs.promises.writeFile(aiRespondPath, tts.audio);
+            scheduleTempAudioDelete(aiRespondPath);
 
-          audioUrl = `https://${hostHeader}/audio/${fileName}`;
-          localVoiceProviderUsed = 'elevenlabs';
-          vd_elevenLabsSuccess = true;
+            audioUrl = `https://${hostHeader}/audio/${fileName}`;
+            localVoiceProviderUsed = 'elevenlabs';
+            vd_elevenLabsSuccess = true;
 
-          if (CallLogger) {
-            CallLogger.logEvent({
-              callId: callSid,
-              companyId: companyID,
-              type: 'TTS_COMPLETED',
-              turn: turnNumber,
-              data: { voiceId: elevenLabsVoice, latencyMs: ttsLatencyMs }
-            }).catch(() => {});
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'TTS_COMPLETED',
+                turn: turnNumber,
+                data: {
+                  provider: 'elevenlabs',
+                  voiceId: elevenLabsVoice || null,
+                  latencyMs: ttsLatencyMs
+                }
+              }).catch(() => {});
+            }
+          } else if (tts && tts.kind === 'polly') {
+            // Polly path — either tenant-chosen primary OR EL→Polly auto-fallback.
+            // audioUrl stays null so the gather.say(_localSayVoice) path runs.
+            // sourceProvider tells us forensically which case fired.
+            localVoiceProviderUsed = (tts.sourceProvider === 'polly-fallback' || tts.sourceProvider === 'polly_fallback')
+              ? 'polly_fallback'
+              : 'polly';
+            vd_elevenLabsSuccess = false; // even on EL primary, EL did not produce audio
+
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'TTS_COMPLETED',
+                turn: turnNumber,
+                data: {
+                  provider: localVoiceProviderUsed,
+                  voice: tts.voice || _localSayVoice,
+                  fallbackReason: tts.fallbackReason || null,
+                  latencyMs: ttsLatencyMs
+                }
+              }).catch(() => {});
+            }
+          } else {
+            // Router returned an unknown shape — should not happen, but fail
+            // safe by leaving audioUrl null so the <Say> path emits the response.
+            logger.warn('[V2 RESPOND] TTSProviderRouter returned unexpected descriptor', {
+              callSid: callSid?.slice(-8), kind: tts?.kind || 'undefined'
+            });
+            localVoiceProviderUsed = 'twilio_say';
           }
         } catch (ttsError) {
-          logger.error('[V2 RESPOND] ElevenLabs TTS failed', {
+          // Router rarely throws (it catches & falls back internally), but if it
+          // does, leave audioUrl null and emit Say with the tenant's Polly voice.
+          logger.error('[V2 RESPOND] TTSProviderRouter threw', {
             callSid: callSid?.slice(-8),
             error: ttsError.message
           });
@@ -7099,9 +7211,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               companyId: companyID,
               type: 'TTS_FAILED',
               turn: turnNumber,
-              data: { error: ttsError.message, fallback: 'twilio_say' }
+              data: { error: ttsError.message, fallback: 'twilio_say', sayVoice: _localSayVoice }
             }).catch(() => {});
           }
+          localVoiceProviderUsed = 'twilio_say';
         }
       }
 
@@ -7283,24 +7396,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         // Play consent YES response, then booking bridge phrase, then redirect.
         // BookingLogicEngine fires on the redirect and immediately asks its
         // first question — no dead-air gap waiting for caller input.
+        // Apr 2026: Say voice is the tenant's chosen Polly voice, not platform default.
         if (audioUrl) twiml.play(audioUrl);
-        else twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
+        else twiml.say({ voice: _localSayVoice }, escapeTwiML(responseText));
 
         // Play Booking Bridge phrase ("Alright, lets get that scheduled for you..")
         // configured in Agent 2.0 Settings → Bridge → Booking Bridge.
+        // Apr 2026: BridgeAudioService is gated on EL primary — Polly tenants
+        // skip the cache lookup so we always emit Say with the tenant's voice.
         const bookingBridgePhrase = (bridgeCfg.bookingBridgePhrase || '').trim();
         if (bookingBridgePhrase) {
           const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
-          const bookingBridgeAudio = BridgeAudioService.getAudioUrl({
+          const bookingBridgeAudio = _isElPrimaryFinal ? BridgeAudioService.getAudioUrl({
             companyId: companyID,
             text: bookingBridgePhrase,
             voiceSettings: company?.aiAgentSettings?.voiceSettings || {},
             hostHeader
-          });
+          }) : null;
           if (bookingBridgeAudio) {
             twiml.play(bookingBridgeAudio);
           } else {
-            twiml.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(bookingBridgePhrase));
+            twiml.say({ voice: _localSayVoice }, escapeTwiML(bookingBridgePhrase));
           }
         }
 
@@ -7366,8 +7482,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           }).catch(() => {});
         }
 
+        // Apr 2026: Say voice is the tenant's chosen Polly voice, not platform default.
         if (audioUrl) gather.play(audioUrl);
-        else gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(responseText));
+        else gather.say({ voice: _localSayVoice }, escapeTwiML(responseText));
 
         // ── BUG-28 FIX: Overwrite preflight gather config with accurate post-LLM values ──
         // Correct patience timeout and pendingFollowUp speechTimeout now that we have runtimeResult.
@@ -7453,8 +7570,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           },
           toolRefs: [],
           tts: {
-            provider: (localVoiceProviderUsed === 'elevenlabs' ? 'elevenlabs' : (audioUrl ? 'twilio_play' : 'twilio_say')),
-            voiceId: company?.aiAgentSettings?.voiceSettings?.voiceId || null
+            // Forensic provider — what actually rendered the audio the caller heard.
+            provider: localVoiceProviderUsed,
+            // The voiceId is meaningful only for ElevenLabs. For Polly paths the
+            // voice is the tenant's pollyVoiceId; for fallback Say it's _localSayVoice.
+            voiceId: (localVoiceProviderUsed === 'elevenlabs')
+              ? (company?.aiAgentSettings?.voiceSettings?.voiceId || null)
+              : null,
+            sayVoice: (audioUrl ? null : _localSayVoice)
           },
           twiml: {
             outputMode: audioUrl ? 'play' : 'say',
@@ -8101,18 +8224,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // BRIDGE AUDIO: Use cached ElevenLabs MP3 via <Play>, never Twilio <Say>.
-    // If no cached audio exists, use <Pause> (silence > wrong voice).
+    // If no cached audio exists, use <Pause> (silence > wrong voice for EL tenants).
+    // Apr 2026: Polly-primary tenants skip the EL cache and emit <Say> with their voice.
     // ═══════════════════════════════════════════════════════════════════════════
     const BridgeAudioService = require('../services/bridgeAudio/BridgeAudioService');
     const bridgeVoiceSettings = company?.aiAgentSettings?.voiceSettings || {};
-    const bridgeAudioUrl = BridgeAudioService.getAudioUrl({
+    const _isElPrimaryAgent2Bridge = getPrimaryProvider(company) === 'elevenlabs';
+    const bridgeAudioUrl = _isElPrimaryAgent2Bridge ? BridgeAudioService.getAudioUrl({
       companyId: companyID,
       text: bridgeLine,
       voiceSettings: bridgeVoiceSettings,
       hostHeader
-    });
-    const bridgeOutputMode = bridgeAudioUrl ? 'play' : 'pause';
-    const bridgeVoiceProvider = bridgeAudioUrl ? 'elevenlabs_cached' : 'silence';
+    }) : null;
+    const bridgeOutputMode = bridgeAudioUrl ? 'play' : (_isElPrimaryAgent2Bridge ? 'pause' : 'say');
+    const bridgeVoiceProvider = bridgeAudioUrl
+      ? 'elevenlabs_cached'
+      : (_isElPrimaryAgent2Bridge ? 'silence' : 'polly');
 
     if (CallLogger && callSid) {
       await CallLogger.logEvent({
@@ -8245,18 +8372,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // BUILD BRIDGE TWIML: <Play> cached audio or <Pause> — NEVER <Say>
+    // BUILD BRIDGE TWIML: <Play> cached audio or <Pause> for EL primary —
+    // <Say> with tenant's Polly voice for Polly primary tenants.
     // ═══════════════════════════════════════════════════════════════════════════
     const bridgeTwiml = new twilio.twiml.VoiceResponse();
     if (bridgeAudioUrl) {
       bridgeTwiml.play(bridgeAudioUrl);
-    } else {
+    } else if (_isElPrimaryAgent2Bridge) {
       logger.warn('[V2TWILIO] No cached bridge audio — using silence instead of Twilio <Say>', {
         callSid: callSid?.slice(-8),
         companyId: companyID,
         bridgeLine: bridgeLine.substring(0, 60)
       });
       bridgeTwiml.pause({ length: 1 });
+    } else {
+      // Polly-primary tenant — emit <Say> with their chosen voice (no cache, no silence).
+      bridgeTwiml.say({ voice: getPollyFallbackVoice(company) }, escapeTwiML(bridgeLine));
     }
     bridgeTwiml.redirect({ method: 'POST' }, continueUrl);
     twimlString = bridgeTwiml.toString();

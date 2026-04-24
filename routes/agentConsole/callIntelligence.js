@@ -2782,6 +2782,68 @@ function buildTwilioHealth(transcriptV2, summary, convTurns) {
     t.voiceProviderUsed === 'twilio_say'
   ).length;
 
+  // ── Voice provider forensic summary (Apr 24, 2026) ───────────────────
+  // Aggregates voiceProviderUsed across every turn so client disputes can
+  // be answered with the truth: "agent rendered turn 1 via ElevenLabs,
+  // turns 2-5 via Polly Matthew (configured primary), turn 6 fell back to
+  // twilio_say after EL synthesis timed out." Built from webhookTimings
+  // (call path) + trace events VOICE_PROVIDER_USED / VOICE_PROVIDER_FALLBACK
+  // (router-emitted, deeper than webhookTimings catch).
+  const providerCounts = {};
+  for (const t of webhookTimings) {
+    const p = t.voiceProviderUsed || 'unknown';
+    providerCounts[p] = (providerCounts[p] || 0) + 1;
+  }
+  const routerUsedEvents = traceEvents.filter(t => t.kind === 'VOICE_PROVIDER_USED');
+  const routerFallbackEvents = traceEvents
+    .filter(t => t.kind === 'VOICE_PROVIDER_FALLBACK')
+    .map(t => ({
+      ts: t.ts || null,
+      from: t.payload?.fromProvider || null,
+      to: t.payload?.toProvider || null,
+      reason: t.payload?.reason || null,
+      errorMessage: t.payload?.errorMessage || null,
+      ttsSource: t.payload?.ttsSource || null,
+      fallbackVoice: t.payload?.fallbackVoice || null
+    }));
+
+  // Best guess at the tenant's configured primary: most common router 'used'
+  // event provider, falling back to majority of webhookTimings entries.
+  // Not authoritative — the company doc is the source of truth for live config —
+  // but accurate for "what did this call actually do".
+  const routerUsedCounts = {};
+  for (const e of routerUsedEvents) {
+    const p = e.payload?.provider || 'unknown';
+    routerUsedCounts[p] = (routerUsedCounts[p] || 0) + 1;
+  }
+  const inferredPrimary = (() => {
+    const entries = Object.entries(routerUsedCounts);
+    if (entries.length > 0) {
+      entries.sort((a, b) => b[1] - a[1]);
+      return entries[0][0];
+    }
+    // Map webhookTimings provider strings → conceptual primary.
+    const elFamily = ['elevenlabs', 'elevenlabs_cached', 'instant_audio_cache', 'instant_audio_trigger', 'instant_audio_kc', 'instant_audio_agent2'];
+    const pollyFamily = ['polly', 'polly_fallback', 'polly_time_budget_guard'];
+    const elCount = Object.entries(providerCounts).filter(([k]) => elFamily.includes(k)).reduce((s, [, n]) => s + n, 0);
+    const pollyCount = Object.entries(providerCounts).filter(([k]) => pollyFamily.includes(k)).reduce((s, [, n]) => s + n, 0);
+    if (elCount === 0 && pollyCount === 0) return 'unknown';
+    return elCount >= pollyCount ? 'elevenlabs' : 'polly';
+  })();
+
+  const voiceProviderSummary = {
+    inferredPrimary,
+    turnCounts: providerCounts,
+    routerEvents: {
+      used: routerUsedEvents.length,
+      fallbacks: routerFallbackEvents.length
+    },
+    fallbackDetails: routerFallbackEvents,
+    note: routerUsedEvents.length === 0 && Object.keys(providerCounts).length === 0
+      ? 'No voice provider data on this call.'
+      : null
+  };
+
   // ── Overall health status ────────────────────────────────────────────
   let status = 'healthy';
   if (twilioErrors.length > 0 || timedOutTurns.length > 0) status = 'error';
@@ -2796,6 +2858,7 @@ function buildTwilioHealth(transcriptV2, summary, convTurns) {
     timedOutTurns: timedOutTurns.length,
     twilioErrors,
     voiceFallbackTurns,
+    voiceProviderSummary,
     abnormalTermination,
     durationSeconds,
     humanTurnCount,
