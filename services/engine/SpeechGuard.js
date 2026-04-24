@@ -77,12 +77,6 @@ const SPEECH_REGISTRY = {
     configPath: 'agent2.discovery.playbook.fallback.pendingReprompt',
     description: 'Reprompt when user response is unclear'
   },
-  'agent2.discovery.robotChallenge': {
-    uiPath: 'aiAgentSettings.agent2.discovery.style.robotChallenge.line',
-    uiTab: 'Agent 2.0 > Configuration',
-    configPath: 'agent2.discovery.style.robotChallenge.line',
-    description: 'Robot challenge response'
-  },
   'agent2.emergencyFallback': {
     uiPath: 'aiAgentSettings.agent2.emergencyFallbackLine.text',
     uiTab: 'Agent 2.0 > Configuration',

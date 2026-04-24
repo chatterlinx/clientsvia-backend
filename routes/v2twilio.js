@@ -6562,9 +6562,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
         responseText = (await getRecoveryMessage(company, 'generalError')) || 'I can help you with that.';
       }
-      // Strip the hardcoded "Ok."/"Okay." ackWord that Agent2DiscoveryRunner prepends by default.
-      // OpenerEngine already skips Agent2 paths so nothing replaces it — bare response sounds more natural.
-      if (responseText) responseText = responseText.replace(/^(Ok|Okay)\.\s+/i, '').trim();
 
       // ═══════════════════════════════════════════════════════════════════════════
       // 🧪 AGENT LAB HOOK 2 — Emit per-turn data to Redis for live X-ray

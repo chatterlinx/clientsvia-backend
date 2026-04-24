@@ -969,10 +969,6 @@ async function readAgent2Truth(companyId) {
         rules: agent2.greetings?.interceptor?.rules || []
       }
     },
-    discoveryStyle: {
-      ackWord: agent2.discovery?.style?.ackWord || 'Ok.',
-      robotChallengeEnabled: agent2.discovery?.style?.robotChallenge?.enabled || false
-    },
     llmFallback: {
       enabled: agent2.llmFallback?.enabled || false,
       model: agent2.llmFallback?.model || 'gpt-4o-mini'

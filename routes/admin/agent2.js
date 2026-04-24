@@ -66,13 +66,6 @@ function defaultAgent2Config() {
     },
     discovery: {
       enabled: true,  // V1.0: PERMANENT DEFAULT - Discovery is always on
-      style: {
-        ackWord: 'Ok.',
-        robotChallenge: {
-          enabled: true,
-          line: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
-        }
-      },
       // ═══════════════════════════════════════════════════════════════════════
       // VOCABULARY SYSTEM (UI-controlled normalization + hints)
       // ═══════════════════════════════════════════════════════════════════════
@@ -528,14 +521,6 @@ function mergeAgent2Config(saved) {
     discovery: {
       ...defaults.discovery,
       ...safeObject(src.discovery, {}),
-      style: {
-        ...defaults.discovery.style,
-        ...safeObject(src.discovery?.style, {}),
-        robotChallenge: {
-          ...defaults.discovery.style.robotChallenge,
-          ...safeObject(src.discovery?.style?.robotChallenge, {})
-        }
-      },
       playbook: {
         ...defaults.discovery.playbook,
         ...safeObject(src.discovery?.playbook, {})

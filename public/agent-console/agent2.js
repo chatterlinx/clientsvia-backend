@@ -200,14 +200,6 @@
     btnCancelGreetingRule: document.getElementById('btn-cancel-greeting-rule'),
     btnSaveGreetingRule: document.getElementById('btn-save-greeting-rule'),
 
-    // Discovery Engine toggle (KC vs ScrabEngine)
-    toggleKCEngineEnabled: document.getElementById('toggle-kc-engine-enabled'),
-
-    // Discovery Style
-    inputAckWord: document.getElementById('input-ack-word'),
-    inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
-    inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
-
     // Toast
     toastContainer: document.getElementById('toast-container')
   };
@@ -353,48 +345,22 @@
     const inputs = [
       DOM.inputGreetingInitial,
       DOM.inputGreetingReturn,
-      DOM.inputAckWord,
-      DOM.inputRobotChallengeLine,
       DOM.inputBridgeThreshold,
       DOM.inputBridgeHardcap,
       DOM.inputBridgeLines
     ].filter(Boolean);
-    
+
     inputs.forEach(input => {
       input.addEventListener('input', () => { state.isDirty = true; });
     });
-    
-    if (DOM.inputRobotChallengeEnabled) {
-      DOM.inputRobotChallengeEnabled.addEventListener('change', () => { state.isDirty = true; });
-    }
+
     if (DOM.inputBridgeEnabled) {
       DOM.inputBridgeEnabled.addEventListener('change', () => { state.isDirty = true; });
-    }
-    if (DOM.toggleKCEngineEnabled) {
-      DOM.toggleKCEngineEnabled.addEventListener('change', () => {
-        state.isDirty = true;
-        _updateEnginebadge();
-      });
     }
 
     // Optimal defaults reset buttons
     document.getElementById('btn-reset-speech')?.addEventListener('click', resetSpeechToDefaults);
     document.getElementById('btn-reset-bridge')?.addEventListener('click', resetBridgeToDefaults);
-  }
-
-  /* --------------------------------------------------------------------------
-     DISCOVERY ENGINE BADGE
-     Updates the KC / SE pill badge next to the Discovery Engine toggle.
-     Called on: initial config load + toggle change.
-     -------------------------------------------------------------------------- */
-  function _updateEnginebadge() {
-    const badge = document.getElementById('discovery-engine-badge');
-    if (!badge) return;
-    const isKC = DOM.toggleKCEngineEnabled?.checked !== false; // default ON = KC
-    badge.textContent    = isKC ? 'KC' : 'SE';
-    badge.style.background    = isKC ? '#d1fae5' : '#f3f4f6';
-    badge.style.color         = isKC ? '#065f46' : '#374151';
-    badge.style.borderColor   = isKC ? '#6ee7b7' : '#d1d5db';
   }
 
   /* --------------------------------------------------------------------------
@@ -457,15 +423,6 @@
       DOM.inputGreetingReturn.value = returnCallerText;
     }
     
-    // Discovery Engine toggle (KC vs ScrabEngine)
-    // Default: KC is ON unless engine is explicitly 'scrabengine'
-    if (DOM.toggleKCEngineEnabled) DOM.toggleKCEngineEnabled.checked = config.discovery?.engine !== 'scrabengine';
-    _updateEnginebadge();
-
-    // Discovery style
-    if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
-    if (DOM.inputRobotChallengeEnabled) DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
-    if (DOM.inputRobotChallengeLine) DOM.inputRobotChallengeLine.value = config.discovery?.style?.robotChallenge?.line || '';
     // Bridge (Latency Filler)
     const bridge = config.bridge || {};
     if (DOM.inputBridgeEnabled) DOM.inputBridgeEnabled.checked = bridge.enabled === true;
@@ -646,15 +603,7 @@
       // IMPORTANT: Greetings are managed by dedicated /greetings endpoints.
       // Do not write partial greetings here, or we risk overwriting callStart/interceptor/audio fields.
       discovery: {
-        ...state.config.discovery,
-        engine: DOM.toggleKCEngineEnabled?.checked ? 'kc' : 'scrabengine',
-        style: {
-          ackWord: DOM.inputAckWord.value.trim() || 'Ok.',
-          robotChallenge: {
-            enabled: DOM.inputRobotChallengeEnabled.checked,
-            line: DOM.inputRobotChallengeLine.value.trim()
-          }
-        },
+        ...state.config.discovery
       },
       bridge: {
         enabled: DOM.inputBridgeEnabled?.checked || false,

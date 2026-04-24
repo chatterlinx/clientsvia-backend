@@ -622,60 +622,6 @@
           </div>
         </div>
 
-        <!-- Discovery Style -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">Discovery Style</h2>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label class="form-label">Acknowledgment Word</label>
-              <input type="text" class="form-input max-w-200" id="input-ack-word" placeholder="Ok.">
-              <p class="form-hint">Short word spoken before responses (e.g., "Ok.", "Got it.", "Sure.")</p>
-            </div>
-            <div class="form-group mb-0">
-              <label class="form-label checkbox-label">
-                <input type="checkbox" id="input-robot-challenge-enabled">
-                Enable Robot Challenge Response
-              </label>
-              <p class="form-hint">If caller says "are you a robot?", respond with a helpful clarification.</p>
-              <textarea class="form-textarea mt-2" id="input-robot-challenge-line" rows="2" placeholder="Please, I am here to help you! You can speak to me naturally..."></textarea>
-            </div>
-          </div>
-        </div>
-
-        <!-- Discovery Engine -->
-        <div class="card" id="card-discovery-engine">
-          <div class="card-header">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <h2 class="card-title" style="margin: 0;">🧠 Discovery Engine</h2>
-              <label class="toggle-switch" style="margin: 0;">
-                <input type="checkbox" id="toggle-kc-engine-enabled">
-                <span class="toggle-slider"></span>
-              </label>
-              <!-- Live engine badge — updates on toggle change -->
-              <span id="discovery-engine-badge" style="
-                font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
-                padding: 3px 10px; border-radius: 20px; line-height: 1;
-                background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
-              ">KC</span>
-            </div>
-          </div>
-          <div class="card-body">
-            <p class="text-muted text-sm" style="margin-bottom: 12px;">
-              <strong>KC (default):</strong> KC Discovery Engine — Groq-powered, Knowledge Container-first, with anchor-based topic continuity for natural multi-turn conversation.<br>
-              <strong>SE:</strong> ScrabEngine — fast keyword-based pipeline. Trigger cards + interceptors drive responses.
-            </p>
-            <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; border-radius: 6px;">
-              <div style="font-weight: 600; color: #065f46; margin-bottom: 4px; font-size: 13px;">✅ KC Engine is the default</div>
-              <div style="font-size: 12px; color: #047857; line-height: 1.6;">
-                Make sure Knowledge Containers in <strong>Services</strong> are populated with keywords and content.<br>
-                If KC engine fails to load for any reason, ScrabEngine is the automatic crash-safe fallback.
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </main>
 

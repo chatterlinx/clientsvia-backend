@@ -299,13 +299,6 @@ export interface ReturnCallerGreeting {
 }
 
 export interface DiscoverySettings {
-  style?: {
-    ackWord?: string;
-    robotChallenge?: {
-      enabled?: boolean;
-      line?: string;
-    };
-  };
   holdMessage?: string;
   vocabulary?: string[];
 }
