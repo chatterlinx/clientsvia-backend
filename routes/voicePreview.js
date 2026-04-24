@@ -147,31 +147,63 @@ router.post('/polly-preview', express.json({ limit: '10kb' }), async (req, res) 
 
     } catch (err) {
         // Classify common AWS errors for friendlier UI messages.
-        const name = err?.name || err?.Code || '';
-        const msg  = err?.message || String(err);
-        console.error('[voicePreview] synth failed:', name, msg);
+        // Also surface the raw AWS error name + region + request id so admins can
+        // diagnose "why is this failing" WITHOUT needing to tail Render logs.
+        const name    = err?.name || err?.Code || '';
+        const msg     = err?.message || String(err);
+        const reqId   = err?.$metadata?.requestId || err?.requestId || null;
+        const httpSt  = err?.$metadata?.httpStatusCode || null;
+        const region  = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
-        if (/InvalidSignatureException|UnrecognizedClientException|SignatureDoesNotMatch/i.test(name)) {
+        // Log the full error to server console (shows up in Render logs).
+        console.error('[voicePreview] synth failed:',
+            JSON.stringify({ name, message: msg, region, requestId: reqId, httpStatusCode: httpSt }));
+
+        // Helper: always include debug trailer in the message so it shows up in the UI.
+        const dbg = ` [aws: name=${name || 'unknown'} region=${region}${reqId ? ' reqId=' + reqId : ''}]`;
+
+        if (/InvalidSignatureException|UnrecognizedClientException|SignatureDoesNotMatch|InvalidClientTokenId/i.test(name)) {
             return res.status(401).json({
                 error: 'aws_auth_failed',
-                message: 'AWS credentials are invalid or expired. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY on Render.'
+                awsErrorName: name,
+                awsRegion: region,
+                awsRequestId: reqId,
+                message: `AWS rejected the credentials. Verify AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY on Render are for an active IAM user and that AWS_REGION matches where your IAM user is configured.${dbg}`
             });
         }
-        if (/AccessDenied/i.test(name)) {
+        if (/AccessDenied|AuthorizationHeader|NotAuthorized/i.test(name)) {
             return res.status(403).json({
                 error: 'aws_access_denied',
-                message: 'The AWS IAM user/role lacks polly:SynthesizeSpeech permission.'
+                awsErrorName: name,
+                awsRegion: region,
+                awsRequestId: reqId,
+                message: `The AWS IAM user lacks polly:SynthesizeSpeech permission. Attach the AmazonPollyFullAccess (or equivalent) policy to the user on AWS IAM console.${dbg}`
             });
         }
-        if (/ThrottlingException|TooManyRequests/i.test(name)) {
+        if (/ThrottlingException|TooManyRequests|Throttled/i.test(name)) {
             return res.status(429).json({
                 error: 'aws_throttled',
-                message: 'AWS Polly is throttling this request. Retry in a moment.'
+                awsErrorName: name,
+                awsRegion: region,
+                message: `AWS Polly is throttling this request. Retry in a moment.${dbg}`
             });
         }
+        if (/ExpiredToken|TokenRefreshRequired/i.test(name)) {
+            return res.status(401).json({
+                error: 'aws_expired_token',
+                awsErrorName: name,
+                awsRegion: region,
+                message: `AWS session token expired. Rotate AWS_SECRET_ACCESS_KEY on Render.${dbg}`
+            });
+        }
+        // Any other AWS/SDK error — pass it through with full detail so user can act.
         return res.status(500).json({
             error: 'synth_failed',
-            message: msg || 'Unknown synthesis error.'
+            awsErrorName: name,
+            awsRegion: region,
+            awsRequestId: reqId,
+            awsHttpStatus: httpSt,
+            message: `Synthesis failed: ${msg || 'unknown error'}.${dbg}`
         });
     }
 });
