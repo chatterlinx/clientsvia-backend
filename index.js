@@ -1342,6 +1342,16 @@ async function startServer() {
             console.error('[Server] ⚠️ Failed to attach Test Console ASR server:', err.message);
         }
 
+        // Attach Media Streams WebSocket (Twilio ↔ Deepgram live bridge, C3+).
+        // Endpoint: /api/twilio/media-stream. Not reached by live calls until
+        // C4 emits <Connect><Stream> TwiML behind the per-tenant feature flag.
+        try {
+            const { attachMediaStreamServer } = require('./services/mediaStream/MediaStreamServer');
+            attachMediaStreamServer(server);
+        } catch (err) {
+            console.error('[Server] ⚠️ Failed to attach Media Streams server:', err.message);
+        }
+
         return server;
     } catch (err) {
         console.error('[Server Startup] ❌ CRITICAL ERROR - Server startup failed!');
