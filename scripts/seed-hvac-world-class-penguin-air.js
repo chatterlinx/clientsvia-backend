@@ -834,11 +834,17 @@ const CATEGORY_BCS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. BEHAVIOR CARDS — STANDALONE
-// Govern specific call flow scenarios that span across all KC categories.
+// 3. BEHAVIOR CARDS — STANDALONE (NUKED April 2026)
+// Standalone behavior cards were retired along with Engine Hub. Flow-level
+// tone/DO/DO-NOT rules now live per-company under
+// `aiAgentSettings.llmAgent.behaviorRules[]` (see services.html → Behavior tab,
+// rendered by composeSystemPrompt). This constant is preserved only as a
+// historical reference of the original Penguin Air flow-level rules; the
+// seeding loop below has been disabled.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STANDALONE_BCS = [
+// eslint-disable-next-line no-unused-vars
+const STANDALONE_BCS_HISTORICAL = [
 
   {
     companyId:      COMPANY_ID,
@@ -1300,18 +1306,11 @@ async function main() {
     ok('BC', `${bc.category} → afterAction: ${bc.afterAction}`);
   }
 
-  // ── 3. Behavior Cards — Standalone ───────────────────────────────────────
-  banner('3. BEHAVIOR CARDS — STANDALONE');
-
-  for (const bc of STANDALONE_BCS) {
-    await db.collection('behaviorCards').updateOne(
-      { companyId: COMPANY_ID, standaloneType: bc.standaloneType },
-      { $set: { ...bc, updatedAt: NOW }, $setOnInsert: { createdAt: NOW } },
-      { upsert: true }
-    );
-    counts.bc++;
-    ok('BC', `${bc.standaloneType} → afterAction: ${bc.afterAction}`);
-  }
+  // ── 3. Behavior Cards — Standalone (NUKED April 2026) ───────────────────
+  // Standalone BCs retired along with Engine Hub. Flow-level rules now seed
+  // into company.aiAgentSettings.llmAgent.behaviorRules[] via the dedicated
+  // migration script (scripts/render-migrate-standalone-bc-to-llmagent.js).
+  // No-op here to keep this seed file focused on KC + category BCs + ops.
 
   // ── 4. Interceptors ───────────────────────────────────────────────────────
   banner('4. CUSTOM INTERCEPTORS');

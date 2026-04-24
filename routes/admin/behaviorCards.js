@@ -6,6 +6,10 @@
  * ============================================================================
  *
  * Full CRUD + AI generation for Behavior Cards (BC) per company.
+ * Scope (April 2026): category-linked BCs only. The standalone BC variant
+ * and the Engine Hub runtime that consumed it were removed; flow-level
+ * behavior now lives in `company.aiAgentSettings.llmAgent.behaviorRules[]`
+ * edited in services.html Behavior tab.
  *
  * ALL routes enforce:
  *   - companyId scoping (multi-tenant — no cross-tenant reads possible)
@@ -16,7 +20,7 @@
  * ROUTE TABLE:
  *   GET    /company/:companyId/behavior-cards                List all BC for company
  *   GET    /company/:companyId/behavior-cards/:bcId          Get single BC
- *   POST   /company/:companyId/behavior-cards                Create new BC
+ *   POST   /company/:companyId/behavior-cards                Create new BC (category_linked only)
  *   PATCH  /company/:companyId/behavior-cards/:bcId          Update BC (partial)
  *   DELETE /company/:companyId/behavior-cards/:bcId          Delete BC
  *   POST   /company/:companyId/behavior-cards/generate       AI-generate draft BC
@@ -27,7 +31,7 @@
  * RELATED:
  *   Model:   models/BehaviorCard.js
  *   Service: services/behaviorCards/BehaviorCardService.js
- *   UI:      public/agent-console/enginehub.html  (Behavior Cards tab)
+ *   UI:      public/agent-console/services.html  (Behavior Cards per KC category)
  * ============================================================================
  */
 
@@ -54,17 +58,17 @@ function _isValidObjectId(id) {
  * Invalidate the BC Redis cache after any write.
  * Always fire-and-forget — never awaited, never blocks the API response.
  */
-function _invalidateCacheFAF(companyId, type, identifier) {
-  if (!identifier) return;
-  BehaviorCardService.invalidate(companyId, type, identifier)
+function _invalidateCacheFAF(companyId, category) {
+  if (!category) return;
+  BehaviorCardService.invalidate(companyId, category)
     .catch(err => logger.warn('[BC ROUTES] Cache invalidation failed (non-fatal)', {
-      companyId, type, identifier, error: err.message
+      companyId, category, error: err.message
     }));
 }
 
 // ============================================================================
 // GET /company/:companyId/behavior-cards
-// List all Behavior Cards for a company, sorted by type then name.
+// List all Behavior Cards for a company, sorted by name.
 // ============================================================================
 
 router.get('/company/:companyId/behavior-cards', authenticateJWT, async (req, res) => {
@@ -76,8 +80,8 @@ router.get('/company/:companyId/behavior-cards', authenticateJWT, async (req, re
 
   try {
     const cards = await BehaviorCard
-      .find({ companyId })
-      .sort({ type: 1, name: 1 })
+      .find({ companyId, type: 'category_linked' })
+      .sort({ name: 1 })
       .lean();
 
     logger.info('[BC ROUTES] GET list', { companyId, count: cards.length });
@@ -118,10 +122,8 @@ router.get('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async (r
 // AI-generate a draft Behavior Card. Does NOT save — returns a draft for the
 // owner to review and edit before saving via the normal POST endpoint.
 //
-// Body: { type, category?, standaloneType? }
-//   type          — 'category_linked' | 'standalone'
-//   category      — KC category name (category_linked only)
-//   standaloneType— one of STANDALONE_TYPES (standalone only)
+// Body: { category }
+//   category — KC category name (required)
 //
 // Returns: { ok, draft: { name, tone, rules: { do[], doNot[], exampleResponses[] } } }
 // ============================================================================
@@ -133,16 +135,10 @@ router.post('/company/:companyId/behavior-cards/generate', authenticateJWT, asyn
     return res.status(400).json({ ok: false, error: 'Invalid companyId' });
   }
 
-  const { type, category, standaloneType } = req.body;
+  const { category } = req.body;
 
-  if (!type || !['category_linked', 'standalone'].includes(type)) {
-    return res.status(400).json({ ok: false, error: 'type must be "category_linked" or "standalone"' });
-  }
-  if (type === 'category_linked' && !category?.trim()) {
-    return res.status(400).json({ ok: false, error: 'category is required for category_linked' });
-  }
-  if (type === 'standalone' && !standaloneType) {
-    return res.status(400).json({ ok: false, error: 'standaloneType is required for standalone' });
+  if (!category?.trim()) {
+    return res.status(400).json({ ok: false, error: 'category is required' });
   }
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -159,10 +155,7 @@ router.post('/company/:companyId/behavior-cards/generate', authenticateJWT, asyn
     const companyName = company?.companyName || 'this company';
     const trade       = (company?.tradeCategories || []).join(', ') || 'home services';
 
-    // Build the scenario description for Groq
-    const scenario = type === 'category_linked'
-      ? `a caller asking about "${category}" topics`
-      : _standaloneScenarioDesc(standaloneType);
+    const scenario = `a caller asking about "${category}" topics`;
 
     const systemPrompt = `You are an expert phone agent behavior designer for home-service companies.
 You write Behavior Cards — structured rules that govern how a phone agent speaks in a specific situation.
@@ -188,7 +181,7 @@ GUIDELINES:
 - do rules: specific, actionable. e.g. "State the exact price without hesitation" not "Be helpful"
 - doNot rules: concrete prohibitions. e.g. "Never apologize for cost" not "Don't be rude"
 - exampleResponses: 2 spoken examples that show the exact tone and length expected. These are calibration anchors — Groq pattern-matches from them.
-- All rules must be specific to ${trade} and the "${type === 'category_linked' ? category : standaloneType}" scenario.
+- All rules must be specific to ${trade} and the "${category}" scenario.
 - Do NOT generate generic rules. Every rule must be specific to this trade and scenario.`;
 
     const result = await GroqStreamAdapter.streamFull({
@@ -233,8 +226,8 @@ GUIDELINES:
     };
 
     logger.info('[BC ROUTES] ✅ Generated draft BC', {
-      companyId, type,
-      target: type === 'category_linked' ? category : standaloneType,
+      companyId,
+      target: category,
       name:   sanitized.name
     });
 
@@ -246,25 +239,11 @@ GUIDELINES:
   }
 });
 
-/** Human-readable scenario descriptions for standalone types. */
-function _standaloneScenarioDesc(standaloneType) {
-  const map = {
-    inbound_greeting:  'the opening of every inbound call — first words the agent speaks',
-    discovery_flow:    'collecting caller name, address, issue, and urgency',
-    escalation_ladder: 'a caller who is upset, angry, or asking to speak to a manager',
-    after_hours_intake:'a caller reaching the agent outside of business hours',
-    mid_flow_interrupt:'a caller who interrupts an active booking or discovery flow with a side question',
-    payment_routing:   'a caller asking about payment, billing, or financing',
-    manager_request:   'a caller who explicitly asks to speak to a manager or supervisor',
-  };
-  return map[standaloneType] || standaloneType;
-}
-
 // ============================================================================
 // POST /company/:companyId/behavior-cards
-// Create a new Behavior Card.
+// Create a new Behavior Card (category_linked only).
 // Uniqueness is enforced at the database layer (compound partial indexes).
-// A 409 is returned if a BC already exists for the same category or standaloneType.
+// A 409 is returned if a BC already exists for the same category.
 // ============================================================================
 
 router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, res) => {
@@ -274,38 +253,22 @@ router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, r
     return res.status(400).json({ ok: false, error: 'Invalid companyId' });
   }
 
-  const { name, type, category, standaloneType, tone, rules, enabled } = req.body;
+  const { name, category, tone, rules, enabled } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return res.status(400).json({ ok: false, error: 'name is required' });
   }
 
-  if (!type || !['category_linked', 'standalone'].includes(type)) {
-    return res.status(400).json({ ok: false, error: 'type must be "category_linked" or "standalone"' });
-  }
-
-  if (type === 'category_linked' && (!category || category.trim().length === 0)) {
-    return res.status(400).json({ ok: false, error: 'category is required for category_linked type' });
-  }
-
-  if (type === 'standalone' && !standaloneType) {
-    return res.status(400).json({ ok: false, error: 'standaloneType is required for standalone type' });
-  }
-
-  if (type === 'standalone' && !BehaviorCard.STANDALONE_TYPES.includes(standaloneType)) {
-    return res.status(400).json({
-      ok:    false,
-      error: `Invalid standaloneType. Allowed: ${BehaviorCard.STANDALONE_TYPES.join(', ')}`
-    });
+  if (!category || category.trim().length === 0) {
+    return res.status(400).json({ ok: false, error: 'category is required' });
   }
 
   try {
     const card = new BehaviorCard({
       companyId:      companyId.trim(),
       name:           name.trim(),
-      type,
-      category:       type === 'category_linked' ? (category || '').trim() : '',
-      standaloneType: type === 'standalone' ? standaloneType : null,
+      type:           'category_linked',
+      category:       category.trim(),
       tone:           (tone || '').trim(),
       rules: {
         do:               (rules?.do               || []).filter(r => r && r.trim().length > 0),
@@ -317,18 +280,17 @@ router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, r
 
     await card.save();
 
-    const identifier = type === 'category_linked' ? card.category : card.standaloneType;
-    _invalidateCacheFAF(companyId, type, identifier);
+    _invalidateCacheFAF(companyId, card.category);
 
-    logger.info('[BC ROUTES] ✅ Created', { companyId, bcId: card._id.toString(), type, name: card.name });
+    logger.info('[BC ROUTES] ✅ Created', { companyId, bcId: card._id.toString(), category: card.category, name: card.name });
     return res.status(201).json({ ok: true, card });
 
   } catch (err) {
     if (err.code === 11000) {
-      const description = type === 'category_linked'
-        ? `A Behavior Card for category "${category}" already exists for this company`
-        : `A Behavior Card for standalone type "${standaloneType}" already exists for this company`;
-      return res.status(409).json({ ok: false, error: description });
+      return res.status(409).json({
+        ok: false,
+        error: `A Behavior Card for category "${category}" already exists for this company`
+      });
     }
 
     logger.error('[BC ROUTES] POST failed', { companyId, error: err.message });
@@ -339,7 +301,7 @@ router.post('/company/:companyId/behavior-cards', authenticateJWT, async (req, r
 // ============================================================================
 // PATCH /company/:companyId/behavior-cards/:bcId
 // Partial update. Only fields explicitly provided in the request body are changed.
-// type, category, standaloneType, and companyId cannot be updated after creation.
+// type, category, and companyId cannot be updated after creation.
 // ============================================================================
 
 router.patch('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async (req, res) => {
@@ -372,8 +334,7 @@ router.patch('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async 
 
     if (!card) return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
 
-    const identifier = card.type === 'category_linked' ? card.category : card.standaloneType;
-    _invalidateCacheFAF(companyId, card.type, identifier);
+    _invalidateCacheFAF(companyId, card.category);
 
     logger.info('[BC ROUTES] ✅ Updated', { companyId, bcId, fields: Object.keys(patch) });
     return res.json({ ok: true, card });
@@ -400,8 +361,7 @@ router.delete('/company/:companyId/behavior-cards/:bcId', authenticateJWT, async
     const card = await BehaviorCard.findOneAndDelete({ _id: bcId, companyId }).lean();
     if (!card) return res.status(404).json({ ok: false, error: 'Behavior Card not found' });
 
-    const identifier = card.type === 'category_linked' ? card.category : card.standaloneType;
-    _invalidateCacheFAF(companyId, card.type, identifier);
+    _invalidateCacheFAF(companyId, card.category);
 
     logger.info('[BC ROUTES] ✅ Deleted', { companyId, bcId, name: card.name });
     return res.json({ ok: true, message: `Behavior Card "${card.name}" deleted` });

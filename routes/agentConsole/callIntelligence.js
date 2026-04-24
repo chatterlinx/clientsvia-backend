@@ -2355,29 +2355,7 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, co
     stg('groq_formatter', 'Groq Response Formatter', 'D',
       convTurns.some(t => _isKCAnswered(t)) ? 'pass' : 'unknown', null),
 
-    // GROUP E — Engine Hub + Behavior Cards
-    stg('engine_hub_runtime', 'Engine Hub Runtime', 'E',
-      (() => {
-        const eh = summary?._engineHub || null;   // stamped by runtime when EH active
-        if (eh?.mode === 'active')   return 'pass';
-        if (eh?.mode === 'learning') return 'pass';
-        if (eh?.mode === 'passive')  return 'info';
-        // Not yet in CallSummary — show wired status based on any KC turn existing
-        return convTurns.length > 1 ? 'info' : 'unknown';
-      })(),
-      (() => {
-        const eh = summary?._engineHub || null;
-        if (eh?.mode) return `Mode: ${eh.mode.toUpperCase()} | hopFactor: ${eh.hopFactor || '?'}`;
-        return 'Wired in GATE 2 — per-call trace pending runtime persistence';
-      })()),
-
-    stg('anchor_agenda', 'Anchor + Agenda State', 'E',
-      (() => {
-        const kcHit = convTurns.some(t => _isKCAnswered(t));
-        return kcHit ? 'info' : 'unknown';
-      })(),
-      'Hop factor now governed by Engine Hub getHopFactor() — Agenda State tracking pending'),
-
+    // GROUP E — Behavior rules (Engine Hub nuked April 2026)
     stg('behavior_card_kc', 'Behavior Card — KC Linked', 'E',
       (() => {
         // KC card present + behavior card would be injected into Groq
@@ -2386,15 +2364,16 @@ function buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, co
       })(),
       'Category-linked BC injected into Groq prompt via KnowledgeContainerService.answer()'),
 
-    stg('behavior_card_standalone', 'Behavior Card — Standalone', 'E',
+    stg('llm_behavior_rules', 'LLM Behavior Rules', 'E',
       (() => {
-        // Standalone BC fires when KC misses → LLM fallback (discovery_flow BC)
-        const llmFallbacks = convTurns.filter(t =>
-          (t.provenancePath || '').toUpperCase().includes('LLM_FALLBACK')
+        // Flow-level behavior lives in aiAgentSettings.llmAgent.behaviorRules[]
+        // injected by composeSystemPrompt on every LLM call.
+        const llmTurns = convTurns.filter(t =>
+          (t.provenancePath || '').toUpperCase().includes('LLM')
         ).length;
-        return llmFallbacks > 0 ? 'pass' : 'info';
+        return llmTurns > 0 ? 'pass' : 'info';
       })(),
-      'discovery_flow BC injected into Claude context on KC miss (GATE 6)')
+      'Rendered by composeSystemPrompt() — edit in services.html Behavior tab')
   ];
 
   // Discovery compliance checklist
@@ -3120,12 +3099,7 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
     }
   }
 
-  // Engine Hub config — exposed in the report header and protocol audit
-  const eh = company?.engineHub;
-  const ehSummary = (eh?.isConfigured && eh?.enabled)
-    ? { mode: eh.mode || 'passive', isConfigured: true, enabled: true }
-    : { mode: null, isConfigured: !!eh?.isConfigured, enabled: false };
-
+  // Engine Hub nuked April 2026 — header no longer surfaces EH mode.
   const healthScore = calcHealthScore(summary, convTurns, discoveryNotes);
 
   // Rich per-turn pipeline trace — Turn1Engine, UAP, Semantic, Groq, section IDs
@@ -3138,7 +3112,6 @@ function buildFullReport({ callSid, companyId, summary, transcriptV2, intelligen
 
   return {
     header: buildHeader(callSid, companyId, summary, healthScore, !!intelligence, convTurns),
-    engineHub: ehSummary,      // Engine Hub mode for this company — shown in sticky header
     story: buildStory(summary, discoveryNotes, convTurns, intelligence),
     vitals: buildVitals(summary, convTurns, discoveryNotes),
     protocolAudit: buildProtocolAudit(summary, transcriptV2, convTurns, discoveryNotes, company),
@@ -3180,7 +3153,8 @@ router.get('/:callSid/full-report', async (req, res) => {
       return res.status(400).json({ error: 'Invalid companyId format' });
     }
 
-    // 1. Parallel load of all data sources (including company for Engine Hub config)
+    // 1. Parallel load of all data sources (company needed for buildProtocolAudit
+    //    speechDetection config; Engine Hub subdoc was nuked April 2026).
     const [summary, transcriptV2, intelligence, company] = await Promise.all([
       CallSummary.findOne({
         companyId: companyOid,
@@ -3188,7 +3162,7 @@ router.get('/:callSid/full-report', async (req, res) => {
       }).lean(),
       CallTranscriptV2.findOne({ companyId: companyOid, callSid }).lean(),
       CallIntelligence.findOne({ callSid }).lean(),
-      Company.findById(companyOid).select('engineHub').lean()
+      Company.findById(companyOid).select('aiAgentSettings voiceSettings').lean()
     ]);
 
     // 2. Load Customer discoveryNotes

@@ -60,7 +60,6 @@ const KCTransferIntentDetector = require('./KCTransferIntentDetector');
 const KCS                     = require('../agent2/KnowledgeContainerService');
 const { callLLMAgentForFollowUp } = require('../llm/LLMFollowUpService');
 const DiscoveryNotesService   = require('../../discoveryNotes/DiscoveryNotesService');
-const EngineHubRuntime        = require('../EngineHubRuntime');
 const logger                  = require('../../../utils/logger');
 const { buildSectionId }      = require('../../../utils/kcHelpers');
 const { stem }                = require('../../../utils/stem');
@@ -1258,15 +1257,9 @@ class KCDiscoveryRunner {
       containers = containers || [];
     }
 
-    // ── Engine Hub Runtime — load config from company document (sync, ~0ms) ──
-    const ehConfig = EngineHubRuntime.load(company);
-    if (ehConfig) {
-      EngineHubRuntime.logTrace(companyId, callSid, 'EH_ACTIVE', {
-        mode:              ehConfig.mode,
-        confidenceThresh:  ehConfig.intentDetection.confidenceThreshold,
-        containerCount:    containers.length,
-      }, ehConfig);
-    }
+    // Engine Hub nuked April 2026 — its config subdoc + 3-mode runtime were
+    // removed. Behavior rules now live in aiAgentSettings.llmAgent.behaviorRules[]
+    // rendered by composeSystemPrompt() on every LLM call.
 
     if (notes) {
       emit('KC_DISCOVERY_NOTES_LOADED', {
@@ -2668,7 +2661,6 @@ class KCDiscoveryRunner {
         userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
         bridgeToken, redis, callerName, onSentence,
         containers:     [match.container],   // single-container focus for kcContext
-        ehConfig,
         notes,                               // enriched callContext source
         cueFrame,                            // for section ranking
         fallbackReason: 'kc_section_gap',    // distinguishes from no_kc_match in logs
@@ -2720,7 +2712,6 @@ class KCDiscoveryRunner {
       userInput, companyId, callSid, company, channel, nextState, emit, startMs, turn,
       bridgeToken, redis, callerName, onSentence,
       containers,   // passed so fallback event records what was searched
-      ehConfig,     // Engine Hub config — drives BC injection + trace logging
       notes,        // discoveryNotes for building Claude callContext
       cueFrame,     // CueExtractor output for KC section ranking
       uapDiagnostic,         // Phase A.3 — GATE 2.5 "why UAP missed" snapshot
@@ -3615,9 +3606,9 @@ async function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid
 // ============================================================================
 // _buildCallContext — Enriched callContext for LLM fallback
 //
-// Packages discoveryNotes + callerProfile (from CallerRecognition pre-warm) +
-// behaviorBlock into a single rich context object consumed by Agent2 LLM
-// (Claude) via callLLMAgentForFollowUp → composeSystemPrompt.
+// Packages discoveryNotes + callerProfile (from CallerRecognition pre-warm)
+// into a single rich context object consumed by Agent2 LLM (Claude) via
+// callLLMAgentForFollowUp → composeSystemPrompt.
 //
 // Why this exists: prior version only surfaced firstName + callReason + urgency.
 // That left the LLM blind to the caller's history — so when KC missed and
@@ -3625,6 +3616,11 @@ async function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid
 // was here last month") and ended up deflecting with "let me check on that"
 // (dead air). This helper surfaces the knowledge Claude needs to acknowledge
 // the caller by name, reflect on their prior visit, and answer confidently.
+//
+// Behavior rules injection (Engine Hub nuked April 2026): flow-level tone +
+// do/doNot rules now live in aiAgentSettings.llmAgent.behaviorRules[] and are
+// rendered by composeSystemPrompt() directly — no longer threaded through
+// callContext. This helper is focused on caller-state surfaces only.
 //
 // Surfaces (all optional — missing fields are simply omitted):
 //   caller:         { firstName, speakable }
@@ -3635,10 +3631,9 @@ async function _upsellRouteToBooking({ nextState, emit, turn, companyId, callSid
 //   repeatIssue:    { detected, reason }         — same issue 2+ times
 //   rejectedTopics: string[]                     — don't re-offer these
 //   recentQA:       [{ question, answer }]       — last 2 turns this call
-//   behaviorBlock:  string                       — Engine Hub discovery_flow BC
 // ============================================================================
-function _buildCallContext(notes, behaviorBlock) {
-  if (!notes && !behaviorBlock) return null;
+function _buildCallContext(notes) {
+  if (!notes) return null;
 
   const ctx = {};
 
@@ -3703,11 +3698,6 @@ function _buildCallContext(notes, behaviorBlock) {
     if (recentQA.length > 0) ctx.recentQA = recentQA;
   }
 
-  // Engine Hub discovery_flow BC rules
-  if (behaviorBlock) {
-    ctx.behaviorBlock = behaviorBlock;
-  }
-
   return Object.keys(ctx).length > 0 ? ctx : null;
 }
 
@@ -3720,7 +3710,6 @@ async function _handleLLMFallback({
   startMs, turn, bridgeToken, redis, callerName, onSentence,
   containers         = [],
   notes              = null,
-  ehConfig           = null,   // Engine Hub runtime config (null = disabled/passive)
   cueFrame           = null,   // CueExtractor output — used for KC section ranking
   fallbackReason     = null,   // Caller-supplied reason override (e.g. 'kc_section_gap')
   uapDiagnostic      = null,   // Phase A.3 — GATE 2.5 "why UAP missed" snapshot
@@ -3760,42 +3749,15 @@ async function _handleLLMFallback({
     callReason:      notes?.callReason || null,
   });
 
-  // ── Engine Hub: load discovery_flow Standalone BC ─────────────────────────
-  // When KC misses, we are in unstructured discovery territory.
-  // The discovery_flow BC injects tone + rules into Claude's context so the
-  // LLM stays on-protocol (one question at a time, urgency check, etc.).
-  // Only injected in learning/active mode — passive = log only.
-  let discoveryFlowBC = null;
-  if (ehConfig && !ehConfig.isPassive) {
-    discoveryFlowBC = await EngineHubRuntime.getStandaloneBC('discovery_flow', companyId);
-    if (discoveryFlowBC) {
-      EngineHubRuntime.logTrace(companyId, callSid, 'BC_INJECTED', {
-        standaloneType: 'discovery_flow',
-        bcName:         discoveryFlowBC.name,
-        afterAction:    discoveryFlowBC.afterAction,
-      }, ehConfig);
-    }
-  } else if (ehConfig?.isPassive) {
-    // Passive mode: log what WOULD have happened but don't inject
-    EngineHubRuntime.getStandaloneBC('discovery_flow', companyId).then(bc => {
-      if (bc) {
-        EngineHubRuntime.logTrace(companyId, callSid, 'BC_WOULD_INJECT', {
-          standaloneType: 'discovery_flow',
-          bcName:         bc.name,
-          mode:           'passive',
-          note:           'Promote to learning/active to apply BC rules',
-        }, ehConfig);
-      }
-    }).catch(() => {});
-  }
-
-  const behaviorBlock = EngineHubRuntime.formatStandaloneBCForPrompt(discoveryFlowBC);
+  // Behavior rules (tone, do, doNot) for LLM fallback now come from
+  // aiAgentSettings.llmAgent.behaviorRules[] via composeSystemPrompt() — no
+  // longer threaded through callContext. See services.html Behavior tab.
 
   // Build enriched callContext — surfaces caller history, prior visits, repeat
   // issues, rejected topics, and recent QA so Claude can acknowledge the
   // caller by name, reflect on their history, and answer confidently from KB.
   // See _buildCallContext() above for the full field list.
-  const callContext = _buildCallContext(notes, behaviorBlock);
+  const callContext = _buildCallContext(notes);
 
   // ── KC KNOWLEDGE INJECTION (April 2026) ──────────────────────────────────
   // Rank top sections across ALL containers by relevance to the caller's

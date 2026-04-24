@@ -424,9 +424,8 @@
       case 'services':
         window.location.href = `${baseUrl}/services.html${companyParam}`;
         break;
-      case 'enginehub':
-        window.location.href = `${baseUrl}/enginehub.html${companyParam}`;
-        break;
+      // Engine Hub nav case nuked April 2026 — per-company behavior rules
+      // now live in services.html Behavior tab (aiAgentSettings.llmAgent).
       case 'discoverynotes':
         window.location.href = `${baseUrl}/discoverynotes.html${companyParam}`;
         break;

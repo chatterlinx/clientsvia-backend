@@ -6,12 +6,19 @@
  * ============================================================================
  *
  * PURPOSE:
- *   Runtime retrieval of Behavior Cards (BC) for the Engine Hub.
- *   Each BC tells the Engine Hub HOW to behave in a given situation —
- *   the tone, rules, and what action to take after the response is spoken.
+ *   Runtime retrieval of Behavior Cards (BC) — one per KC category.
+ *   Each BC tells the KC answer path HOW to deliver the response:
+ *   the tone, rules, and example responses Groq calibrates from.
+ *
+ * SCOPE (April 2026):
+ *   Category-linked BCs only. The standalone BC variant + Engine Hub runtime
+ *   were removed. Flow-level behavior (discovery, escalation, greeting,
+ *   after-hours, mid-flow interrupt) now lives in
+ *   `company.aiAgentSettings.llmAgent.behaviorRules[]` — edited in
+ *   services.html Behavior tab and rendered on every LLM call.
  *
  * CACHING STRATEGY:
- *   HOT PATH  → Redis   key = behavior-card:{companyId}:{type}:{identifier}
+ *   HOT PATH  → Redis   key = behavior-card:{companyId}:category:{category}
  *                       TTL = 1 hour  (BC changes are admin-driven and infrequent)
  *   COLD PATH → MongoDB behaviorCards collection
  *
@@ -28,7 +35,6 @@
  * MULTI-TENANT SAFETY:
  *   Every Redis key includes companyId as the second segment.
  *   Every MongoDB query includes companyId as a required filter.
- *   Key format: behavior-card:{companyId}:{type}:{identifier}
  *   No cross-tenant reads are possible through this service.
  *
  * USAGE:
@@ -37,14 +43,11 @@
  *   // For KC card delivery — load behavior for the card's category
  *   const bc = await BehaviorCardService.forCategory(companyId, 'Pricing & Trust');
  *
- *   // For call flow scenarios — load standalone behavior
- *   const bc = await BehaviorCardService.forStandalone(companyId, 'inbound_greeting');
- *
  *   // Format BC for injection into the Groq context package
  *   const block = BehaviorCardService.formatForGroq(bc);
  *
  *   // Invalidate cache after any admin write (fire-and-forget)
- *   BehaviorCardService.invalidate(companyId, 'category_linked', 'Pricing & Trust')
+ *   BehaviorCardService.invalidate(companyId, 'Pricing & Trust')
  *     .catch(e => logger.warn('...', e));
  *
  * ============================================================================
@@ -68,19 +71,11 @@ const CONFIG = {
 // ============================================================================
 
 /**
- * Build Redis key for a category_linked BC.
+ * Build Redis key for a category-linked BC.
  * Format: behavior-card:{companyId}:category:{category}
  */
 function _categoryKey(companyId, category) {
   return `${CONFIG.KEY_PREFIX}:${companyId}:category:${category}`;
-}
-
-/**
- * Build Redis key for a standalone BC.
- * Format: behavior-card:{companyId}:standalone:{standaloneType}
- */
-function _standaloneKey(companyId, standaloneType) {
-  return `${CONFIG.KEY_PREFIX}:${companyId}:standalone:${standaloneType}`;
 }
 
 // ============================================================================
@@ -90,7 +85,7 @@ function _standaloneKey(companyId, standaloneType) {
 /**
  * forCategory — Load the Behavior Card that governs a KC category.
  *
- * Called by the Engine Hub when delivering any KC card response.
+ * Called by the KC answer path when delivering any KC card response.
  * The BC provides the tone rules, do/do-not rules, and example responses
  * that Groq uses to shape how the KC content is spoken.
  *
@@ -148,101 +143,37 @@ async function forCategory(companyId, category) {
 }
 
 /**
- * forStandalone — Load a standalone Behavior Card by type.
- *
- * Called by the Engine Hub for flow-governing scenarios (greeting,
- * escalation, discovery, after-hours, etc.) that operate without
- * a KC card underneath.
- *
- * Returns null if no BC is configured for this standaloneType.
- * Engine continues without behavior rules — graceful degrade.
- *
- * @param  {string}          companyId      Required. Tenant scope.
- * @param  {string}          standaloneType One of STANDALONE_TYPES from BehaviorCard model.
- * @returns {Promise<Object|null>}
- */
-async function forStandalone(companyId, standaloneType) {
-  if (!companyId || !standaloneType) {
-    logger.warn('[BC SERVICE] forStandalone: missing companyId or standaloneType — skipped');
-    return null;
-  }
-
-  const key = _standaloneKey(companyId, standaloneType);
-
-  try {
-    // ── Hot path: Redis ──────────────────────────────────────────────────────
-    const redis = await getSharedRedisClient();
-    if (redis) {
-      const cached = await redis.get(key);
-      if (cached) {
-        logger.debug('[BC SERVICE] Cache hit — standalone', { companyId, standaloneType });
-        return JSON.parse(cached);
-      }
-    }
-
-    // ── Cold path: MongoDB ───────────────────────────────────────────────────
-    const bc = await BehaviorCard.findStandalone(companyId, standaloneType);
-
-    if (!bc) {
-      logger.debug('[BC SERVICE] No standalone BC configured', { companyId, standaloneType });
-      return null;
-    }
-
-    // ── Warm Redis cache (fire-and-forget — never blocks response path) ──────
-    if (redis) {
-      redis.set(key, JSON.stringify(bc), { EX: CONFIG.REDIS_TTL_SECONDS })
-        .catch(err => logger.warn('[BC SERVICE] Cache warm failed (non-fatal)', {
-          companyId, standaloneType, error: err.message
-        }));
-    }
-
-    logger.debug('[BC SERVICE] Loaded from MongoDB — standalone', { companyId, standaloneType });
-    return bc;
-
-  } catch (err) {
-    logger.warn('[BC SERVICE] forStandalone failed (non-fatal — graceful degrade)', {
-      companyId, standaloneType, error: err.message
-    });
-    return null;
-  }
-}
-
-/**
  * invalidate — Remove a BC from the Redis cache after an admin write.
  *
  * Called fire-and-forget by the admin API routes after any BC
- * POST, PATCH, or DELETE. Ensures the next Engine Hub call reads
- * the updated BC from MongoDB, not a stale cache entry.
+ * POST, PATCH, or DELETE. Ensures the next read from MongoDB reflects
+ * the admin's change rather than a stale cached value.
  *
- * @param  {string}  companyId    Tenant scope.
- * @param  {string}  type         'category_linked' | 'standalone'
- * @param  {string}  identifier   category (for category_linked) or standaloneType (for standalone)
+ * @param  {string}  companyId   Tenant scope.
+ * @param  {string}  category    KC category the BC governs.
  * @returns {Promise<void>}
  */
-async function invalidate(companyId, type, identifier) {
-  if (!companyId || !type || !identifier) return;
+async function invalidate(companyId, category) {
+  if (!companyId || !category) return;
 
   try {
     const redis = await getSharedRedisClient();
     if (!redis) return;
 
-    const key = type === 'category_linked'
-      ? _categoryKey(companyId, identifier)
-      : _standaloneKey(companyId, identifier);
-
+    const key = _categoryKey(companyId, category);
     await redis.del(key);
-    logger.debug('[BC SERVICE] Cache invalidated', { companyId, type, identifier });
+    logger.debug('[BC SERVICE] Cache invalidated', { companyId, category });
 
   } catch (err) {
     logger.warn('[BC SERVICE] invalidate failed (non-fatal)', {
-      companyId, type, identifier, error: err.message
+      companyId, category, error: err.message
     });
   }
 }
 
 /**
  * formatForGroq — Format a BC document into the behavior block
- * that is injected into the Groq context package on every Engine Hub turn.
+ * that is injected into the Groq context package on every KC turn.
  *
  * This block tells Groq the tone, what to do, what not to do, and
  * provides example responses it uses to calibrate voice register and length.
@@ -293,7 +224,6 @@ function formatForGroq(bc) {
 
 module.exports = {
   forCategory,
-  forStandalone,
   invalidate,
   formatForGroq,
   CONFIG

@@ -6,7 +6,7 @@
  * ============================================================================
  *
  * PURPOSE:
- *   Behavior Cards govern HOW the agent operates in a given situation.
+ *   Behavior Cards govern HOW the agent operates in a given KC category.
  *   They are completely distinct from Knowledge Cards (KC), which govern
  *   WHAT the agent knows.
  *
@@ -14,27 +14,18 @@
  *   BC governs how the answer is delivered — tone, rules, do/do-not, and
  *   example responses Groq calibrates from.
  *
- * TWO TYPES:
- *
- *   category_linked
- *     One BC per KC category, shared across every KC card in that category.
- *     Edit once — behavior updates across all KC cards in the category.
- *     Example: "Pricing & Trust Behavior" governs all pricing KC cards.
- *
- *   standalone
- *     Governs call flow scenarios that have no KC card underneath.
- *     Examples: inbound_greeting, discovery_flow, escalation_ladder,
- *               after_hours_intake, mid_flow_interrupt.
- *
- *     NOTE: standalone BC documents are stored but not yet consumed by any
- *     engine flow. forStandalone() in BehaviorCardService is built and ready —
- *     wire it when building each standalone scenario (build steps 8b–11 in
- *     the platform build plan). Category-linked BC is fully wired today.
+ * SCOPE (April 2026):
+ *   Only `category_linked` Behavior Cards remain. The `standalone` variant
+ *   and its Engine Hub runtime (`EngineHubRuntime.getStandaloneBC`) were
+ *   removed. Flow-level behavior (discovery, escalation, greeting, after
+ *   hours, mid-flow interrupt, payment routing, manager request) now lives
+ *   in `company.aiAgentSettings.llmAgent.behaviorRules[]` — edited in
+ *   services.html Behavior tab and injected on every LLM call via
+ *   composeSystemPrompt(). One home, broader coverage, simpler mental model.
  *
  * UNIQUENESS:
- *   One category_linked BC per company per category.
- *   One standalone BC per company per standaloneType.
- *   Enforced at the database layer via unique partial indexes.
+ *   One BC per company per KC category. Enforced at the DB layer via a
+ *   unique partial index.
  *
  * MULTI-TENANT SAFETY:
  *   Every document is scoped by companyId.
@@ -46,29 +37,11 @@
  * RELATED:
  *   Service:   services/behaviorCards/BehaviorCardService.js
  *   Routes:    routes/admin/behaviorCards.js
- *   UI:        public/agent-console/enginehub.html  (Behavior Cards tab)
+ *   UI:        public/agent-console/services.html  (Behavior Cards per KC category)
  * ============================================================================
  */
 
 const mongoose = require('mongoose');
-
-// ============================================================================
-// CONSTANTS  (exported for use in routes and services)
-// ============================================================================
-
-/**
- * Valid values for standaloneType.
- * Each type maps to a specific call flow scenario.
- */
-const STANDALONE_TYPES = [
-  'inbound_greeting',     // First words on every inbound call
-  'discovery_flow',       // Collecting name, address, issue, urgency
-  'escalation_ladder',    // Distress handling, manager request, transfer logic
-  'after_hours_intake',   // Caller reaches agent outside business hours
-  'mid_flow_interrupt',   // Caller injects a question into an active flow
-  'payment_routing',      // Payment-related interaction handling
-  'manager_request'       // Caller explicitly asks to speak to a manager
-];
 
 // ============================================================================
 // SCHEMA
@@ -97,30 +70,23 @@ const behaviorCardSchema = new mongoose.Schema({
   },
 
   // ── Card type ────────────────────────────────────────────────────────────────
+  // Kept as a discriminator for clean index semantics and future extensibility.
+  // Only 'category_linked' is accepted after the April 2026 Engine Hub nuke.
   type: {
     type:     String,
     required: true,
-    enum:     ['category_linked', 'standalone'],
-    comment:  'category_linked: shared across all KC cards in a KC category. standalone: governs a specific call flow scenario.'
+    enum:     ['category_linked'],
+    default:  'category_linked',
+    comment:  'Shared across all KC cards in a KC category. Standalone BC type removed April 2026.'
   },
 
-  // ── Category link  (category_linked type only) ───────────────────────────────
+  // ── Category link ────────────────────────────────────────────────────────────
   // Must match the `category` field on CompanyKnowledgeContainer documents exactly.
-  // Empty string '' for standalone type.
   category: {
-    type:    String,
-    default: '',
-    trim:    true,
-    comment: 'KC category this BC governs. Exact match against KnowledgeContainer.category.'
-  },
-
-  // ── Standalone type  (standalone type only) ──────────────────────────────────
-  // Null for category_linked type.
-  standaloneType: {
-    type:    String,
-    enum:    [...STANDALONE_TYPES, null],
-    default: null,
-    comment: 'The specific call flow scenario this BC governs. Null for category_linked.'
+    type:     String,
+    required: true,
+    trim:     true,
+    comment:  'KC category this BC governs. Exact match against KnowledgeContainer.category.'
   },
 
   // ── Behavior rules ────────────────────────────────────────────────────────────
@@ -181,19 +147,13 @@ const behaviorCardSchema = new mongoose.Schema({
 // All indexes lead with companyId — enforces multi-tenant isolation at DB layer.
 // ============================================================================
 
-// Primary runtime lookup: category_linked BC by company + category
+// Primary runtime lookup: BC by company + category
 behaviorCardSchema.index(
   { companyId: 1, type: 1, category: 1 },
   { name: 'idx_bc_company_type_category', background: true }
 );
 
-// Primary runtime lookup: standalone BC by company + standaloneType
-behaviorCardSchema.index(
-  { companyId: 1, standaloneType: 1 },
-  { name: 'idx_bc_company_standalone', background: true }
-);
-
-// Uniqueness: one category_linked BC per company per category
+// Uniqueness: one BC per company per category
 behaviorCardSchema.index(
   { companyId: 1, category: 1 },
   {
@@ -201,18 +161,6 @@ behaviorCardSchema.index(
     sparse:                  true,
     partialFilterExpression: { type: 'category_linked' },
     name:                    'idx_bc_unique_category_linked',
-    background:              true
-  }
-);
-
-// Uniqueness: one standalone BC per company per standaloneType
-behaviorCardSchema.index(
-  { companyId: 1, standaloneType: 1 },
-  {
-    unique:                  true,
-    sparse:                  true,
-    partialFilterExpression: { type: 'standalone', standaloneType: { $ne: null } },
-    name:                    'idx_bc_unique_standalone',
     background:              true
   }
 );
@@ -242,37 +190,10 @@ behaviorCardSchema.statics.findForCategory = function (companyId, category) {
   }).lean();
 };
 
-/**
- * findStandalone — Load a standalone Behavior Card by standaloneType.
- *
- * Called by BehaviorCardService.forStandalone(). Service is built and ready.
- * Wire call sites when building each standalone scenario:
- *   - inbound_greeting   → HybridReceptionistLLM.js (build step 11)
- *   - discovery_flow     → DiscoveryNotesService (build step 11)
- *   - escalation_ladder  → escalation engine (build step 8c)
- *   - after_hours_intake → v2twilio.js after-hours gate (build step TBD)
- *   - mid_flow_interrupt → ConversationEngine.js (build step TBD)
- *
- * Returns null if not configured — engine degrades gracefully.
- *
- * @param  {string}          companyId
- * @param  {string}          standaloneType   One of STANDALONE_TYPES
- * @returns {Promise<Object|null>}
- */
-behaviorCardSchema.statics.findStandalone = function (companyId, standaloneType) {
-  return this.findOne({
-    companyId,
-    type:          'standalone',
-    standaloneType,
-    enabled:       true
-  }).lean();
-};
-
 // ============================================================================
 // EXPORTS
 // ============================================================================
 
 const BehaviorCard = mongoose.model('BehaviorCard', behaviorCardSchema, 'behaviorCards');
 
-module.exports                  = BehaviorCard;
-module.exports.STANDALONE_TYPES = STANDALONE_TYPES;
+module.exports = BehaviorCard;

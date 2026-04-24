@@ -343,7 +343,6 @@ async function main() {
       name:           card.name,
       type:           card.type,
       category:       card.category,
-      standaloneType: null,
       tone:           card.tone,
       rules:          card.rules,
       afterAction:    card.afterAction,

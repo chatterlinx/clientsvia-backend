@@ -299,9 +299,10 @@ async function loadAllRoutes() {
 
         // DELETED: Legacy V2 Trade Categories - replaced by V2 Global Trade Categories system
 
-        // ⚙️ Engine Hub (V1 March 2026 — Governed Voice Operating System)
-        routes.engineHubRoutes     = await loadRouteWithTimeout('./routes/admin/engineHub',     'engineHubRoutes');     // ⚙️ Engine Hub Settings (per-company CRUD)
-        routes.behaviorCardsRoutes = await loadRouteWithTimeout('./routes/admin/behaviorCards', 'behaviorCardsRoutes'); // 🃏 Behavior Cards (governs HOW the agent operates per category/flow)
+        // 🃏 Behavior Cards (category-linked only; governs HOW the agent delivers each KC category)
+        // Engine Hub + standalone BC plumbing nuked April 2026 — replaced by services.html Behavior tab
+        // (company.aiAgentSettings.llmAgent.behaviorRules[]) consumed by composeSystemPrompt on every LLM call.
+        routes.behaviorCardsRoutes = await loadRouteWithTimeout('./routes/admin/behaviorCards', 'behaviorCardsRoutes'); // 🃏 Behavior Cards (governs HOW the agent operates per category)
 
         // 🧠 Version 1.0 — discoveryNotes + UAP Intelligence
         routes.discoveryNotesSettingsRoutes = await loadRouteWithTimeout('./routes/admin/discoveryNotesSettings', 'discoveryNotesSettingsRoutes'); // 📋 Discovery Notes Settings (bookingFieldConfig, snapshots)
@@ -735,9 +736,8 @@ function registerRoutes(routes) {
     app.use('/api/admin/calibration/company', routes.calibrationRoutes);      // 📊 UAP Calibration (qaLog Layer 1/2/Unknown stats)
     // UAP Arrays route removed — matching now uses section.callerPhrases via BridgeService
 
-    // ⚙️ Engine Hub — Governed Voice Operating System (V1 March 2026)
-    app.use('/api/admin/engine-hub',     routes.engineHubRoutes);     // ⚙️ Engine Hub Settings (per-company, enabled/mode/policies/trace)
-    app.use('/api/admin/behavior-cards', routes.behaviorCardsRoutes); // 🃏 Behavior Cards (governs HOW the agent operates per KC category + flow scenarios)
+    // 🃏 Behavior Cards (category-linked only — standalone types and Engine Hub nuked April 2026)
+    app.use('/api/admin/behavior-cards', routes.behaviorCardsRoutes); // 🃏 Behavior Cards (governs HOW the agent operates per KC category)
     app.use('/api/admin/turn1',          routes.turn1ConfigRoutes);   // 🎙️ Turn1Engine config (first-turn triage + personalized welcome)
     app.use('/api/admin/agent2/company', routes.audioHealthRoutes);  // 🔊 Audio Health (per-page pre-cached audio stats)
 
