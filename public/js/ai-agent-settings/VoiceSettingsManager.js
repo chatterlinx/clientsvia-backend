@@ -467,6 +467,15 @@ class VoiceSettingsManager {
             if (radio) radio.checked = isActive;
             const badge = card.querySelector('.voice-provider-default-badge');
             if (badge) badge.classList.toggle('hidden', !isActive);
+            // Manually swap red/green on the toggle background — Tailwind JIT is
+            // inconsistent about picking up `peer-checked:bg-green-500` alongside
+            // the base `bg-red-500`. Doing it in JS makes the visual state
+            // deterministic.
+            const toggleBg = card.querySelector('.voice-provider-toggle-bg');
+            if (toggleBg) {
+                toggleBg.classList.toggle('bg-green-500', isActive);
+                toggleBg.classList.toggle('bg-red-500', !isActive);
+            }
         });
 
         // Sync Polly dropdowns to saved values
