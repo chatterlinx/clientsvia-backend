@@ -84,7 +84,6 @@ const REPO_ROOT = path.join(__dirname, '../../');
 const BACKEND_SOURCE_FILES = [
   'routes/v2twilio.js',
   'services/engine/booking/BookingLogicEngine.js',
-  'services/engine/agent2/Agent2DiscoveryEngine.js',
   'routes/agentConsole/agentConsole.js',
   'routes/agentConsole/truthExport.js'
 ];
@@ -484,8 +483,6 @@ async function buildRuntimeTruth(companyId) {
         hesitant: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.hesitant || {},
         complex: company.aiAgentSettings?.agent2?.discovery?.followUpConsent?.complex || {}
       },
-      consentPhrases: company.aiAgentSettings?.agent2?.consentPhrases || [],
-      escalationPhrases: company.aiAgentSettings?.agent2?.escalationPhrases || [],
       bookingPrompts: company.aiAgentSettings?.agent2?.bookingPrompts || {}
     },
     
@@ -833,7 +830,7 @@ async function checkUiCoverage(company) {
       issue: 'Return caller greeting not configured in UI',
       uiPath: 'MISSING',
       expectedUiLocation: 'agent2.html → Return Caller Recognition card',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryEngine.js',
+      backendFile: 'services/engine/agent2/Agent2GreetingInterceptor.js',
       impact: '~30% of calls (returning customers) miss personalization'
     });
   }
@@ -847,7 +844,7 @@ async function checkUiCoverage(company) {
       issue: 'Hold line message not configured in UI',
       uiPath: 'MISSING',
       expectedUiLocation: 'booking.html → Hold Message field',
-      backendFile: 'services/engine/agent2/Agent2DiscoveryEngine.js',
+      backendFile: 'services/engine/booking/BookingLogicEngine.js',
       impact: 'All booking flows with calendar use hardcoded hold message'
     });
   }

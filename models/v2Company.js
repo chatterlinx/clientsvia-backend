@@ -3940,11 +3940,6 @@ const companySchema = new mongoose.Schema({
             enabled: { type: Boolean, default: false },
             // V4: Global Negative Keywords - applies to ALL trigger cards
             globalNegativeKeywords: { type: [String], default: [] },
-            // AC1: Consent/Escalation phrase lists (Agent Console editable)
-            // Required for Agent2DiscoveryEngine.loadCompanyConfig() — without schema paths,
-            // Mongoose drops the arrays on save and UI changes appear to "not persist".
-            consentPhrases: [{ type: String, trim: true, lowercase: true }],
-            escalationPhrases: [{ type: String, trim: true, lowercase: true }],
             // AC1: Speech Detection — Twilio Gather configuration
             // UI: agent2.html > "🎙️ Speech Detection" card
             // Runtime: routes/v2twilio.js reads agent2.speechDetection first,

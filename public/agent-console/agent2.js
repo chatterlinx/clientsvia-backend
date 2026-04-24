@@ -36,26 +36,7 @@
   };
 
   const CONFIG = {
-    API_BASE: '/api/agent-console',
-    DEFAULT_CONSENT_PHRASES: [
-      'yes',
-      'yeah',
-      'sure',
-      'ok',
-      'okay',
-      'yes please',
-      'that works',
-      'sounds good',
-      'let\'s do it'
-    ],
-    DEFAULT_ESCALATION_PHRASES: [
-      'speak to a human',
-      'talk to someone',
-      'real person',
-      'operator',
-      'representative',
-      'manager'
-    ]
+    API_BASE: '/api/agent-console'
   };
 
   /* --------------------------------------------------------------------------
@@ -71,12 +52,6 @@
     config: null,
     triggerStats: null,
     embedMode: null,
-    testSession: {
-      mode: 'DISCOVERY',
-      turn: 0,
-      callerName: null,
-      intent: null
-    },
     isDirty: false,
     
     // ═══════════════════════════════════════════════════════════════
@@ -224,17 +199,7 @@
     ruleAudioStatus: document.getElementById('rule-audio-status'),
     btnCancelGreetingRule: document.getElementById('btn-cancel-greeting-rule'),
     btnSaveGreetingRule: document.getElementById('btn-save-greeting-rule'),
-    
-    // Consent Phrases
-    consentPhrasesList: document.getElementById('consent-phrases-list'),
-    inputConsentPhrase: document.getElementById('input-consent-phrase'),
-    btnAddConsentPhrase: document.getElementById('btn-add-consent-phrase'),
-    
-    // Escalation Phrases
-    escalationPhrasesList: document.getElementById('escalation-phrases-list'),
-    inputEscalationPhrase: document.getElementById('input-escalation-phrase'),
-    btnAddEscalationPhrase: document.getElementById('btn-add-escalation-phrase'),
-    
+
     // Discovery Engine toggle (KC vs ScrabEngine)
     toggleKCEngineEnabled: document.getElementById('toggle-kc-engine-enabled'),
 
@@ -246,17 +211,7 @@
     inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
     inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
     inputFallbackNoMatchClarifierQuestion: document.getElementById('input-fallback-no-match-clarifier-question'),
-    
-    // Test Panel
-    testInput: document.getElementById('test-input'),
-    btnTestTurn: document.getElementById('btn-test-turn'),
-    testOutputReply: document.getElementById('test-output-reply'),
-    testSessionState: document.getElementById('test-session-state'),
-    testHandoffPayload: document.getElementById('test-handoff-payload'),
-    testTraceLog: document.getElementById('test-trace-log'),
-    btnResetSession: document.getElementById('btn-reset-session'),
-    btnGeneratePayload: document.getElementById('btn-generate-payload'),
-    
+
     // Toast
     toastContainer: document.getElementById('toast-container')
   };
@@ -397,27 +352,7 @@
     }
     
     DOM.btnSaveConfig.addEventListener('click', saveConfig);
-    
-    // Consent phrases
-    DOM.btnAddConsentPhrase.addEventListener('click', () => addPhrase('consent'));
-    DOM.inputConsentPhrase.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') addPhrase('consent');
-    });
-    
-    // Escalation phrases
-    DOM.btnAddEscalationPhrase.addEventListener('click', () => addPhrase('escalation'));
-    DOM.inputEscalationPhrase.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') addPhrase('escalation');
-    });
-    
-    // Test panel
-    DOM.btnTestTurn.addEventListener('click', runTestTurn);
-    DOM.testInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') runTestTurn();
-    });
-    DOM.btnResetSession.addEventListener('click', resetTestSession);
-    DOM.btnGeneratePayload.addEventListener('click', generateSamplePayload);
-    
+
     // Track changes (with null checks for optional fields)
     const inputs = [
       DOM.inputGreetingInitial,
@@ -575,113 +510,7 @@
     if (DOM.inputMediaStreamsOn)  DOM.inputMediaStreamsOn.checked  = msEnabled;
     updateMediaStreamsPreview(ms, config.__mediaStreamsResolved);
 
-    // Consent phrases
-    const consentPhrases = config.consentPhrases || CONFIG.DEFAULT_CONSENT_PHRASES;
-    renderPhraseList('consent', consentPhrases);
-    
-    // Escalation phrases
-    const escalationPhrases = config.escalationPhrases || CONFIG.DEFAULT_ESCALATION_PHRASES;
-    renderPhraseList('escalation', escalationPhrases);
-    
     state.isDirty = false;
-  }
-
-  /* --------------------------------------------------------------------------
-     PHRASE LIST MANAGEMENT
-     -------------------------------------------------------------------------- */
-  function parseBulkPhrases(raw) {
-    const text = `${raw || ''}`.trim();
-    if (!text) return [];
-
-    // Allow bulk add via commas / new lines / semicolons.
-    // Example: "yes, yeah, sure" → ["yes","yeah","sure"]
-    return text
-      .split(/[,;\n]+/g)
-      .map(p => p.trim())
-      .filter(Boolean)
-      .map(p => p.toLowerCase());
-  }
-
-  function renderPhraseList(type, phrases) {
-    const container = type === 'consent' ? DOM.consentPhrasesList : DOM.escalationPhrasesList;
-    container.innerHTML = '';
-    
-    phrases.forEach((phrase, index) => {
-      const tag = document.createElement('span');
-      tag.className = 'phrase-tag';
-      tag.innerHTML = `
-        ${escapeHtml(phrase)}
-        <button type="button" class="phrase-remove" data-type="${type}" data-index="${index}">×</button>
-      `;
-      container.appendChild(tag);
-    });
-    
-    // Add event listeners for remove buttons
-    container.querySelectorAll('.phrase-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const type = e.target.dataset.type;
-        const index = parseInt(e.target.dataset.index);
-        removePhrase(type, index);
-      });
-    });
-  }
-
-  function addPhrase(type) {
-    const input = type === 'consent' ? DOM.inputConsentPhrase : DOM.inputEscalationPhrase;
-    const phrases = parseBulkPhrases(input.value);
-    if (phrases.length === 0) return;
-    
-    const arrayKey = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
-    const defaults = type === 'consent' ? CONFIG.DEFAULT_CONSENT_PHRASES : CONFIG.DEFAULT_ESCALATION_PHRASES;
-    
-    if (!state.config[arrayKey]) {
-      state.config[arrayKey] = [...defaults];
-    }
-
-    // De-dupe within the pasted set and against existing phrases.
-    const existing = new Set((state.config[arrayKey] || []).map(p => `${p}`.trim().toLowerCase()).filter(Boolean));
-    const uniqueIncoming = Array.from(new Set(phrases));
-
-    let added = 0;
-    let skipped = 0;
-    for (const phrase of uniqueIncoming) {
-      if (!phrase) continue;
-      if (existing.has(phrase)) {
-        skipped++;
-        continue;
-      }
-      state.config[arrayKey].push(phrase);
-      existing.add(phrase);
-      added++;
-    }
-
-    if (added === 0) {
-      showToast('warning', 'Duplicate', 'All phrases already exist.');
-      return;
-    }
-
-    renderPhraseList(type, state.config[arrayKey]);
-    input.value = '';
-    state.isDirty = true;
-
-    if (skipped > 0) {
-      showToast('success', 'Added', `Added ${added} phrase${added !== 1 ? 's' : ''} (skipped ${skipped} duplicate${skipped !== 1 ? 's' : ''}).`);
-    } else {
-      showToast('success', 'Added', `Added ${added} phrase${added !== 1 ? 's' : ''}.`);
-    }
-  }
-
-  function removePhrase(type, index) {
-    const arrayKey = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
-    const defaults = type === 'consent' ? CONFIG.DEFAULT_CONSENT_PHRASES : CONFIG.DEFAULT_ESCALATION_PHRASES;
-    
-    if (!state.config[arrayKey]) {
-      state.config[arrayKey] = [...defaults];
-    }
-    
-    state.config[arrayKey].splice(index, 1);
-    renderPhraseList(type, state.config[arrayKey]);
-    state.isDirty = true;
   }
 
   /* --------------------------------------------------------------------------
@@ -879,9 +708,7 @@
       mediaStreams: {
         ...(state.config.mediaStreams || {}),
         enabled: !!DOM.inputMediaStreamsOn?.checked
-      },
-      consentPhrases: state.config.consentPhrases,
-      escalationPhrases: state.config.escalationPhrases
+      }
     };
     
     try {
@@ -901,143 +728,8 @@
   }
 
   /* --------------------------------------------------------------------------
-     TEST TURN
-     -------------------------------------------------------------------------- */
-  async function runTestTurn() {
-    const text = DOM.testInput.value.trim();
-    if (!text) {
-      showToast('warning', 'Empty Input', 'Please enter what the caller says.');
-      return;
-    }
-    
-    DOM.btnTestTurn.disabled = true;
-    DOM.testOutputReply.textContent = 'Processing...';
-    DOM.testOutputReply.classList.remove('empty');
-    
-    appendTraceLog(`[Turn ${state.testSession.turn + 1}] Caller: "${text}"`);
-    
-    try {
-      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/test-turn`, {
-        method: 'POST',
-        body: {
-          text,
-          session: state.testSession
-        }
-      });
-      
-      // Update display
-      DOM.testOutputReply.textContent = data.result?.replyText || 'No reply generated.';
-      
-      // Update session state
-      if (data.result?.sessionUpdates) {
-        Object.assign(state.testSession, data.result.sessionUpdates);
-      }
-      state.testSession.turn++;
-      DOM.testSessionState.textContent = JSON.stringify(state.testSession, null, 2);
-      
-      // Check for handoff payload
-      if (data.result?.handoffPayload) {
-        DOM.testHandoffPayload.innerHTML = syntaxHighlight(JSON.stringify(data.result.handoffPayload, null, 2));
-        appendTraceLog(`[HANDOFF TRIGGERED] Mode switching to BOOKING`);
-      }
-      
-      appendTraceLog(`[Agent] ${data.result?.replyText || 'No reply'}`);
-      
-      // Clear input
-      DOM.testInput.value = '';
-      
-    } catch (error) {
-      DOM.testOutputReply.textContent = 'Error: ' + error.message;
-      appendTraceLog(`[ERROR] ${error.message}`);
-    } finally {
-      DOM.btnTestTurn.disabled = false;
-    }
-  }
-
-  function resetTestSession() {
-    state.testSession = {
-      mode: 'DISCOVERY',
-      turn: 0,
-      callerName: null,
-      intent: null
-    };
-    
-    DOM.testSessionState.textContent = JSON.stringify(state.testSession, null, 2);
-    DOM.testOutputReply.textContent = 'Send a message to test the discovery flow...';
-    DOM.testOutputReply.classList.add('empty');
-    DOM.testHandoffPayload.textContent = 'No handoff triggered yet...';
-    DOM.testTraceLog.textContent = '[Session reset - ready for new test]';
-    DOM.testInput.value = '';
-    
-    showToast('info', 'Session Reset', 'Test session has been reset.');
-  }
-
-  function appendTraceLog(message) {
-    const timestamp = new Date().toLocaleTimeString();
-    const currentLog = DOM.testTraceLog.textContent;
-    if (currentLog.startsWith('[Trace') || currentLog.startsWith('[Session')) {
-      DOM.testTraceLog.textContent = `${timestamp} ${message}`;
-    } else {
-      DOM.testTraceLog.textContent = `${currentLog}\n${timestamp} ${message}`;
-    }
-    
-    // Auto-scroll
-    DOM.testTraceLog.parentElement.scrollTop = DOM.testTraceLog.parentElement.scrollHeight;
-  }
-
-  function generateSamplePayload() {
-    const samplePayload = {
-      handoffContractVersion: 'AC1',
-      companyId: state.companyId,
-      callSid: `CA_TEST_${Date.now()}`,
-      fromPhone: '+15551234567',
-      assumptions: {
-        firstName: state.testSession.callerName?.split(' ')[0] || 'Unknown',
-        lastName: state.testSession.callerName?.split(' ').slice(1).join(' ') || '',
-        bookingMode: 'maintenance'
-      },
-      summary: {
-        issue: state.testSession.intent || 'Service request',
-        serviceType: 'general',
-        urgency: 'routine'
-      },
-      discoveryContext: {
-        consent: {
-          bucket: 'maintenance',
-          matchedPhrases: ['maintenance']
-        }
-      }
-    };
-    
-    DOM.testHandoffPayload.innerHTML = syntaxHighlight(JSON.stringify(samplePayload, null, 2));
-    showToast('info', 'Sample Generated', 'Sample handoff payload created.');
-  }
-
-  /* --------------------------------------------------------------------------
      UTILITIES
      -------------------------------------------------------------------------- */
-  function syntaxHighlight(json) {
-    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return json.replace(
-      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
-      function(match) {
-        let cls = 'json-number';
-        if (/^"/.test(match)) {
-          if (/:$/.test(match)) {
-            cls = 'json-key';
-          } else {
-            cls = 'json-string';
-          }
-        } else if (/true|false/.test(match)) {
-          cls = 'json-boolean';
-        } else if (/null/.test(match)) {
-          cls = 'json-null';
-        }
-        return '<span class="' + cls + '">' + match + '</span>';
-      }
-    );
-  }
-
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;

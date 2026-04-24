@@ -12,7 +12,6 @@
  * ENDPOINTS:
  * - GET /:companyId/truth — Master Truth JSON (cached, sanitized)
  * - GET /:companyId/truth?force=true — Force refresh (bypass cache)
- * - POST /:companyId/agent2/test-turn — Test Agent 2.0 discovery turn
  * - POST /:companyId/booking/test-step — Test Booking Logic step
  * 
  * ============================================================================
@@ -1315,67 +1314,6 @@ router.get(
 );
 
 /**
- * POST /:companyId/agent2/test-turn
- * 
- * Test a single Agent 2.0 discovery turn
- * Returns: replyText, sessionUpdates, handoffPayload (if booking triggered), events
- */
-router.post(
-  '/:companyId/agent2/test-turn',
-  authenticateJWT,
-  requirePermission(PERMISSIONS.CONFIG_READ),
-  async (req, res) => {
-    const { companyId } = req.params;
-    const { text, session } = req.body;
-    const requestId = `test_${Date.now()}`;
-    
-    logger.info(`[${MODULE_ID}] Test turn`, {
-      companyId,
-      requestId,
-      textLength: text?.length || 0
-    });
-    
-    if (!text || typeof text !== 'string') {
-      return res.status(400).json({
-        error: 'Missing or invalid text parameter',
-        requestId
-      });
-    }
-    
-    try {
-      const Agent2DiscoveryEngine = require('../../services/engine/agent2/Agent2DiscoveryEngine');
-      
-      const result = await Agent2DiscoveryEngine.processTurn({
-        session: session || {},
-        text,
-        companyId,
-        callSid: `TEST_${requestId}`,
-        fromPhone: '+15555555555',
-        isTest: true
-      });
-      
-      res.json({
-        success: true,
-        requestId,
-        result
-      });
-    } catch (error) {
-      logger.error(`[${MODULE_ID}] Test turn failed: ${error.message}`, {
-        companyId,
-        requestId,
-        stack: error.stack
-      });
-      
-      res.status(500).json({
-        error: 'Test turn failed',
-        message: error.message,
-        requestId
-      });
-    }
-  }
-);
-
-/**
  * POST /:companyId/booking/test-step
  * 
  * Test a Booking Logic step with payload and bookingCtx
@@ -1698,8 +1636,6 @@ router.get(
           bridgeEnabled:          agent2.bridge?.enabled || false,
           postGatherDelayMs:      agent2.bridge?.postGatherDelayMs || 500,
           speechDetection:        agent2.speechDetection || null,
-          consentPhrasesCount:    (agent2.consentPhrases || []).length,
-          escalationPhrasesCount: (agent2.escalationPhrases || []).length,
           discoveryHandoff:       agent2.discovery?.discoveryHandoff || {},
           fallbackResponse:       company.aiAgentSettings?.knowledgeBaseSettings?.fallbackResponse || '',
         },

@@ -38,7 +38,7 @@ const SPEECH_SOURCE_MAPPINGS = {
   
   'greeting.callStart.text': {
     backendVariable: 'callStartGreeting',
-    backendFiles: ['routes/v2twilio.js', 'services/engine/agent2/Agent2DiscoveryEngine.js'],
+    backendFiles: ['routes/v2twilio.js'],
     dbPath: 'aiAgentSettings.agent2.greetings.callStart.text',
     uiPage: 'agent2.html',
     uiSection: 'Call Start Greeting',
@@ -62,7 +62,7 @@ const SPEECH_SOURCE_MAPPINGS = {
   
   'greeting.returnCaller.text': {
     backendVariable: 'returnCallerGreeting',
-    backendFiles: ['services/engine/agent2/Agent2DiscoveryEngine.js'],
+    backendFiles: ['services/engine/agent2/Agent2GreetingInterceptor.js'],
     dbPath: 'aiAgentSettings.agent2.greetings.returnCaller.text',
     uiPage: 'agent2.html',
     uiSection: 'Return Caller Recognition',
@@ -154,7 +154,7 @@ const SPEECH_SOURCE_MAPPINGS = {
   
   'booking.holdMessage': {
     backendVariable: 'holdMessage',
-    backendFiles: ['services/engine/booking/BookingLogicEngine.js', 'services/engine/agent2/Agent2DiscoveryEngine.js'],
+    backendFiles: ['services/engine/booking/BookingLogicEngine.js'],
     dbPath: 'aiAgentSettings.agent2.discovery.holdMessage',
     uiPage: 'booking.html',
     uiSection: 'Hold Message',
