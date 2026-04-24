@@ -24,6 +24,19 @@
  *   call under `=== BEHAVIOR RULES ===` — they are the canonical "wording
  *   samples" for how the agent should handle common edge cases.
  *
+ * ⚠️  RETROACTIVE USE ONLY (as of Apr 24, 2026):
+ *   New tenants now inherit DEFAULT_BEHAVIOR_RULES automatically at runtime
+ *   via the deep-merge in `services/engine/llm/LLMFollowUpService.js:120`
+ *   (the defaults are wired at the bottom of `config/llmAgentDefaults.js`).
+ *   This script is still useful for:
+ *     - Persisting defaults into the DB for an EXISTING tenant so the
+ *       admin can edit one rule without silently pulling the other 7
+ *       from runtime memory.
+ *     - Back-filling tenants that were onboarded BEFORE the runtime-default
+ *       wiring existed.
+ *   Running it on a newly onboarded tenant is a safe no-op — the runtime
+ *   merge already provides the 8 rules whether they're in the DB or not.
+ *
  * IDEMPOTENCY / SAFETY:
  *   - Rule IDs are the stable keys above (straight from DEFAULT_BEHAVIOR_RULES).
  *   - If a rule ID already exists on the tenant, it is LEFT UNTOUCHED.

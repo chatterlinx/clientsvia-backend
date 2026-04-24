@@ -79,7 +79,11 @@ const DEFAULT_LLM_AGENT_SETTINGS = {
   //             'flow'      — conversational flow edge cases
   //             'custom'    — admin-created rules
   //
-  // Pre-seeded with DEFAULT_BEHAVIOR_RULES on first load (onboarding-ready)
+  // Pre-seeded with DEFAULT_BEHAVIOR_RULES on first load (onboarding-ready).
+  // This placeholder is REPLACED with the real 8-rule array just below
+  // DEFAULT_BEHAVIOR_RULES is declared (see "Runtime-default wiring" block
+  // near the bottom of this file). A forward reference won't work here
+  // because DEFAULT_BEHAVIOR_RULES is declared later in the same module.
   behaviorRules: [],
 
   // ── Knowledge Source ─────────────────────────────────────────────────────
@@ -916,6 +920,34 @@ function composeIntakeResponsePrompt(settings, entities = {}, intakeSettings, ch
 
   return parts.join('\n');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runtime-default wiring
+//
+// Replace the stub `behaviorRules: []` in DEFAULT_LLM_AGENT_SETTINGS with the
+// real canonical 8-rule array now that BOTH declarations exist. This is the
+// single-line fix that makes new tenants inherit the platform defaults at
+// runtime WITHOUT needing a DB seed:
+//
+//   - `services/engine/llm/LLMFollowUpService.js:120` calls
+//     `deepMergeLLMAgent(DEFAULT_LLM_AGENT_SETTINGS, saved)` on every live
+//     call. Saved values still win (admin edits preserved), but when a
+//     tenant's saved `behaviorRules` is undefined (brand-new company with
+//     `llmAgent: {}`), the merge keeps the default — the 8 rules below.
+//   - `composeSystemPrompt()` at L500-501 renders the rules into
+//     `=== BEHAVIOR RULES ===`. Empty array meant the whole block was
+//     silently omitted; this wiring restores it for unseeded tenants.
+//   - `routes/agentConsole/llmAgent.js` GET path also merges defaults on
+//     read, so the Agent Studio UI shows the 8 rules to new admins.
+//   - Admins who explicitly SAVE an empty `behaviorRules: []` still get []
+//     (array replaces wholesale in deepMerge) — intentional clear respected.
+//
+// The `scripts/render-seed-default-behavior-rules.js` script remains useful
+// for EXISTING tenants whose admins want the defaults written to the DB
+// (e.g. so editing one rule doesn't silently pull the other 7 from runtime).
+// For new onboarding, it is no longer required.
+// ─────────────────────────────────────────────────────────────────────────────
+DEFAULT_LLM_AGENT_SETTINGS.behaviorRules = DEFAULT_BEHAVIOR_RULES;
 
 module.exports = {
   DEFAULT_LLM_AGENT_SETTINGS,
