@@ -149,11 +149,14 @@ async function seedCompany(db, companyId, { dryRun = false } = {}) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const dryRun = args.includes('--dry-run');
+  const dryRun  = args.includes('--dry-run');
+  const allMode = args.includes('--all');
+  // Positional args are anything that isn't a recognized flag.
   const positional = args.filter(a => !a.startsWith('--'));
-  const arg = positional[0];
+  const companyIdArg = positional[0];
 
-  if (!arg) {
+  // Need either --all OR a companyId. Having neither is a usage error.
+  if (!allMode && !companyIdArg) {
     console.error('');
     console.error('❌  Usage: node scripts/render-seed-default-behavior-rules.js <companyId|--all> [--dry-run]');
     console.error('');
@@ -181,7 +184,7 @@ async function main() {
   const db = client.db('clientsvia');
 
   let targets = [];
-  if (arg === '--all') {
+  if (allMode) {
     // Seed every tenant. Limit projection to ids + name for fast scan.
     const companies = await db.collection('companiesCollection').find(
       {},
@@ -191,14 +194,14 @@ async function main() {
     console.log(`  Targets (--all): ${targets.length} companies\n`);
   } else {
     try {
-      new ObjectId(arg);
+      new ObjectId(companyIdArg);
     } catch {
-      console.error(`❌  Invalid companyId format: "${arg}"`);
+      console.error(`❌  Invalid companyId format: "${companyIdArg}"`);
       await client.close();
       process.exit(1);
     }
-    targets = [arg];
-    console.log(`  Target: ${arg}\n`);
+    targets = [companyIdArg];
+    console.log(`  Target: ${companyIdArg}\n`);
   }
 
   if (targets.length === 0) {
