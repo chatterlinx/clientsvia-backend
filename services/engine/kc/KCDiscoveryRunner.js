@@ -2341,6 +2341,93 @@ class KCDiscoveryRunner {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // SHORT-UTTERANCE SECTION GUARD  (April 2026)
+    // ──────────────────────────────────────────────────────────────────────────
+    // Block arbitrary bestSection acceptance when the caller's utterance is
+    // too short to carry real intent AND CueExtractor found NO cue fields.
+    //
+    // BUG FIX (Apr 24, 2026):
+    //   Live Penguin Air call: caller says "We had." (2 words, truncated/filler).
+    //   anchorContainerId was already set to No Cooling from a prior turn. GATE
+    //   3 keyword scorer picks the highest surface-overlap section — which in
+    //   this case was "multiple visits / flag for supervisor review", a scary
+    //   operational edge-case section that had NOTHING to do with what the
+    //   caller actually intended. Agent then said "I'd like to flag this for
+    //   review" on a completely innocuous 2-word utterance. Unacceptable.
+    //
+    // Fix semantics:
+    //   When the guard trips, strip bestSection so the Section Gap handler
+    //   below routes to Groq using the full container's groqContent. Groq
+    //   synthesizes a gentle clarifier / general answer from authored
+    //   knowledge instead of direct-answering from an arbitrary surface-match
+    //   section. The container (anchor topic) stays attached — we still honor
+    //   the caller's current topic — we just refuse to pick a specific
+    //   section on this thin a signal.
+    //
+    // Guard conditions (ALL three must hold):
+    //   1. match came from GATE 3 KEYWORD (the speculative gate).
+    //      UAP/semantic matches already have a much stronger signal — don't
+    //      override them.
+    //   2. cueFrame ran AND extracted zero fields (fieldCount === 0).
+    //      No permission cue, no request cue, no action core, no topic words.
+    //   3. Utterance has fewer than 3 meaningful words.
+    //      "We had.", "Um yeah", "The one." — these are filler, not questions.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (match && match.bestSection && !match.targetSection &&
+        match.matchSource === 'KEYWORD' &&
+        cueFrame && cueFrame.fieldCount === 0) {
+      const _guardWordCount = _norm
+        ? _norm.split(/\s+/).filter(Boolean).length
+        : 0;
+
+      if (_guardWordCount > 0 && _guardWordCount < 3) {
+        const _strippedLabel = match.bestSection?.label || null;
+        const _strippedIdx   = match.bestSectionIdx ?? null;
+
+        logger.info('[KC_ENGINE] 🛡️ SHORT_UTTERANCE_SECTION_GUARD — stripping bestSection, routing via Section Gap', {
+          companyId, callSid, turn,
+          inputPreview:   _clip(userInput, 40),
+          wordCount:      _guardWordCount,
+          containerTitle: match.container?.title || null,
+          strippedSection:    _strippedLabel,
+          strippedSectionIdx: _strippedIdx,
+        });
+
+        emit('KC_SHORT_UTTERANCE_SECTION_GUARD', {
+          containerTitle:     match.container?.title || null,
+          containerId:        String(match.container?._id || ''),
+          strippedSection:    _strippedLabel,
+          strippedSectionIdx: _strippedIdx,
+          userInput:          _clip(userInput, 100),
+          wordCount:          _guardWordCount,
+          turn,
+        });
+
+        _writeDiscoveryNotes(companyId, callSid, {
+          qaLog: [{
+            type:                'KC_SHORT_UTTERANCE_SECTION_GUARD',
+            turn:                turn ?? 0,
+            question:            userInput,
+            wordCount:           _guardWordCount,
+            containerTitle:      match.container?.title || 'Unknown',
+            containerId:         String(match.container?._id || ''),
+            kcId:                match.container?.kcId || null,
+            strippedSection:     _strippedLabel,
+            strippedSectionIdx:  _strippedIdx,
+            anchorContainerId:   callContext?.anchorContainerId || null,
+            timestamp:           new Date().toISOString(),
+          }],
+        }).catch(() => {});
+
+        // Strip bestSection so downstream Section Gap handler fires.
+        // Container (anchor topic) stays attached — Groq answers from full
+        // groqContent instead of direct-answering from the arbitrary section.
+        match.bestSection    = null;
+        match.bestSectionIdx = null;
+      }
+    }
+
     // Carry bestSection from findContainer into the match for section routing
     if (match && match.bestSection && !match.targetSection) {
       match.targetSection    = match.bestSection;

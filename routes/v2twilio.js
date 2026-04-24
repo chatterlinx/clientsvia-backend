@@ -2427,8 +2427,66 @@ router.post('/voice', async (req, res) => {
           } else if (fallbackText) {
             gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackText))));
           } else {
-            // No greeting text AND no emergency fallback configured — silent start
-            logger.warn(`[GREETING] ⚠️ No greeting text or emergency fallback configured for company ${company._id}. Caller hears silence.`);
+            // ──────────────────────────────────────────────────────────────────
+            // 🚨 LAST-RESORT SAY (April 2026) — NEVER LEAVE CALLER WITH SILENCE
+            // ──────────────────────────────────────────────────────────────────
+            // Prerecorded audio missing on disk AND no ElevenLabs voice AND no
+            // greeting text AND no emergencyFallback configured. Without this
+            // branch the caller hears ~11 seconds of dead air while Gather's
+            // timeout runs out — the single worst first-impression failure
+            // mode the platform can produce. Pull copy from UI recovery
+            // messages (multi-tenant rule — no hardcoded business strings);
+            // fall back to a companyName-based acknowledgement so there is
+            // always *something* audible between pickup and the first caller
+            // utterance.
+            logger.warn(`[GREETING] ⚠️ No greeting text / emergency fallback for company ${company._id} — firing last-resort say so caller is not met with silence.`);
+            const lastResortText =
+              (await getRecoveryMessage(company, 'generalError').catch(() => null))
+              || `Thank you for calling ${company.companyName || 'us'}. One moment please.`;
+            gather.say({ voice: TWILIO_FALLBACK_VOICE }, escapeTwiML(cleanTextForTTS(stripMarkdown(lastResortText))));
+
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: req.body.CallSid,
+                companyId: company._id,
+                type: 'GREETING_EMERGENCY_SAY_FIRED',
+                turn: 0,
+                data: {
+                  reason: 'prerecorded_missing_no_tts_no_fallback',
+                  missingAudioPath: rawAudioPath,
+                  source: greetingSource,
+                  spokenTextPreview: lastResortText.substring(0, 120),
+                  voiceProvider: 'twilio_say',
+                  visualTrace: {
+                    icon: '🚨',
+                    stage: 'Greeting',
+                    status: 'emergency_say_fired',
+                    details: 'Prerecorded audio missing, no TTS, no emergency fallback — last-resort Say prevented silent start',
+                  },
+                }
+              }).catch(() => {});
+
+              // V4: SPEECH_SOURCE_SELECTED so the attribution trail shows
+              // the emergency path on the Call Review transcript.
+              CallLogger.logEvent({
+                callId: req.body.CallSid,
+                companyId: company._id,
+                type: 'SPEECH_SOURCE_SELECTED',
+                turn: 0,
+                data: {
+                  sourceId: 'platform.recoveryMessages.generalError',
+                  uiPath: 'UI → Recovery Messages → generalError (or hardcoded company-name fallback)',
+                  uiTab: 'Connection Messages',
+                  configPath: 'recoveryMessages.generalError',
+                  spokenTextPreview: lastResortText.substring(0, 120),
+                  note: 'EMERGENCY SAY: greeting config had no playable audio, no TTS path, and no emergency fallback — last-resort copy used',
+                  isFromUiConfig: true,
+                  usedEmergencyFallback: true,
+                  audioMissing: true,
+                  originalAudioPath: rawAudioPath,
+                }
+              }).catch(() => {});
+            }
           }
         }
       }
