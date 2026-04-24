@@ -24,9 +24,9 @@ describe('agent2PathNamespace', () => {
   });
 
   test('returns canonical and display candidates for lookup', () => {
-    expect(toLookupCandidates('aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer')).toEqual([
-      'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer',
-      'agent2.discovery.playbook.fallback.noMatchAnswer'
+    expect(toLookupCandidates('aiAgentSettings.agent2.greetings.callStart.text')).toEqual([
+      'aiAgentSettings.agent2.greetings.callStart.text',
+      'agent2.greetings.callStart.text'
     ]);
   });
 });

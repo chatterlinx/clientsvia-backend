@@ -53,18 +53,6 @@ const SPEECH_REGISTRY = {
     configPath: 'agent2.discovery.clarifiers[].question',
     description: 'Clarifier question'
   },
-  'agent2.discovery.fallback.noMatchAnswer': {
-    uiPath: 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer',
-    uiTab: 'Agent 2.0 > Configuration',
-    configPath: 'agent2.discovery.playbook.fallback.noMatchAnswer',
-    description: 'Fallback when no trigger matches'
-  },
-  'agent2.discovery.fallback.noMatchClarifierQuestion': {
-    uiPath: 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchClarifierQuestion',
-    uiTab: 'Agent 2.0 > Configuration',
-    configPath: 'agent2.discovery.playbook.fallback.noMatchClarifierQuestion',
-    description: 'Clarifier question when reason captured'
-  },
   'agent2.discovery.fallback.afterAnswerQuestion': {
     uiPath: 'aiAgentSettings.agent2.discovery.playbook.fallback.afterAnswerQuestion',
     uiTab: 'Agent 2.0 > Configuration',

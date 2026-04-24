@@ -207,10 +207,6 @@
     inputAckWord: document.getElementById('input-ack-word'),
     inputRobotChallengeEnabled: document.getElementById('input-robot-challenge-enabled'),
     inputRobotChallengeLine: document.getElementById('input-robot-challenge-line'),
-    inputDiscoveryConsentQuestion: document.getElementById('input-discovery-consent-question'),
-    inputFallbackNoMatchAnswer: document.getElementById('input-fallback-no-match-answer'),
-    inputFallbackNoMatchWhenReasonCaptured: document.getElementById('input-fallback-no-match-when-reason-captured'),
-    inputFallbackNoMatchClarifierQuestion: document.getElementById('input-fallback-no-match-clarifier-question'),
 
     // Toast
     toastContainer: document.getElementById('toast-container')
@@ -359,10 +355,6 @@
       DOM.inputGreetingReturn,
       DOM.inputAckWord,
       DOM.inputRobotChallengeLine,
-      DOM.inputDiscoveryConsentQuestion,
-      DOM.inputFallbackNoMatchAnswer,
-      DOM.inputFallbackNoMatchWhenReasonCaptured,
-      DOM.inputFallbackNoMatchClarifierQuestion,
       DOM.inputBridgeThreshold,
       DOM.inputBridgeHardcap,
       DOM.inputBridgeLines
@@ -474,10 +466,6 @@
     if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
     if (DOM.inputRobotChallengeEnabled) DOM.inputRobotChallengeEnabled.checked = config.discovery?.style?.robotChallenge?.enabled || false;
     if (DOM.inputRobotChallengeLine) DOM.inputRobotChallengeLine.value = config.discovery?.style?.robotChallenge?.line || '';
-    if (DOM.inputDiscoveryConsentQuestion) DOM.inputDiscoveryConsentQuestion.value = config.discovery?.discoveryHandoff?.consentQuestion || '';
-    if (DOM.inputFallbackNoMatchAnswer) DOM.inputFallbackNoMatchAnswer.value = config.discovery?.playbook?.fallback?.noMatchAnswer || '';
-    if (DOM.inputFallbackNoMatchWhenReasonCaptured) DOM.inputFallbackNoMatchWhenReasonCaptured.value = config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '';
-    if (DOM.inputFallbackNoMatchClarifierQuestion) DOM.inputFallbackNoMatchClarifierQuestion.value = config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '';
     // Bridge (Latency Filler)
     const bridge = config.bridge || {};
     if (DOM.inputBridgeEnabled) DOM.inputBridgeEnabled.checked = bridge.enabled === true;
@@ -667,19 +655,6 @@
             line: DOM.inputRobotChallengeLine.value.trim()
           }
         },
-        discoveryHandoff: {
-          ...(state.config.discovery?.discoveryHandoff || {}),
-          consentQuestion: DOM.inputDiscoveryConsentQuestion?.value?.trim() || ''
-        },
-        playbook: {
-          ...(state.config.discovery?.playbook || {}),
-          fallback: {
-            ...(state.config.discovery?.playbook?.fallback || {}),
-            noMatchAnswer: DOM.inputFallbackNoMatchAnswer?.value?.trim() || '',
-            noMatchWhenReasonCaptured: DOM.inputFallbackNoMatchWhenReasonCaptured?.value?.trim() || '',
-            noMatchClarifierQuestion: DOM.inputFallbackNoMatchClarifierQuestion?.value?.trim() || ''
-          }
-        }
       },
       bridge: {
         enabled: DOM.inputBridgeEnabled?.checked || false,

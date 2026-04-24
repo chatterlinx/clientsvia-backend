@@ -259,17 +259,13 @@ function defaultAgent2Config() {
         useScenarioFallback: false,
         allowedScenarioTypes: ['FAQ', 'TROUBLESHOOT', 'PRICING', 'SERVICE', 'UNKNOWN'],
         minScenarioScore: 0.72,
-        fallback: {
-          // V119: DISTINCT FALLBACK PATHS
-          // noMatchAnswer: Used when NO reason captured (OK to ask "how can I help?")
-          noMatchAnswer: "Ok. How can I help you today?",
-          // noMatchWhenReasonCaptured: Used when reason IS captured (NEVER restart conversation)
-          noMatchWhenReasonCaptured: "Ok. I'm sorry to hear that.",
-          // noMatchClarifierQuestion: Optional clarifying question when reason captured
-          noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
-          // afterAnswerQuestion: Append after successful card/scenario answer
-          afterAnswerQuestion: "Would you like to schedule a visit, or do you have a question I can help with?"
-        },
+        // NOTE (Apr 2026): `fallback.{noMatchAnswer,noMatchWhenReasonCaptured,noMatchClarifierQuestion}`
+        // seed defaults removed — none were consumed by the live call engine
+        // (KC GATE 4 LLM fallback + emergencyFallbackLine handle no-match today).
+        // `fallback.afterAnswerQuestion` + `fallback.pending*` remain orphan/UI-only
+        // and are out of scope for this cleanup (no UI card in Agent 2.0 for them).
+        // Empty object kept so the guardrail + pending-migration code below has a stable shape.
+        fallback: {},
         // ⚠️ VIOLATION REMOVED — Mar 1, 2026
         // Five HVAC-specific trigger cards that were hardcoded here as defaults have been
         // permanently removed. Hardcoded trigger content is a platform violation:
@@ -807,8 +803,6 @@ async function validatePublishReadiness(companyDoc) {
   const recoveryMessages = companyId
     ? await LLM0ControlsLoader.loadRecoveryMessages(String(companyId))
     : {};
-  const fallback = discovery.playbook?.fallback || {};
-  const discoveryHandoff = discovery.discoveryHandoff || {};
   const voiceSettings = settings.voiceSettings || {};
 
   const requiredChecks = [
@@ -820,10 +814,6 @@ async function validatePublishReadiness(companyDoc) {
     { key: 'agent2.greetings.callStart.emergencyFallback', ok: Boolean((callStart.emergencyFallback || '').trim()) },
     { key: 'agent2.greetings.returnCaller.text', ok: Boolean(returnCallerText.trim()) },
     { key: 'agent2.discovery.holdMessage', ok: Boolean((discovery.holdMessage || '').trim()) },
-    { key: 'agent2.discovery.discoveryHandoff.consentQuestion', ok: Boolean((discoveryHandoff.consentQuestion || '').trim()) },
-    { key: 'agent2.discovery.playbook.fallback.noMatchAnswer', ok: Boolean((fallback.noMatchAnswer || '').trim()) },
-    { key: 'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured', ok: Boolean((fallback.noMatchWhenReasonCaptured || '').trim()) },
-    { key: 'agent2.discovery.playbook.fallback.noMatchClarifierQuestion', ok: Boolean((fallback.noMatchClarifierQuestion || '').trim()) },
     { key: 'voiceSettings.voiceId', ok: Boolean((voiceSettings.voiceId || '').trim()) },
     { key: 'agent2.discovery.followUpConsent.yes.response', ok: Boolean((discovery.followUpConsent?.yes?.response || '').trim()) },
     { key: 'agent2.discovery.followUpConsent.no.response', ok: Boolean((discovery.followUpConsent?.no?.response || '').trim()) },
@@ -843,10 +833,6 @@ async function validatePublishReadiness(companyDoc) {
     'callHandling.recoveryMessages.audioUnclear': 'llm.html#call-handling',
     'callHandling.recoveryMessages.silenceRecovery': 'llm.html#call-handling',
     'agent2.discovery.holdMessage': 'booking.html#booking-prompts',
-    'agent2.discovery.discoveryHandoff.consentQuestion': 'agent2.html#discovery-fallback-messages',
-    'agent2.discovery.playbook.fallback.noMatchAnswer': 'agent2.html#discovery-fallback-messages',
-    'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured': 'agent2.html#discovery-fallback-messages',
-    'agent2.discovery.playbook.fallback.noMatchClarifierQuestion': 'agent2.html#discovery-fallback-messages',
     'voiceSettings.voiceId': 'company-profile.html#voice-settings',
     'agent2.discovery.followUpConsent.yes.response': 'triggers.html#followup-consent-section',
     'agent2.discovery.followUpConsent.no.response': 'triggers.html#followup-consent-section',
@@ -885,18 +871,6 @@ function getInvalidRequiredFieldUpdates(updates) {
   }
   if (updates?.discovery?.holdMessage !== undefined && isBlank(updates.discovery.holdMessage)) {
     invalid.push('agent2.discovery.holdMessage');
-  }
-  if (updates?.discovery?.discoveryHandoff?.consentQuestion !== undefined && isBlank(updates.discovery.discoveryHandoff.consentQuestion)) {
-    invalid.push('agent2.discovery.discoveryHandoff.consentQuestion');
-  }
-  if (updates?.discovery?.playbook?.fallback?.noMatchAnswer !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchAnswer)) {
-    invalid.push('agent2.discovery.playbook.fallback.noMatchAnswer');
-  }
-  if (updates?.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchWhenReasonCaptured)) {
-    invalid.push('agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured');
-  }
-  if (updates?.discovery?.playbook?.fallback?.noMatchClarifierQuestion !== undefined && isBlank(updates.discovery.playbook.fallback.noMatchClarifierQuestion)) {
-    invalid.push('agent2.discovery.playbook.fallback.noMatchClarifierQuestion');
   }
   if (updates?.discovery?.followUpConsent) {
     const requiredBuckets = ['yes', 'no', 'reprompt', 'hesitant', 'maintenance', 'service_call'];

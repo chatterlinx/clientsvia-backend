@@ -849,20 +849,6 @@ async function checkUiCoverage(company) {
     });
   }
 
-  // Check 6: Discovery handoff consent question (CRITICAL)
-  const consentQuestion = company.aiAgentSettings?.agent2?.discovery?.discoveryHandoff?.consentQuestion;
-  if (!consentQuestion || !consentQuestion.trim()) {
-    issues.push({
-      component: 'discoveryHandoffConsentQuestion',
-      severity: 'CRITICAL',
-      issue: 'Discovery handoff consent question is blank',
-      uiPath: 'MISSING',
-      expectedUiLocation: 'agent2.html → Discovery handoff consent question field',
-      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
-      impact: 'Booking consent prompt may fallback to non-UI speech'
-    });
-  }
-
   // Check 6b: Follow-up Consent Gate (HIGH)
   const fuc = company.aiAgentSettings?.agent2?.discovery?.followUpConsent;
   const fucYesPhrases = fuc?.yes?.phrases || [];
@@ -878,48 +864,13 @@ async function checkUiCoverage(company) {
     });
   }
 
-  // Check 7: Playbook fallback noMatchAnswer (CRITICAL)
-  const fallback = company.aiAgentSettings?.agent2?.discovery?.playbook?.fallback || {};
-  if (!fallback.noMatchAnswer || !fallback.noMatchAnswer.trim()) {
-    issues.push({
-      component: 'fallbackNoMatchAnswer',
-      severity: 'CRITICAL',
-      issue: 'Discovery fallback.noMatchAnswer is blank',
-      uiPath: 'MISSING',
-      expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
-      impact: 'No-match handling may require non-UI emergency fallback'
-    });
-  }
+  // NOTE (Apr 2026): Checks 6/7/8/9 removed — they policed orphan fields
+  // (discoveryHandoff.consentQuestion + playbook.fallback.noMatch*) that were
+  // never read by the live call engine. KC GATE 4 LLM fallback +
+  // emergencyFallbackLine own the no-match path today.
 
-  // Check 8: Playbook fallback noMatchWhenReasonCaptured (HIGH)
-  if (!fallback.noMatchWhenReasonCaptured || !fallback.noMatchWhenReasonCaptured.trim()) {
-    issues.push({
-      component: 'fallbackNoMatchWhenReasonCaptured',
-      severity: 'HIGH',
-      issue: 'Discovery fallback.noMatchWhenReasonCaptured is blank',
-      uiPath: 'MISSING',
-      expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
-      impact: 'Reason-captured flows may degrade response quality'
-    });
-  }
-
-  // Check 9: Playbook fallback noMatchClarifierQuestion (HIGH)
-  if (!fallback.noMatchClarifierQuestion || !fallback.noMatchClarifierQuestion.trim()) {
-    issues.push({
-      component: 'fallbackNoMatchClarifierQuestion',
-      severity: 'HIGH',
-      issue: 'Discovery fallback.noMatchClarifierQuestion is blank',
-      uiPath: 'MISSING',
-      expectedUiLocation: 'agent2.html → Discovery fallback messages',
-      backendFile: 'services/engine/kc/KCDiscoveryRunner.js',
-      impact: 'Clarifier follow-up may degrade to emergency fallback'
-    });
-  }
-  
   // Calculate compliance percentage
-  const totalComponents = 17; // Total required UI-driven speech components
+  const totalComponents = 13; // Total required UI-driven speech components
   const compliantComponents = totalComponents - issues.length;
   const compliantPercentage = Math.round((compliantComponents / totalComponents) * 100);
   
