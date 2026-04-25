@@ -406,12 +406,13 @@ function _renderAddPatternsContent(turnNum) {
   const merged = _cueGapMerged.get(turnNum);
   if (!merged) return;
 
+  // ── Cue phrase rows (non-trade fields) ──────────────────────────────────
   const tokenLabels = {
     requestCue: 'REQUEST', permissionCue: 'PERMISSION', infoCue: 'INFO',
     directiveCue: 'DIRECTIVE', actionCore: 'ACTION', urgencyCore: 'URGENCY', modifierCore: 'MODIFIER'
   };
 
-  const rows = Object.entries(tokenLabels).map(([token, label]) => {
+  const cueRows = Object.entries(tokenLabels).map(([token, label]) => {
     const vals = merged[token] || [];
     if (!vals.length) return '';
     return vals.map((v, vi) => {
@@ -422,18 +423,125 @@ function _renderAddPatternsContent(turnNum) {
         <input id="${inputId}" type="text" value="${v.replace(/"/g, '&quot;')}"
           style="flex:1;min-width:140px;font-size:12px;padding:3px 7px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" />
         <button onclick="saveCuePattern('${inputId}','${token}','${statusId}')"
-          style="font-size:11px;padding:2px 10px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
-          Save
-        </button>
+          style="font-size:11px;padding:2px 10px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">Save</button>
         <span id="${statusId}" style="font-size:11px;"></span>
       </div>`;
     }).join('');
   }).filter(Boolean).join('');
 
+  // ── Trade terms section (async — loads vocabularies then renders) ────────
+  const tradeTerms = (merged.tradeMatches || []).filter(Boolean);
+  const tradeSecId = `cue-trade-sec-${turnNum}`;
+  const tradeSec = tradeTerms.length
+    ? `<div id="${tradeSecId}" style="margin-top:10px;padding-top:8px;border-top:1px solid #d1fae5;">
+         <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;">🔧 Add to Trade Vocabulary</div>
+         <div style="font-size:11px;color:#6b7280;font-style:italic;">Loading vocabularies…</div>
+       </div>`
+    : '';
+
   panelEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:5px;">
     <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px;">＋ Add to GlobalShare cuePhrases</div>
-    ${rows || '<div style="font-size:11px;color:#6b7280;">No text values to add.</div>'}
+    ${cueRows || '<div style="font-size:11px;color:#6b7280;">No cue values to add.</div>'}
+    ${tradeSec}
   </div>`;
+
+  // Async: load trade vocabularies, then render the trade term rows
+  if (tradeTerms.length) {
+    _loadAndRenderTradeTerms(turnNum, tradeSecId, tradeTerms);
+  }
+}
+
+async function _loadAndRenderTradeTerms(turnNum, sectionId, tradeTerms) {
+  const secEl = document.getElementById(sectionId);
+  if (!secEl) return;
+
+  const tok = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+  const authHdr = tok ? { 'Authorization': `Bearer ${tok}` } : {};
+
+  let vocabs = [];
+  try {
+    const piData = await fetch('/api/admin/globalshare/phrase-intelligence', { headers: authHdr })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    vocabs = Array.isArray(piData.tradeVocabularies) ? piData.tradeVocabularies : [];
+  } catch (err) {
+    secEl.querySelector('div:last-child').textContent = `Failed to load vocabularies: ${err.message}`;
+    return;
+  }
+
+  if (!vocabs.length) {
+    secEl.innerHTML = `<div style="font-size:11px;color:#6b7280;">No trade vocabularies configured — create one in GlobalShare → Trade Vocabularies.</div>`;
+    return;
+  }
+
+  // Build option list once
+  const options = vocabs.map(v => `<option value="${esc(v.tradeKey)}">${esc(v.label)} (${(v.terms||[]).length} terms)</option>`).join('');
+
+  // Check which terms already exist in ALL vocabularies
+  const allTerms = new Set(vocabs.flatMap(v => (v.terms || []).map(t => t.toLowerCase().trim())));
+
+  const rows = tradeTerms.map((term, ti) => {
+    const alreadyExists = allTerms.has(term.toLowerCase().trim());
+    const selectId = `cue-tv-sel-${turnNum}-${ti}`;
+    const statusId = `cue-tv-st-${turnNum}-${ti}`;
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+      <span style="font-size:11px;font-weight:700;color:#0369a1;width:80px;flex-shrink:0;">TRADE</span>
+      <span style="flex:1;min-width:100px;font-size:12px;font-family:monospace;padding:3px 7px;border:1px solid #bae6fd;border-radius:4px;background:#f0f9ff;color:#0c4a6e;">${esc(term)}</span>
+      <select id="${selectId}" style="font-size:11px;padding:3px 6px;border:1px solid #d1d5db;border-radius:4px;${alreadyExists ? 'opacity:0.5;' : ''}">
+        ${options}
+      </select>
+      <button onclick="saveTradeVocabTerm('${esc(term)}','${selectId}','${statusId}')"
+        style="font-size:11px;padding:2px 10px;border-radius:4px;background:#0369a1;color:#fff;border:none;cursor:pointer;font-weight:600;${alreadyExists ? 'opacity:0.5;' : ''}">
+        Add
+      </button>
+      <span id="${statusId}" style="font-size:11px;">${alreadyExists ? '<span style="color:#6b7280;">✓ already in vocab</span>' : ''}</span>
+    </div>`;
+  }).join('');
+
+  secEl.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:#0369a1;margin-bottom:6px;">🔧 Add to Trade Vocabulary</div>
+    ${rows}`;
+}
+
+async function saveTradeVocabTerm(term, selectId, statusId) {
+  const selectEl = document.getElementById(selectId);
+  const statusEl = document.getElementById(statusId);
+  if (!selectEl || !statusEl) return;
+
+  const tradeKey = selectEl.value;
+  if (!tradeKey || !term) return;
+
+  statusEl.innerHTML = '<span style="color:#6b7280;">Saving…</span>';
+
+  try {
+    const tok = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const authHdr = tok ? { 'Authorization': `Bearer ${tok}` } : {};
+
+    const piData = await fetch('/api/admin/globalshare/phrase-intelligence', { headers: authHdr })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+
+    const vocabs = Array.isArray(piData.tradeVocabularies) ? piData.tradeVocabularies : [];
+    const vocab  = vocabs.find(v => v.tradeKey === tradeKey);
+    if (!vocab) { statusEl.innerHTML = '<span style="color:#991b1b;">✗ trade not found</span>'; return; }
+
+    const termLower = term.toLowerCase().trim();
+    if ((vocab.terms || []).map(t => t.toLowerCase()).includes(termLower)) {
+      statusEl.innerHTML = '<span style="color:#6b7280;">✓ already exists</span>';
+      return;
+    }
+
+    vocab.terms = [...(vocab.terms || []), termLower];
+    const saveRes = await fetch('/api/admin/globalshare/phrase-intelligence/tradeVocabularies', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHdr },
+      body: JSON.stringify({ data: vocabs })
+    });
+    if (!saveRes.ok) throw new Error(`HTTP ${saveRes.status}`);
+
+    statusEl.innerHTML = `<span style="color:#059669;">✓ added to ${esc(vocab.label)}</span>`;
+    selectEl.disabled = true;
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#991b1b;">✗ ${esc(err.message)}</span>`;
+  }
 }
 
 function toggleMergedPatternPanel(turnNum) {
