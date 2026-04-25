@@ -92,6 +92,17 @@ async function aggregateRecent({ companyId = null } = {}) {
   _loadDeps();
   if (!CallTranscriptV2) return null;
 
+  // Fail-fast when Mongo isn't connected. Without this, .aggregate() buffers
+  // for 10s before timing out — the health endpoint should respond quickly
+  // with `activity: null` so callers can distinguish "Mongo down" from
+  // "Mongo up but coregate idle for 24h".
+  try {
+    const mongoose = require('mongoose');
+    if (!mongoose?.connection || mongoose.connection.readyState !== 1) {
+      return null;
+    }
+  } catch (_e) { /* mongoose not loaded → bail */ return null; }
+
   const since = new Date(Date.now() - WINDOW_MS);
 
   // Two cheap aggregations:
