@@ -171,12 +171,41 @@ async function runCueGapAnalysis(btn, turnNum) {
       </div>`;
     }).join('');
 
+    // Simulated GATE 2.4 from merged Groq values
+    const _mTrade  = (merged.tradeMatches || []).length;
+    const _mNonTrade = _CUE_FIELDS
+      .filter(([,k]) => k !== 'tradeMatches')
+      .filter(([,k]) => (merged[k] || []).length > 0).length;
+    const _mFc     = _mNonTrade + (_mTrade > 0 ? 1 : 0);  // fieldCount sim
+    const _mHasTrade = _mTrade > 0;
+    const _mBypass = _mFc === 2 && _mHasTrade &&
+                     !!(merged.modifierCore?.length || merged.actionCore?.length || merged.urgencyCore?.length);
+    const _mPass   = (_mFc >= 3 && _mHasTrade) || _mBypass;
+    let simGate24Html;
+    if (_mPass) {
+      const bNote = _mBypass ? ' <span style="color:#059669;">(narrative bypass)</span>' : '';
+      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #86efac;">GATE 2.4 PASS</span>
+        <span style="font-size:11px;color:#374151;margin-left:4px;">${_mFc}/8 fields · trade hit → would route via CueExtractor${bNote}</span>`;
+    } else if (_mFc > 0) {
+      const missing = 3 - _mFc;
+      const bNote = _mHasTrade && _mFc === 2
+        ? ' · has trade but needs modifier/action/urgency for bypass'
+        : !_mHasTrade ? ' · no trade hit' : '';
+      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">GATE 2.4 FAIL</span>
+        <span style="font-size:11px;color:#374151;margin-left:4px;">${_mFc}/8 fields · needs ${missing} more${bNote} → would fall to UAP phrase index</span>`;
+    } else {
+      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;">GATE 2.4 SKIP</span>
+        <span style="font-size:11px;color:#9ca3af;margin-left:4px;">0 fields extracted</span>`;
+    }
+    const simGateLine = `<div style="margin-bottom:6px;line-height:1.5;">${simGate24Html}</div>`;
+
     const matchResultId  = `cue-match-result-${turnNum}`;
     const patternPanelId = `cue-pattern-panel-${turnNum}`;
 
     container.innerHTML = `<div style="margin-top:6px;padding-top:5px;border-top:1px dashed #e5e7eb;">
       <div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px;">🤖 GROQ — all signals merged</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:6px;">${cells}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:4px;">${cells}</div>
+      ${simGateLine}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
         <button onclick="runAllPhraseMatches(${turnNum})"
           style="font-size:12px;padding:3px 12px;border-radius:4px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;">
@@ -1041,10 +1070,34 @@ function _renderInlineUapSummary(agentTurn, turns) {
       driftChip = ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`;
     }
 
+    // GATE 2.4 status — computed from actual cueFrame values
+    const _fc        = cf.fieldCount ?? 0;
+    const _hasTrade  = tradeCount > 0;
+    const _bypass    = _fc === 2 && _hasTrade &&
+                       !!(cf.modifierCore || cf.actionCore || cf.urgencyCore);
+    const _gate24Pass = (_fc >= 3 && _hasTrade) || _bypass;
+    let gate24Html;
+    if (_gate24Pass) {
+      const bypassNote = _bypass ? ' <span style="color:#059669;">(narrative bypass)</span>' : '';
+      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #86efac;">GATE 2.4 PASS</span>
+        <span style="font-size:11px;color:#374151;margin-left:4px;">${_fc}/8 fields · trade hit → routes to CueExtractor${bypassNote}</span>`;
+    } else if (_fc > 0) {
+      const missing = 3 - _fc;
+      const bypassNote = _hasTrade && _fc === 2
+        ? ' · has trade but needs modifier/action/urgency for bypass'
+        : !_hasTrade ? ' · no trade hit' : '';
+      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">GATE 2.4 FAIL</span>
+        <span style="font-size:11px;color:#374151;margin-left:4px;">${_fc}/8 fields · needs ${missing} more${bypassNote} → falls to UAP phrase index</span>`;
+    } else {
+      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;">GATE 2.4 SKIP</span>
+        <span style="font-size:11px;color:#9ca3af;margin-left:4px;">0 fields extracted</span>`;
+    }
+    const gateLine = `<div style="margin-top:5px;line-height:1.5;">${gate24Html}</div>`;
+
     // Gap analysis button + Card 2 placeholder
     const gapBtn = callerText && turnNum != null
-      ? `<div style="margin-top:4px;">
-           <button onclick="runCueGapAnalysis(this, ${turnNum})" style="font-size:9px;padding:2px 8px;border-radius:3px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;cursor:pointer;font-weight:600;">🔍 Analyze gap →</button>
+      ? `<div style="margin-top:6px;">
+           <button onclick="runCueGapAnalysis(this, ${turnNum})" style="font-size:11px;padding:2px 10px;border-radius:3px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;cursor:pointer;font-weight:600;">🔍 Analyze gap →</button>
          </div>
          <div id="cue-gap-${turnNum}"></div>`
       : '';
@@ -1052,6 +1105,7 @@ function _renderInlineUapSummary(agentTurn, turns) {
     gridLine = `<div style="margin-top:5px;">
       <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame — ACTUAL${driftChip}</div>
       <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+      ${gateLine}
       ${gapBtn}
     </div>`;
   }
