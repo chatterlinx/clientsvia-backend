@@ -55,6 +55,14 @@ const path = require('path');
 try { require('dotenv').config(); } catch (_e) { /* optional */ }
 
 const { MongoClient, ObjectId } = require('mongodb');
+// Mongoose is required IN ADDITION to the raw driver because KCDiscoveryRunner
+// (and everything it transitively requires — CompanyKnowledgeContainer,
+// AdminSettings, Customer, etc.) queries through Mongoose models. Mongoose
+// keeps its own connection pool, separate from the raw driver. Without
+// mongoose.connect() each Model query inside the engine buffers for 10s
+// then throws "buffering timed out" — silently masquerading as
+// "no_containers_configured" in KC's catch path.
+const mongoose = require('mongoose');
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 const args       = process.argv.slice(2);
@@ -179,11 +187,26 @@ function renderTurn(t, capturedEvents, capturedRoute) {
   const mongo = await MongoClient.connect(process.env.MONGODB_URI);
   const db    = mongo.db('clientsvia');
 
+  // Connect Mongoose against the same URI. KCDiscoveryRunner and every model it
+  // touches (CompanyKnowledgeContainer, AdminSettings, Customer, BehaviorCard,
+  // CallTranscriptV2, etc.) queries via Mongoose. Mongoose maintains its own
+  // connection pool — independent of the raw driver above. Skipping this step
+  // makes every Model.find()/findById() inside the engine wait the default
+  // 10000ms buffer timeout and then throw, which the engine swallows in catch
+  // blocks, leaving us with the misleading `containerCount: 0,
+  // reason: "no_containers_configured"` outcome.
+  await mongoose.connect(process.env.MONGODB_URI, { dbName: 'clientsvia' });
+
+  const cleanup = async () => {
+    try { await mongoose.disconnect(); } catch (_e) { /* best-effort */ }
+    try { await mongo.close(); }       catch (_e) { /* best-effort */ }
+  };
+
   // 1. Load Company
   const company = await db.collection('companiesCollection').findOne({ _id: new ObjectId(companyId) });
   if (!company) {
     console.error(`❌ Company ${companyId} not found`);
-    await mongo.close();
+    await cleanup();
     process.exit(1);
   }
 
@@ -194,21 +217,21 @@ function renderTurn(t, capturedEvents, capturedRoute) {
   });
   if (!cust) {
     console.error(`❌ No customer record contains callSid ${callSid} for company ${companyId}`);
-    await mongo.close();
+    await cleanup();
     process.exit(1);
   }
 
   const note = (cust.discoveryNotes || []).find(n => n.callSid === callSid);
   if (!note) {
     console.error(`❌ Customer ${cust.phone || cust._id} found but no discoveryNote with callSid`);
-    await mongo.close();
+    await cleanup();
     process.exit(1);
   }
 
   const turns = extractTurns(note.qaLog);
   if (turns.length === 0) {
     console.error(`❌ Call found but qaLog has no turns`);
-    await mongo.close();
+    await cleanup();
     process.exit(1);
   }
 
@@ -309,9 +332,13 @@ function renderTurn(t, capturedEvents, capturedRoute) {
     }, null, 2));
   }
 
-  await mongo.close();
+  await cleanup();
   process.exit(0);
 })().catch(err => {
   console.error('FATAL:', err.stack || err.message);
-  process.exit(1);
+  // Best-effort cleanup on fatal — connections may or may not exist depending
+  // on where we threw. Both libs tolerate close-when-already-closed.
+  Promise.allSettled([mongoose.disconnect(), /* mongo handle is local-scope; let process.exit reap it */]).finally(() => {
+    process.exit(1);
+  });
 });
