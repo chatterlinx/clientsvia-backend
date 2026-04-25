@@ -239,7 +239,7 @@ async function runAllPhraseMatches(turnNum) {
     return;
   }
 
-  resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Matching ${values.length} values…</div>`;
+  resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Embedding &amp; matching ${values.length} values against KC phrase index… (5-10s)</div>`;
 
   const results = await Promise.all(
     values.map(phrase =>

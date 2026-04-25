@@ -3512,71 +3512,64 @@ router.post('/company/:companyId/cue-phrase-match', async (req, res) => {
     }
 
     // ── Top-3 phrase matches via embedding cosine similarity ─────────────
-    // Load caller phrases from all active containers for this company
+    // Load caller phrases from all active containers for this company.
+    // Wrapped in a timeout — embedding all KC phrases via OpenAI can take 3-8s.
+    // If it times out, topMatches degrades to [] and UAP match still returns.
     const phraseEmb = phraseEmbs[0];
     let topMatches = [];
     if (phraseEmb?.length) {
-      const allDocs = await CompanyKnowledgeContainer.collection.find(
-        { companyId, isActive: { $ne: false } },
-        { projection: {
-          title: 1, kcId: 1,
-          'sections.label': 1, 'sections.isActive': 1,
-          'sections.callerPhrases.text': 1, 'sections.callerPhrases.anchorWords': 1,
-        } }
-      ).toArray();
+      const _topMatchTimeout = new Promise(resolve => setTimeout(() => resolve(null), 8000));
+      const _topMatchWork = (async () => {
+        const allDocs = await CompanyKnowledgeContainer.collection.find(
+          { companyId, isActive: { $ne: false } },
+          { projection: {
+            title: 1, kcId: 1,
+            'sections.label': 1, 'sections.isActive': 1,
+            'sections.callerPhrases.text': 1, 'sections.callerPhrases.anchorWords': 1,
+          } }
+        ).toArray();
 
-      // Flatten all caller phrases with section metadata
-      const cpList = [];
-      for (const doc of allDocs) {
-        const docId = doc._id.toString();
-        (doc.sections || []).forEach((sec, idx) => {
-          if (sec.isActive === false) return;
-          const kcId = doc.kcId || null;
-          const sectionKcId = kcId ? `${kcId}-${String(idx + 1).padStart(2, '0')}` : null;
-          (sec.callerPhrases || []).forEach(cp => {
-            const text = typeof cp === 'string' ? cp : cp.text;
-            if (text) cpList.push({
-              text,
-              containerId:   docId,
-              containerName: doc.title || 'Untitled',
-              sectionIndex:  idx,
-              sectionLabel:  sec.label || `Section ${idx + 1}`,
-              sectionKcId,
+        const cpList = [];
+        for (const doc of allDocs) {
+          const docId = doc._id.toString();
+          (doc.sections || []).forEach((sec, idx) => {
+            if (sec.isActive === false) return;
+            const kcId = doc.kcId || null;
+            const sectionKcId = kcId ? `${kcId}-${String(idx + 1).padStart(2, '0')}` : null;
+            (sec.callerPhrases || []).forEach(cp => {
+              const text = typeof cp === 'string' ? cp : cp.text;
+              if (text) cpList.push({ text, containerId: docId, containerName: doc.title || 'Untitled', sectionIndex: idx, sectionLabel: sec.label || `Section ${idx + 1}`, sectionKcId });
             });
           });
-        });
-      }
-
-      const cpEmbs = cpList.length
-        ? await SemanticMatchService.embedBatch(cpList.map(c => c.text))
-        : [];
-
-      // Best match per section (highest cosine similarity)
-      const bestPerSection = new Map();
-      for (let i = 0; i < cpEmbs.length; i++) {
-        const sim = _cosineSimilarity(phraseEmb, cpEmbs[i]);
-        if (sim < 0.65) continue;
-        const cp = cpList[i];
-        const key = `${cp.containerId}:${cp.sectionIndex}`;
-        const prev = bestPerSection.get(key);
-        if (!prev || sim > prev.score) {
-          bestPerSection.set(key, { score: sim, phraseText: cp.text, ...cp });
         }
-      }
 
-      topMatches = [...bestPerSection.values()]
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map(m => ({
-          containerId:   m.containerId,
-          containerName: m.containerName,
-          sectionIndex:  m.sectionIndex,
-          sectionLabel:  m.sectionLabel,
-          sectionKcId:   m.sectionKcId,
-          phraseText:    m.phraseText,
-          score:         Math.round(m.score * 1000) / 1000,
-          tier:          m.score >= 0.90 ? '90%+' : m.score >= 0.80 ? '80%+' : '70%+',
-        }));
+        const cpEmbs = cpList.length ? await SemanticMatchService.embedBatch(cpList.map(c => c.text)) : [];
+
+        const bestPerSection = new Map();
+        for (let i = 0; i < cpEmbs.length; i++) {
+          const sim = _cosineSimilarity(phraseEmb, cpEmbs[i]);
+          if (sim < 0.65) continue;
+          const cp = cpList[i];
+          const key = `${cp.containerId}:${cp.sectionIndex}`;
+          const prev = bestPerSection.get(key);
+          if (!prev || sim > prev.score) bestPerSection.set(key, { score: sim, phraseText: cp.text, ...cp });
+        }
+
+        return [...bestPerSection.values()]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+          .map(m => ({
+            containerId:   m.containerId,
+            containerName: m.containerName,
+            sectionIndex:  m.sectionIndex,
+            sectionLabel:  m.sectionLabel,
+            sectionKcId:   m.sectionKcId,
+            phraseText:    m.phraseText,
+            score:         Math.round(m.score * 1000) / 1000,
+            tier:          m.score >= 0.90 ? '90%+' : m.score >= 0.80 ? '80%+' : '70%+',
+          }));
+      })();
+      topMatches = (await Promise.race([_topMatchWork, _topMatchTimeout])) || [];
     }
 
     return res.json({
