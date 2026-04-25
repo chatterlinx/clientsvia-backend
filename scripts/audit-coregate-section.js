@@ -56,9 +56,37 @@ const sectionIdx   = parseInt(arg('sectionIdx', '0'), 10);
 const input        = arg('input');
 const anchorsCsv   = arg('anchors', '');
 const anchorWords  = anchorsCsv.split(',').map(s => s.trim()).filter(Boolean);
+// Multi-input flags — pipe-separated so individual inputs can contain commas.
+// Defaults provide a reasonable threshold-calibration set if none passed.
+const positivesArg = arg('positives', null);
+const negativesArg = arg('negatives', null);
+const DEFAULT_POSITIVES = [
+  // Same intent ("will I be charged again for the same trip"), different surface forms.
+  'do i have to pay for somebody to come back',
+  'will i be charged again for another visit',
+  'is there a fee if you have to come out twice',
+  'do i pay again for the same problem',
+];
+const DEFAULT_NEGATIVES = [
+  // Pure off-topic — wouldn't reach Logic 2 (no anchor match), but tests the floor.
+  'what time do you open',
+  'i need to schedule an appointment',
+  'the technician already came yesterday',
+  // Anchor false positives — these CAN reach Logic 2 because they share anchor
+  // words with the section ("pay" / "again"). The new gate must reject them.
+  'do you have to pay for parking again',
+  'i can pay you again next time we talk',
+  'come back and tell me again what your name is',
+];
+const positives = (positivesArg
+  ? positivesArg.split('|').map(s => s.trim()).filter(Boolean)
+  : DEFAULT_POSITIVES);
+const negatives = (negativesArg
+  ? negativesArg.split('|').map(s => s.trim()).filter(Boolean)
+  : DEFAULT_NEGATIVES);
 
 if (!companyId || !containerId || !input || anchorWords.length === 0) {
-  console.error('Usage: node scripts/audit-coregate-section.js --companyId <id> --containerId <id> --sectionIdx <n> --input "<utterance>" --anchors "a,b,c"');
+  console.error('Usage: node scripts/audit-coregate-section.js --companyId <id> --containerId <id> --sectionIdx <n> --input "<utterance>" --anchors "a,b,c" [--positives "p1|p2|..."] [--negatives "n1|n2|..."]');
   process.exit(1);
 }
 if (!process.env.MONGODB_URI) { console.error('❌ MONGODB_URI not set'); process.exit(1); }
@@ -288,6 +316,100 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   }
   console.log('');
 
+  // ── 5c. PART 3 — threshold sweep (positives vs negatives) ────────────────
+  // Per-phrase MAX is only safe to ship if it cleanly separates on-topic
+  // paraphrases from off-topic utterances. We embed each test input raw
+  // (no windowing — embedding-3-small handles short text fine) and compute
+  // per-phrase MAX vs the same section's stored phrase embeddings.
+  //
+  // Two flavors of negative are critical:
+  //   (a) pure off-topic — no anchor words. Wouldn't reach Logic 2 in
+  //       production but tests the absolute score floor of unrelated text.
+  //   (b) anchor false positives — share anchor words with the section but
+  //       carry a different intent ("pay for parking again"). These DO reach
+  //       Logic 2 and are the actual things we need the gate to reject.
+  //
+  // The threshold candidates [0.70, 0.75, 0.78, 0.80] mark which thresholds
+  // each input passes. The right threshold is the highest one that:
+  //   ✅ all positives pass    AND   ✅ all negatives reject
+  hr('═');
+  if (sectionPhraseEmbs.length === 0) {
+    console.log('PART 3 — threshold sweep — SKIPPED (no per-phrase embeddings)');
+    hr('═');
+  } else {
+    console.log(`PART 3 — threshold sweep over per-phrase MAX (positives vs negatives)`);
+    console.log(`         positives: ${positives.length} inputs   negatives: ${negatives.length} inputs`);
+    hr('═');
+
+    // Embed all test inputs in a single batch round-trip per side.
+    const testInputs = [
+      ...positives.map(t => ({ text: t, kind: 'positive' })),
+      ...negatives.map(t => ({ text: t, kind: 'negative' })),
+    ];
+    const allEmbs = await Promise.all(
+      testInputs.map(t => SemanticMatchService.embedText(t.text))
+    );
+
+    // Per-input: compute MAX over section's phrase embeddings.
+    const results = testInputs.map((t, i) => {
+      const emb = allEmbs[i];
+      if (!emb) return { ...t, max: null, winner: null };
+      let best = -Infinity, winText = null;
+      for (const row of sectionPhraseEmbs) {
+        const s = cosine(emb, row.embedding);
+        if (s !== null && s > best) { best = s; winText = row.phraseText; }
+      }
+      return { ...t, max: best, winner: winText };
+    });
+
+    const THRESHOLDS = [0.70, 0.75, 0.78, 0.80];
+    const colW = 8;
+
+    // Print table header
+    const hdrThresh = THRESHOLDS.map(t => `≥${t.toFixed(2)}`.padStart(colW)).join('');
+    console.log('');
+    console.log(`  kind      MAX     ${hdrThresh}   input → winning phrase`);
+    console.log('  ' + '─'.repeat(96));
+
+    for (const r of results) {
+      if (r.max === null) {
+        console.log(`  ${r.kind.padEnd(9)} (no embed)`);
+        continue;
+      }
+      const cells = THRESHOLDS.map(t => {
+        const passes = r.max >= t;
+        // For positives we WANT pass (✅). For negatives we WANT reject (✅).
+        const correct = (r.kind === 'positive') ? passes : !passes;
+        return (correct ? '✅' : '❌').padStart(colW);
+      }).join('');
+      const arrow = r.kind === 'positive' ? '→' : '⊘';
+      console.log(`  ${r.kind.padEnd(9)} ${fmt(r.max)} ${cells}   "${r.text.slice(0, 40)}${r.text.length > 40 ? '…' : ''}"`);
+      console.log(`            ${' '.repeat(colW * THRESHOLDS.length + 6)}   ${arrow} "${(r.winner || '').slice(0, 60)}"`);
+    }
+    console.log('');
+
+    // ── Separation analysis ────────────────────────────────────────────────
+    const posMin = Math.min(...results.filter(r => r.kind === 'positive' && r.max !== null).map(r => r.max));
+    const negMax = Math.max(...results.filter(r => r.kind === 'negative' && r.max !== null).map(r => r.max));
+    const gap   = posMin - negMax;
+    console.log(`  separation:  min(positive) = ${fmt(posMin)}    max(negative) = ${fmt(negMax)}    gap = ${fmt(gap)}`);
+    console.log('');
+    if (gap > 0) {
+      // Pick threshold midway in the gap, biased slightly toward negMax to
+      // forgive paraphrasing more than to admit false positives.
+      const recThresh = Math.round(((negMax + (posMin - negMax) * 0.4)) * 100) / 100;
+      console.log(`  ✅ Clean separation. Recommended threshold: ${recThresh.toFixed(2)}`);
+      console.log(`     (admits all ${results.filter(r => r.kind === 'positive').length} positives, rejects all ${results.filter(r => r.kind === 'negative').length} negatives in this set)`);
+    } else {
+      console.log(`  ⚠️  No clean threshold. min(positive) ≤ max(negative) — overlap zone.`);
+      console.log(`     Architectural change alone won't suffice. Either:`);
+      console.log(`       - add the missing positive paraphrase to section.callerPhrases, OR`);
+      console.log(`       - add a secondary signal (negative keyword check, anchor proximity)`);
+      console.log(`         to disambiguate the overlapping inputs.`);
+    }
+    console.log('');
+  }
+
   // ── 6. Readout ───────────────────────────────────────────────────────────
   hr('═');
   console.log(`READOUT`);
@@ -296,12 +418,15 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   console.log(`        centroid is in the wrong region of embedding space for short`);
   console.log(`        focused utterances. This is the architecture issue.`);
   console.log('');
-  console.log(`PART 2 (per-phrase MAX): if any variant passes 0.80, the architectural`);
-  console.log(`        fix is — replace Logic 2's full-input vs phraseCore comparison`);
-  console.log(`        with per-phrase MAX cosine over callerPhrases[].embedding.`);
-  console.log(`        The per-phrase embeddings already exist (sidecar collection),`);
-  console.log(`        Re-score already builds them, so the change is purely on the`);
-  console.log(`        Logic 2 read side.`);
+  console.log(`PART 2 (per-phrase MAX): scores how well per-phrase MAX cosine works`);
+  console.log(`        against the SAME caller variants we tested in Part 1. If the`);
+  console.log(`        scores jumped meaningfully, the architecture pivot is real.`);
+  console.log('');
+  console.log(`PART 3 (threshold sweep): the recommendation is only valid if positives`);
+  console.log(`        and negatives separate cleanly. The "gap" line is the answer:`);
+  console.log(`        positive gap → ship the architectural change at the recommended`);
+  console.log(`        threshold. Negative gap → the section's vocabulary needs a new`);
+  console.log(`        callerPhrase OR Logic 2 needs a secondary signal beyond cosine.`);
   console.log('');
 
   await cleanup();
