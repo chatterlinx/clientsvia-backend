@@ -2505,7 +2505,8 @@
           <input type="text" class="pf-input" id="pfInput"
             placeholder="Type a caller phrase, e.g. &quot;how often should I get my hvac tuned up&quot;"
             onkeydown="if(event.key==='Enter'){pfScan();event.preventDefault();}">
-          <button class="pf-scan-btn" id="pfScanBtn" onclick="pfScan()">Scan</button>
+          <button class="pf-scan-btn" id="pfScanBtn" onclick="pfScan('live')">▶ Run Live</button>
+          <button class="pf-scan-btn" id="pfImprovedBtn" onclick="pfScan('improved')" style="background:#059669;display:none;">▶ Run Improved</button>
         </div>
         <div id="pfResults"></div>
       </div>
@@ -6875,17 +6876,26 @@ function _pfSimulateMatch(phrase, callerPhrases) {
 }
 
 /* ── Main scan function ─────────────────────────────────────────────── */
-async function pfScan() {
+// Stores the baseline "Run Live" snapshot for before/after comparison
+let _pfLiveSnapshot = null;
+
+async function pfScan(mode = 'live') {
   const phrase = document.getElementById('pfInput').value.trim();
   if (!phrase) return;
 
-  const btn = document.getElementById('pfScanBtn');
-  const resultsEl = document.getElementById('pfResults');
-  btn.disabled = true; btn.textContent = 'Scanning…';
-  resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">Scanning all knowledge containers…</div>';
+  const btn         = document.getElementById('pfScanBtn');
+  const improvedBtn = document.getElementById('pfImprovedBtn');
+  const resultsEl   = document.getElementById('pfResults');
+  const activeBtn   = mode === 'improved' ? improvedBtn : btn;
+
+  activeBtn.disabled = true;
+  activeBtn.textContent = 'Scanning…';
+  if (mode === 'live') {
+    resultsEl.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:16px;">Scanning phrase index across all knowledge containers…</div>';
+  }
 
   try {
-    // Fire cross-scan + test-match + cuePhrases in parallel
+    // Phrase index + CueExtractor only — no content scoring
     const [result, tmResult, piResult] = await Promise.all([
       AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/company/${S.companyId}/knowledge/cross-scan`,
@@ -6899,80 +6909,105 @@ async function pfScan() {
       ).catch(() => null),
       AgentConsoleAuth.apiFetch('/api/admin/globalshare/phrase-intelligence').catch(() => null),
     ]);
-    // Cache cuePhrases for cue editor too
+
     _pfCueAllPatterns = piResult?.cuePhrases || [];
-    _pfSynonymGroups = piResult?.synonymGroups || [];
+    _pfSynonymGroups  = piResult?.synonymGroups || [];
     if (!result.success) throw new Error(result.error || 'Scan failed');
 
-    const scanResult = result.results?.[0];
+    const scanResult    = result.results?.[0];
+    // Phrase index only — show ALL matches so you can spot containers
+    // that need negative keywords to suppress false routing
+    const phraseMatches = (scanResult?.phraseMatches || [])
+      .filter(m => m.phraseScore > 0)
+      .sort((a, b) => (b.phraseScore || 0) - (a.phraseScore || 0));
 
-    // ── CueExtractor Strip + Runtime Analysis Panel ──
-    let html = _pfBuildCueStrip(tmResult?.cueFrame, tmResult, _pfCueAllPatterns);
+    const cueFrame  = tmResult?.cueFrame || null;
+    const fieldCount = cueFrame?.fieldCount || 0;
+    const gatePass  = fieldCount >= 3;
+
+    // Snapshot for comparison
+    const snapshot = { phrase, phraseMatches, cueFrame, fieldCount, gatePass, tmResult };
+    if (mode === 'live') {
+      _pfLiveSnapshot = snapshot;
+      improvedBtn.style.display = 'inline-block';
+    }
+
+    // ── CueExtractor pass/fail strip ──
+    let html = _pfBuildCueStrip(cueFrame, tmResult, _pfCueAllPatterns);
     html += _pfBuildRuntimePanel(tmResult);
 
-    if (!scanResult?.matches?.length && !scanResult?.phraseMatches?.length) {
-      html += '<div class="pf-no-match">No matches found across any KC.</div>';
+    // ── Before/After delta bar (improved mode only) ──
+    if (mode === 'improved' && _pfLiveSnapshot) {
+      const prev = _pfLiveSnapshot;
+      const fcDelta  = fieldCount - prev.fieldCount;
+      const fcArrow  = fcDelta > 0 ? `<span style="color:#059669;font-weight:700;">+${fcDelta} ▲</span>`
+                     : fcDelta < 0 ? `<span style="color:#dc2626;">−${Math.abs(fcDelta)} ▼</span>`
+                     : `<span style="color:#6b7280;">no change</span>`;
+      const gatePrev = prev.gatePass ? 'PASS' : 'FAIL';
+      const gateNow  = gatePass      ? 'PASS' : 'FAIL';
+      const gateColor = gatePass && !prev.gatePass ? '#059669'
+                      : !gatePass && prev.gatePass  ? '#dc2626' : '#6b7280';
+      const pmPrev = prev.phraseMatches.length;
+      const pmNow  = phraseMatches.length;
+      const pmDelta = pmNow - pmPrev;
+      const pmArrow = pmDelta > 0 ? `<span style="color:#059669;font-weight:700;">+${pmDelta} ▲</span>`
+                    : pmDelta < 0 ? `<span style="color:#dc2626;">−${Math.abs(pmDelta)} ▼</span>`
+                    : `<span style="color:#6b7280;">no change</span>`;
+      html = `<div style="padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;margin-bottom:10px;font-size:13px;">
+        <strong style="color:#059669;">▶ IMPROVED vs LIVE</strong>
+        &nbsp;·&nbsp; Fields: <strong>${prev.fieldCount}→${fieldCount}</strong> ${fcArrow}
+        &nbsp;·&nbsp; Gate 2.4: <strong style="color:${gateColor};">${gatePrev}→${gateNow}</strong>
+        &nbsp;·&nbsp; Phrase hits: <strong>${pmPrev}→${pmNow}</strong> ${pmArrow}
+      </div>` + html;
+    }
+
+    // ── Phrase match results (phrase index only) ──
+    if (!phraseMatches.length) {
+      html += '<div class="pf-no-match">No phrase index matches — phrase is not in any KC callerPhrases.</div>';
       resultsEl.innerHTML = html;
       _pfShowDraftButton(resultsEl, phrase);
       return;
     }
 
-    // ── Merge content matches + phrase matches into unified list ──
-    const merged = _pfMergeResults(scanResult.matches || [], scanResult.phraseMatches || []);
-
-    // ── Build result cards ──
     html += '<div class="pf-results">';
-    merged.forEach((m, rank) => {
-      const cPct   = m.contentScore ? Math.round(m.contentScore * 100) : 0;
-      const pPct   = m.phraseScore  ? Math.round(m.phraseScore * 100)  : 0;
-      const bestPct = Math.max(cPct, pPct);
-      const bestCls = bestPct >= 90 ? 'high' : bestPct >= 70 ? 'mid' : 'low';
-      const cCls   = cPct >= 90 ? 'high' : cPct >= 70 ? 'mid' : 'low';
-      const pCls   = pPct >= 90 ? 'high' : pPct >= 70 ? 'mid' : 'low';
-      const isTop  = rank === 0 && bestPct >= 85;
+    phraseMatches.forEach((m, rank) => {
+      const pPct = Math.round((m.phraseScore || 0) * 100);
+      const pCls = pPct >= 90 ? 'high' : pPct >= 70 ? 'mid' : 'low';
+      const isTop = rank === 0 && pPct >= 80;
 
       html += `<div class="pf-result-card${isTop ? ' top' : ''}"
         onclick="_pfLoadEditor('${m.containerId}',${m.sectionIndex},this)">
         <div class="pf-result-row">
           <div class="pf-dual-scores">
-            <span class="pf-score-label">C</span>
-            <span class="pf-pct ${cCls}" style="min-width:28px">${cPct}%</span>
-            <div class="pf-score-bar-wrap" style="width:36px">
-              <div class="pf-score-bar"><div class="pf-score-fill ${cCls}" style="width:${cPct}%"></div></div>
-            </div>
-            <span class="pf-score-label" style="margin-left:4px">P</span>
-            <span class="pf-pct ${pCls}" style="min-width:28px">${pPct || '—'}%</span>
-            <div class="pf-score-bar-wrap" style="width:36px">
+            <span class="pf-score-label">P</span>
+            <span class="pf-pct ${pCls}" style="min-width:36px;">${pPct}%</span>
+            <div class="pf-score-bar-wrap" style="width:60px">
               <div class="pf-score-bar"><div class="pf-score-fill ${pCls}" style="width:${pPct}%"></div></div>
             </div>
           </div>
           ${m.sectionKcId ? `<span class="pf-sect-id">${_esc(m.sectionKcId)}</span>` : ''}
-          <span class="pf-section-name">${_esc(m.sectionLabel)}</span>
-          <span class="pf-container-name">${_esc(m.containerName)}</span>
-          ${isTop ? '<span class="pf-home-tag">Home</span>' : ''}
+          <span class="pf-section-name">${_esc(m.sectionLabel || '')}</span>
+          <span class="pf-container-name">${_esc(m.containerName || '')}</span>
+          ${isTop ? '<span class="pf-home-tag">Top</span>' : ''}
           <span class="pf-expand-icon" onclick="event.stopPropagation();_pfToggleExpand(this)">&#9654;</span>
         </div>
-        ${m.phraseText ? `<div class="pf-phrase-match-info">Phrase: "${_esc(m.phraseText)}"</div>` : ''}
-        <div class="pf-result-content">${_esc(m.content || 'No content preview')}</div>
+        ${m.phraseText ? `<div class="pf-phrase-match-info">Matched: "${_esc(m.phraseText)}"</div>` : ''}
+        <div class="pf-result-content">${_esc(m.content || '')}</div>
       </div>`;
     });
 
     html += '</div>';
-    html += `<div class="pf-actions">
-      <button class="pf-copy-btn" onclick="pfCopyPhrase()">Copy Phrase</button>
-    </div>`;
     resultsEl.innerHTML = html;
 
-    // If best score is weak, show draft generator
-    const bestOverall = merged.length ? Math.max(merged[0].contentScore || 0, merged[0].phraseScore || 0) : 0;
-    if (bestOverall < 0.60) {
+    if (phraseMatches.length && phraseMatches[0].phraseScore < 0.70) {
       _pfShowDraftButton(resultsEl, phrase);
     }
 
   } catch (err) {
     resultsEl.innerHTML = `<div class="pf-no-match" style="color:#dc2626;">Error: ${_esc(err.message)}</div>`;
   } finally {
-    btn.disabled = false; btn.textContent = 'Scan';
+    activeBtn.disabled = false;
+    activeBtn.textContent = mode === 'improved' ? '▶ Run Improved' : '▶ Run Live';
   }
 }
 
