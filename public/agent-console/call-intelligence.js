@@ -329,8 +329,11 @@ async function saveCuePattern(inputId, token, statusId) {
   statusEl.style.color = '#6b7280';
 
   try {
+    const _tok = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const _authHdr = _tok ? { 'Authorization': `Bearer ${_tok}` } : {};
+
     // 1. Load current cuePhrases
-    const piData = await fetch('/api/admin/globalshare/phrase-intelligence')
+    const piData = await fetch('/api/admin/globalshare/phrase-intelligence', { headers: _authHdr })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
     const cuePhrases = Array.isArray(piData.cuePhrases) ? piData.cuePhrases : [];
 
@@ -348,7 +351,7 @@ async function saveCuePattern(inputId, token, statusId) {
     cuePhrases.push({ pattern, token });
     const saveRes = await fetch('/api/admin/globalshare/phrase-intelligence/cuePhrases', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ..._authHdr },
       body: JSON.stringify({ data: cuePhrases })
     });
     if (!saveRes.ok) throw new Error(`HTTP ${saveRes.status}`);
