@@ -987,6 +987,11 @@ app.get('/health/drift', require('./utils/cuePhrasesDriftMonitor').healthDriftHa
 // percentiles, circuit state, 24h mid-call-fallback count. (C5/5)
 app.get('/health/media-streams', require('./utils/mediaStreamHealthMonitor').healthMediaStreamsHandler);
 
+// UAP Logic 2 core gate health — judge breaker state, 24h decision breakdown,
+// judge call rate / latency percentiles / cache hit rate, recent error.
+// Optional ?companyId= scopes to a single tenant. (coregate C4)
+app.get('/health/coregate', require('./utils/coreGateHealthMonitor').healthCoreGateHandler);
+
 app.get('/:pageName.html', (req, res, next) => {
     const pageName = req.params.pageName;
     const filePath = path.join(__dirname, 'public', `${pageName}.html`);

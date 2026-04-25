@@ -1972,6 +1972,18 @@ class KCDiscoveryRunner {
                             latencyMs: judgeResult.latencyMs,
                             cached:    judgeResult.cached,
                           });
+                          emit('CORE_GATE_JUDGE_CALLED', {
+                            sectionId,
+                            sectionLabel: sec?.label || null,
+                            verdict:      judgeResult.verdict,
+                            confidence:   judgeResult.confidence,
+                            reason:       judgeResult.reason,
+                            latencyMs:    judgeResult.latencyMs,
+                            cached:       judgeResult.cached,
+                            model:        judgeResult.model,
+                            provider:     judgeResult.provider,
+                            perPhraseMAX: Math.round(perPhraseMAX * 1000) / 1000,
+                          });
                         } catch (jErr) {
                           judgeError = jErr;
                           finalCorePass = perPhraseMAX >= fallbackThreshold;
@@ -1980,10 +1992,30 @@ class KCDiscoveryRunner {
                           // judge "failure" — that's a config issue, not
                           // an upstream provider problem. Counting it would
                           // open the breaker and bury the misconfig.
+                          let breakerTrip = null;
                           if (jErr.code !== 'JUDGE_NO_API_KEY' && jErr.code !== 'JUDGE_NO_MODEL' && jErr.code !== 'JUDGE_UNSUPPORTED_PROVIDER') {
-                            await CoreGateJudgeCircuitBreaker.recordFailure({
+                            breakerTrip = await CoreGateJudgeCircuitBreaker.recordFailure({
                               companyId, sectionId,
                               reason: jErr.code || jErr.message,
+                            }).catch(() => null);
+                          }
+                          emit('CORE_GATE_JUDGE_ERROR', {
+                            sectionId,
+                            sectionLabel:      sec?.label || null,
+                            code:              jErr.code || 'unknown',
+                            message:           String(jErr.message || '').slice(0, 200),
+                            perPhraseMAX:      Math.round(perPhraseMAX * 1000) / 1000,
+                            fallbackThreshold,
+                            fallbackPass:      finalCorePass,
+                            countedTowardBreaker: !!breakerTrip,
+                            failureCount:      breakerTrip?.count ?? null,
+                          });
+                          if (breakerTrip?.opened) {
+                            emit('CORE_GATE_CIRCUIT_OPENED', {
+                              companyId, sectionId,
+                              reason:        jErr.code || 'unknown',
+                              count:         breakerTrip.count,
+                              ttlSeconds:    CoreGateJudgeCircuitBreaker.CIRCUIT_BREAKER_TTL_S,
                             });
                           }
                           logger.warn('[KC_ENGINE] LOGIC 2 judge error — threshold-only fallback', {
@@ -2104,6 +2136,26 @@ class KCDiscoveryRunner {
                       pass:           finalCorePass,
                       rescuedFromFail,
                       sectionLabel:   targetSection?.label,
+                    });
+
+                    // ── Emit single trace event for the whole Logic 2 evaluation ──
+                    // CORE_GATE_JUDGE_CALLED / _ERROR / _CIRCUIT_OPENED already
+                    // emitted in their own branches; this is the always-on
+                    // summary event (one per turn that reaches Logic 2).
+                    emit('CORE_GATE_SCORE', {
+                      sectionId,
+                      sectionLabel:    targetSection?.label || null,
+                      decision,
+                      perPhraseMAX:    perPhraseMAX !== -1 ? Math.round(perPhraseMAX * 1000) / 1000 : null,
+                      bestPhrase:      bestPhrase ? String(bestPhrase).slice(0, 80) : null,
+                      phrasesScored,
+                      legacyCoreScore: legacyCoreScore !== null ? Math.round(legacyCoreScore * 1000) / 1000 : null,
+                      thresholdHigh:   cfg.thresholdHigh,
+                      thresholdLow:    cfg.thresholdLow,
+                      passed:          finalCorePass,
+                      rescuedFromFail,
+                      configSource:    cfg._source || null,
+                      callerCore:      callerCore.slice(0, 120),
                     });
 
                     if (!finalCorePass) {

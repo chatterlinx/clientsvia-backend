@@ -38,6 +38,19 @@ const TraceSchema = new mongoose.Schema(
     //     KC_SECTION_GAP, KC_LLM_FALLBACK, KC_ACK, WEBHOOK_TIMING,
     //     COMPUTE_CRASH, ROUTE_CRASH, ...
     //
+    //   UAP Logic 2 core gate (3-tier judge, C4):
+    //     CORE_GATE_SCORE          — every Logic 2 evaluation: tier decision,
+    //                                perPhraseMAX, legacyCoreScore, pass/fail,
+    //                                config source. One per turn that reaches Logic 2.
+    //     CORE_GATE_JUDGE_CALLED   — judge ran (tier 3 ambiguous zone): verdict,
+    //                                confidence, reason, latencyMs, cached, model.
+    //     CORE_GATE_JUDGE_ERROR    — judge threw / timed out: code, message,
+    //                                fallbackThreshold used, fallback verdict.
+    //     CORE_GATE_CIRCUIT_OPENED — judge breaker tripped (3 consecutive failures
+    //                                in 60s window). Platform-wide; logs companyId
+    //                                of the call that pushed it over the edge.
+    //     CORE_GATE_CIRCUIT_CLOSED — breaker auto-closed after TTL or force-closed.
+    //
     //   Media Streams (C4/5 + C5/5):
     //     MS_STREAM_OPENED         — Twilio WS handshake done
     //     MS_STREAM_CLOSED         — WS torn down (any reason)
