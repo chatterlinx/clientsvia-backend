@@ -1142,6 +1142,65 @@ const adminSettingsSchema = new mongoose.Schema({
         },
 
         // ────────────────────────────────────────────────────────────────────
+        // CORE GATE JUDGE — Three-tier dispatch for UAP "Logic 2" (C1+)
+        // ────────────────────────────────────────────────────────────────────
+        // The legacy Logic 2 path embeds caller topicWords[] as one string and
+        // compares it to the section's pre-computed phraseCore vector — a
+        // kitchen-sink centroid that drifts away from the section's true
+        // embedding space. Cross-section audits proved no single threshold
+        // over (perPhraseMAX, contentDom) cleanly separates real paraphrases
+        // from anchor-false-positives ("do I have to PAY for parking AGAIN").
+        //
+        // Per-phrase MAX (over PhraseEmbedding sidecar) + 3-tier dispatch:
+        //   • perPhraseMAX ≥ thresholdHigh           → strict_pass  (skip judge)
+        //   • perPhraseMAX <  thresholdLow           → definite_fail (skip judge)
+        //   • thresholdLow ≤ perPhraseMAX < thresholdHigh
+        //                                            → judge        (LLM rules)
+        //
+        // Judge: small fast LLM (Groq llama-3.1-8b-instant by default) called
+        // ONLY in the ambiguous zone (~10-20% of evals). Redis-cached per
+        // (companyId, sectionId, md5(rawInput)) for 1h. Platform-wide circuit
+        // breaker mirrors v2elevenLabsService.js — opens on consecutive
+        // failures, 1h TTL. On open / timeout / error: fall back to a strict
+        // threshold-only decision (perPhraseMAX ≥ thresholdHigh − 0.07).
+        //
+        // Tenant override: aiAgentSettings.agent2.speechDetection.coreGate.*
+        // (each field nullable — null inherits the platform default below).
+        //
+        // ROLLOUT SAFETY: judgeEnabled=false everywhere → engine MUST behave
+        // exactly like the legacy threshold-only path (no judge calls, no
+        // Redis lookups, no extra latency).
+        // ────────────────────────────────────────────────────────────────────
+        coreGateJudge: {
+            thresholdHigh: {
+                type: Number, default: 0.85, min: 0.50, max: 0.99,
+                description: 'perPhraseMAX cosine ≥ this → strict pass, judge skipped (default 0.85, calibrated cross-section).'
+            },
+            thresholdLow: {
+                type: Number, default: 0.65, min: 0.30, max: 0.90,
+                description: 'perPhraseMAX cosine < this → definite fail, judge skipped (default 0.65, calibrated cross-section).'
+            },
+            judgeEnabled: {
+                type: Boolean, default: true,
+                description: 'Master toggle. False = behave like legacy threshold-only path (no LLM, no Redis lookup).'
+            },
+            judgeProvider: {
+                type: String, enum: ['groq', 'openai', 'anthropic'], default: 'groq',
+                description: 'LLM provider for the ambiguous-zone judge. Groq llama-3.1-8b-instant chosen for ~50ms p50 latency + free-tier headroom.'
+            },
+            judgeModel: {
+                type: String, default: 'llama-3.1-8b-instant',
+                description: 'Provider-specific model id. Must be a fast, cheap model — judge runs in the call-path.'
+            },
+            judgeTimeoutMs: {
+                type: Number, default: 200, min: 50, max: 1000,
+                description: 'Max ms to wait for the judge. On timeout: count toward circuit breaker, fall back to threshold-only.'
+            }
+        },
+        coreGateJudgeUpdatedAt: { type: Date,   default: null },
+        coreGateJudgeUpdatedBy: { type: String, default: null },
+
+        // ────────────────────────────────────────────────────────────────────
         // MEDIA STREAMS — Platform defaults for direct Deepgram live STT (C2+)
         // Consumed by services/mediaStream/ConfigResolver.js. Each tenant can
         // override any field via company.aiAgentSettings.agent2.mediaStreams.

@@ -4010,19 +4010,38 @@ const companySchema = new mongoose.Schema({
                     default: {}
                 },
                 // ────────────────────────────────────────────────────────────
-                // CORE GATE OVERRIDES — Per-tenant Logic 2 rescue toggle
+                // CORE GATE OVERRIDES — Per-tenant Logic 2 controls
                 // ────────────────────────────────────────────────────────────
-                // Tenant-level kill switch for the Logic 2 anchor-anchored
-                // window rescue (platform default lives at
-                // AdminSettings.globalHub.coreGateRescueEnabled).
+                // Every field nullable. null → inherit the platform default
+                // from AdminSettings.globalHub.coreGate* (resolved at runtime
+                // by services/engine/kc/CoreGateConfigResolver.js).
                 //
-                // null  → inherit platform default (recommended).
-                // false → disable rescue for this tenant (e.g. if their
-                //         vocabulary causes false positives).
-                // true  → force enable even when platform is off.
+                // rescueEnabled — kill switch for the legacy anchor-anchored
+                // window rescue (compound-question paraphrase recovery).
+                //
+                // thresholdHigh / thresholdLow / judgeEnabled / judgeProvider /
+                // judgeModel / judgeTimeoutMs — three-tier dispatch knobs for
+                // the per-phrase MAX gate + LLM judge (C1+). See AdminSettings
+                // globalHub.coreGateJudge for the full architecture.
+                //
+                // Use cases for tenant override:
+                //   • Tenant has tight, well-scored phrases — raise thresholdHigh
+                //     to push more decisions through the strict_pass tier (skip
+                //     judge cost).
+                //   • Tenant has fuzzy / overlapping anchors — lower thresholdLow
+                //     to ROUTE rather than fail, let the judge sort it out.
+                //   • Cost-sensitive tenant — set judgeEnabled=false to fall
+                //     back to threshold-only behaviour (legacy speed, lower
+                //     accuracy on ambiguous-zone inputs).
                 // ────────────────────────────────────────────────────────────
                 coreGate: {
-                    rescueEnabled: { type: Boolean, default: null }
+                    rescueEnabled:  { type: Boolean, default: null },
+                    thresholdHigh:  { type: Number,  default: null, min: 0.50, max: 0.99 },
+                    thresholdLow:   { type: Number,  default: null, min: 0.30, max: 0.90 },
+                    judgeEnabled:   { type: Boolean, default: null },
+                    judgeProvider:  { type: String,  default: null, enum: ['groq', 'openai', 'anthropic', null] },
+                    judgeModel:     { type: String,  default: null },
+                    judgeTimeoutMs: { type: Number,  default: null, min: 50, max: 1000 }
                 }
             },
             // ─────────────────────────────────────────────────────────────────
