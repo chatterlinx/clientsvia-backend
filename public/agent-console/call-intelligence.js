@@ -298,23 +298,59 @@ async function runAllPhraseMatches(turnNum) {
     </div>`;
   }).join('');
 
+  // Combined phrase match — join all unique values into one phrase → simulate routing
+  const combinedPhrase = values.join(' ');
+  const combinedEl = `<div id="cue-combined-${turnNum}" style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:5px;">
+    <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;">
+      🔗 Combined phrase match — all values as one utterance
+    </div>
+    <div style="font-size:11px;font-family:monospace;color:#6b7280;margin-bottom:6px;">"${esc(combinedPhrase)}"</div>
+    <div id="cue-combined-result-${turnNum}" style="font-size:11px;color:#6b7280;font-style:italic;">Running…</div>
+  </div>`;
+
   resultEl.innerHTML = `
     <div style="margin-top:4px;">
       <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;">
         ⚡ Phrase matches — top 3 per value (edit section to modify phrases or add negative keywords)
       </div>
       ${cards}
-      <div style="font-size:10px;color:#9ca3af;margin-top:2px;font-style:italic;">
-        ⚠ Score = cosine similarity between input and existing KC caller phrases · UAP HIT = live route taken
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;margin-bottom:6px;font-style:italic;">
+        Score = cosine similarity between input and existing KC caller phrases · UAP HIT = live route taken
       </div>
+      ${combinedEl}
     </div>`;
+
+  // Auto-expand the Add patterns panel
+  _renderAddPatternsContent(turnNum);
+  const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
+  if (panelEl) panelEl.style.display = 'block';
+
+  // Run combined phrase match async
+  apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
+    { method: 'POST', body: JSON.stringify({ phrase: combinedPhrase }) })
+    .then(d => {
+      const el = document.getElementById(`cue-combined-result-${turnNum}`);
+      if (!el) return;
+      if (d.matched) {
+        const conf = d.confidence != null ? ` · ${(d.confidence * 100).toFixed(0)}%` : '';
+        el.innerHTML = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;">UAP HIT</span>
+          <span style="margin-left:6px;color:#111827;font-weight:600;">${esc(d.containerTitle || '')}</span>
+          <span style="color:#6b7280;margin-left:4px;">${esc(d.matchType || '')}${conf}</span>
+          <span style="color:#9ca3af;font-size:10px;margin-left:6px;">— combined phrase would route correctly</span>`;
+      } else {
+        el.innerHTML = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">NO ROUTE</span>
+          <span style="color:#6b7280;margin-left:6px;font-size:11px;">combined phrase not found in KC — phrases need to be added to dictionary</span>`;
+      }
+    })
+    .catch(() => {
+      const el = document.getElementById(`cue-combined-result-${turnNum}`);
+      if (el) el.textContent = 'Combined match failed.';
+    });
 }
 
-function toggleMergedPatternPanel(turnNum) {
+function _renderAddPatternsContent(turnNum) {
   const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
   if (!panelEl) return;
-  if (panelEl.style.display !== 'none') { panelEl.style.display = 'none'; return; }
-
   const merged = _cueGapMerged.get(turnNum);
   if (!merged) return;
 
@@ -346,6 +382,13 @@ function toggleMergedPatternPanel(turnNum) {
     <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px;">＋ Add to GlobalShare cuePhrases</div>
     ${rows || '<div style="font-size:11px;color:#6b7280;">No text values to add.</div>'}
   </div>`;
+}
+
+function toggleMergedPatternPanel(turnNum) {
+  const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
+  if (!panelEl) return;
+  if (panelEl.style.display !== 'none') { panelEl.style.display = 'none'; return; }
+  _renderAddPatternsContent(turnNum);
   panelEl.style.display = 'block';
 }
 
