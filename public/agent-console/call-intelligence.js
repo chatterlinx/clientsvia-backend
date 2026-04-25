@@ -287,7 +287,7 @@ async function runCueGapAnalysis(btn, turnNum) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
         <button onclick="runAllPhraseMatches(${turnNum})"
           style="font-size:12px;padding:3px 12px;border-radius:4px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;">
-          ⚡ Match all values →
+          🔍 Find best KC match →
         </button>
         <button onclick="toggleMergedPatternPanel(${turnNum})"
           style="font-size:12px;padding:3px 12px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
@@ -313,46 +313,91 @@ async function runAllPhraseMatches(turnNum) {
 
   const values = _allPhraseValues(merged);
   if (!values.length) {
-    resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;">No values to match.</div>`;
+    resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;">No extracted values to match.</div>`;
     return;
   }
 
-  resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Embedding &amp; matching ${values.length} values against KC phrase index… (5-10s)</div>`;
+  // Combine all extracted cue values into one search query
+  const combinedPhrase = values.join(' ');
+  resultEl.innerHTML = `
+    <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">
+      <span style="font-style:italic;">Searching all KC phrases for:</span>
+      <span style="font-family:monospace;color:#374151;margin-left:4px;">"${esc(combinedPhrase)}"</span>
+    </div>
+    <div style="font-size:11px;color:#6b7280;font-style:italic;">Embedding &amp; scoring against all KC phrases… (5-10s)</div>`;
 
   const companyId = state.companyId;
-  const results = await Promise.all(
-    values.map(phrase =>
-      apiFetch(`/api/call-intelligence/company/${companyId}/cue-phrase-match`,
-        { method: 'POST', body: JSON.stringify({ phrase }) })
-        .then(d => ({ phrase, ...d }))
-        .catch(e => ({ phrase, matched: false, topMatches: [], error: e.message }))
-    )
-  );
+  let data;
+  try {
+    data = await apiFetch(`/api/call-intelligence/company/${companyId}/cue-phrase-match`,
+      { method: 'POST', body: JSON.stringify({ phrase: combinedPhrase }) });
+  } catch (err) {
+    resultEl.innerHTML = `<div style="font-size:11px;color:#991b1b;">Match failed: ${esc(err.message)}</div>`;
+    return;
+  }
 
-  const combinedPhrase = values.join(' ');
-  const cards = results.map(r => _buildPhraseMatchCard(r, companyId)).join('');
+  const topMatches = Array.isArray(data.topMatches) ? data.topMatches : [];
+  const RANK_BADGE = ['🥇', '🥈', '🥉'];
+
+  const rankRows = topMatches.slice(0, 3).map((m, i) => {
+    const pct = Math.round(m.score * 100);
+    const tierStyle = m.score >= 0.90
+      ? 'background:#dcfce7;color:#166534;border:1px solid #86efac;'
+      : m.score >= 0.80
+        ? 'background:#fef9c3;color:#713f12;border:1px solid #fde047;'
+        : 'background:#ffedd5;color:#9a3412;border:1px solid #fdba74;';
+    const kcUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&section=${encodeURIComponent(m.sectionKcId || '')}`;
+
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6;">
+      <span style="font-size:16px;flex-shrink:0;line-height:1.2;">${RANK_BADGE[i]}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:700;color:#111827;">
+          ${esc(m.containerName)}
+          <span style="font-weight:400;color:#6b7280;"> · ${esc(m.sectionLabel)}</span>
+          ${m.sectionKcId ? `<span style="color:#9ca3af;font-size:10px;margin-left:4px;">[${esc(m.sectionKcId)}]</span>` : ''}
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin-top:2px;font-style:italic;">
+          matched: "${esc((m.phraseText || '').slice(0, 60))}${(m.phraseText||'').length > 60 ? '…' : ''}"
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+        <span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;${tierStyle}">${pct}%</span>
+        <a href="${kcUrl}" target="_blank" style="font-size:10px;color:#6b7280;text-decoration:underline;">Edit ↗</a>
+      </div>
+    </div>`;
+  }).join('');
+
+  const uapNote = data.matched
+    ? `<div style="margin-top:4px;font-size:11px;color:#374151;">
+         <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;">UAP HIT</span>
+         <span style="margin-left:6px;">${esc(data.containerTitle || '')} · ${esc(data.matchType || '')}</span>
+         <span style="color:#9ca3af;margin-left:4px;font-size:10px;">— live route confirmed</span>
+       </div>`
+    : `<div style="margin-top:4px;font-size:11px;color:#9ca3af;">UAP: no direct phrase match on combined query</div>`;
+
+  const noResults = !topMatches.length
+    ? `<div style="font-size:11px;color:#9ca3af;padding:6px 0;font-style:italic;">No KC phrases scored ≥65% against this query — terms may need to be added to the KC dictionary.</div>`
+    : '';
 
   resultEl.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;">
-        ⚡ Phrase matches — top 3 per value (edit section to modify phrases or add negative keywords)
+      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:2px;">
+        🔍 Top KC matches for combined query
       </div>
-      ${cards}
-      <div style="font-size:10px;color:#9ca3af;margin-top:2px;margin-bottom:6px;font-style:italic;">
-        Score = cosine similarity against KC caller phrases · UAP HIT = live route taken
+      <div style="font-size:10px;color:#9ca3af;margin-bottom:6px;">
+        query: <span style="font-family:monospace;color:#6b7280;">"${esc(combinedPhrase)}"</span>
       </div>
-      <div id="cue-combined-${turnNum}" style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:5px;">
-        <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;">🔗 Combined phrase match — all values as one utterance</div>
-        <div style="font-size:11px;font-family:monospace;color:#6b7280;margin-bottom:6px;">"${esc(combinedPhrase)}"</div>
-        <div id="cue-combined-result-${turnNum}" style="font-size:11px;color:#6b7280;font-style:italic;">Running…</div>
+      ${rankRows}${noResults}
+      ${uapNote}
+      <div style="font-size:10px;color:#d1d5db;margin-top:6px;font-style:italic;">
+        Score = cosine similarity of combined cue values vs each KC caller phrase
       </div>
     </div>`;
 
-  // Auto-expand the Add patterns panel, then kick off combined match
+  // Auto-expand Add patterns panel
   _renderAddPatternsContent(turnNum);
   const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
   if (panelEl) panelEl.style.display = 'block';
-  _runCombinedMatchAsync(turnNum, combinedPhrase);
 }
 
 function _renderAddPatternsContent(turnNum) {
