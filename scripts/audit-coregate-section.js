@@ -132,9 +132,11 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
     try { await mongo.close(); }       catch (_e) { /* */ }
   };
 
-  // ── 1. Load section with hidden phraseCoreEmbedding ──────────────────────
+  // ── 1. Load section with hidden phraseCoreEmbedding + contentEmbedding ──
+  // Both are select:false so we have to opt in explicitly. contentEmbedding
+  // is the domain signal we test in Part 4 — embed of the full section content.
   const containerDoc = await CompanyKnowledgeContainer.findById(containerId)
-    .select('+sections.phraseCoreEmbedding')
+    .select('+sections.phraseCoreEmbedding +sections.contentEmbedding')
     .lean();
 
   if (!containerDoc) {
@@ -159,6 +161,9 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   console.log(`contentCore (text): ${JSON.stringify(section.contentCore || '(none)')}`);
   console.log(`phraseCoreEmbedding length: ${section.phraseCoreEmbedding?.length || 0}`);
   console.log(`phraseCoreEmbedding[0..2]:  ${section.phraseCoreEmbedding?.slice(0, 3).map(x => x.toFixed(4)).join(', ') || '(none)'}`);
+  console.log(`contentEmbedding length:    ${section.contentEmbedding?.length || 0}`);
+  console.log(`contentEmbedding[0..2]:     ${section.contentEmbedding?.slice(0, 3).map(x => x.toFixed(4)).join(', ') || '(none)'}`);
+  console.log(`contentEmbeddingAt: ${section.contentEmbeddingAt || '(never)'}`);
   console.log(`phraseScoreHash:    ${section.phraseScoreHash || '(none — Re-score not run since edit)'}`);
   console.log(`phraseCoreScoredAt: ${section.phraseCoreScoredAt || '(never)'}`);
   console.log(`callerPhrases (${section.callerPhrases?.length || 0}):`);
@@ -401,13 +406,126 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
       console.log(`  ✅ Clean separation. Recommended threshold: ${recThresh.toFixed(2)}`);
       console.log(`     (admits all ${results.filter(r => r.kind === 'positive').length} positives, rejects all ${results.filter(r => r.kind === 'negative').length} negatives in this set)`);
     } else {
-      console.log(`  ⚠️  No clean threshold. min(positive) ≤ max(negative) — overlap zone.`);
-      console.log(`     Architectural change alone won't suffice. Either:`);
-      console.log(`       - add the missing positive paraphrase to section.callerPhrases, OR`);
-      console.log(`       - add a secondary signal (negative keyword check, anchor proximity)`);
-      console.log(`         to disambiguate the overlapping inputs.`);
+      console.log(`  ⚠️  Per-phrase MAX alone has overlap zone. See Parts 4 + 5 for`);
+      console.log(`     domain-signal augmentation.`);
     }
     console.log('');
+
+    // ── PART 4 — domain signal: cosine vs section.contentEmbedding ─────────
+    // Hypothesis: section content text (full ANSWER, not the question
+    // paraphrases) lives in a more domain-saturated region of embedding space
+    // than the per-phrase question vectors. A caller asking about HVAC scores
+    // high; a caller asking about parking scores low — even if both share
+    // the "pay X again" structure. This gives us a DOMAIN signal independent
+    // of the per-phrase syntax/structure signal.
+    hr('═');
+    if (!section.contentEmbedding?.length) {
+      console.log(`PART 4 — content domain signal — SKIPPED`);
+      console.log(`         (section.contentEmbedding not populated; Re-score may be needed)`);
+      hr('═');
+    } else {
+      console.log(`PART 4 — cosine vs section.contentEmbedding (DOMAIN signal)`);
+      console.log(`         Section content occupies a domain-saturated region of`);
+      console.log(`         embedding space. Off-domain inputs should score LOW.`);
+      hr('═');
+      console.log('');
+
+      const contentEmb = section.contentEmbedding;
+
+      // Reuse the same allEmbs we already computed.
+      const contentResults = testInputs.map((t, i) => {
+        const emb = allEmbs[i];
+        if (!emb) return { ...t, content: null };
+        return { ...t, content: cosine(emb, contentEmb) };
+      });
+
+      const CONTENT_THRESHOLDS = [0.30, 0.40, 0.45, 0.50];
+      const cHdr = CONTENT_THRESHOLDS.map(t => `≥${t.toFixed(2)}`.padStart(colW)).join('');
+      console.log(`  kind      cos     ${cHdr}   input`);
+      console.log('  ' + '─'.repeat(96));
+      for (const r of contentResults) {
+        if (r.content === null) {
+          console.log(`  ${r.kind.padEnd(9)} (no embed)`);
+          continue;
+        }
+        const cells = CONTENT_THRESHOLDS.map(t => {
+          const passes = r.content >= t;
+          const correct = (r.kind === 'positive') ? passes : !passes;
+          return (correct ? '✅' : '❌').padStart(colW);
+        }).join('');
+        console.log(`  ${r.kind.padEnd(9)} ${fmt(r.content)} ${cells}   "${r.text.slice(0, 50)}${r.text.length > 50 ? '…' : ''}"`);
+      }
+      console.log('');
+
+      const cPosMin = Math.min(...contentResults.filter(r => r.kind === 'positive' && r.content !== null).map(r => r.content));
+      const cNegMax = Math.max(...contentResults.filter(r => r.kind === 'negative' && r.content !== null).map(r => r.content));
+      const cGap   = cPosMin - cNegMax;
+      console.log(`  separation:  min(positive) = ${fmt(cPosMin)}    max(negative) = ${fmt(cNegMax)}    gap = ${fmt(cGap)}`);
+      console.log('');
+      if (cGap > 0) {
+        const recT = Math.round(((cNegMax + (cPosMin - cNegMax) * 0.4)) * 100) / 100;
+        console.log(`  ✅ Domain signal alone separates cleanly. Threshold: ${recT.toFixed(2)}`);
+      } else {
+        console.log(`  ⚠️  Domain signal alone has overlap zone. See Part 5 for hybrid gate.`);
+      }
+      console.log('');
+
+      // ── PART 5 — HYBRID GATE: per-phrase MAX × content domain ─────────
+      // The architectural answer if both individual signals overlap.
+      // Pass requires EITHER strict per-phrase MAX (verbatim/near match)
+      // OR (medium per-phrase MAX AND domain signal). Tries multiple
+      // threshold pairs to find the cleanest gate.
+      hr('═');
+      console.log(`PART 5 — HYBRID GATE — per-phrase MAX × content domain`);
+      console.log(`         pass = (perPhraseMAX ≥ T_strict)`);
+      console.log(`              OR (perPhraseMAX ≥ T_med AND contentCos ≥ T_dom)`);
+      hr('═');
+      console.log('');
+
+      // Combine the per-phrase MAX results from Part 3 with content cos here.
+      const combined = testInputs.map((t, i) => ({
+        ...t,
+        max:     results[i]?.max ?? null,
+        content: contentResults[i]?.content ?? null,
+      }));
+
+      // Try several gate configurations.
+      const GATES = [
+        { name: 'A: strict 0.85 / med 0.70 + dom 0.40',  strict: 0.85, med: 0.70, dom: 0.40 },
+        { name: 'B: strict 0.85 / med 0.72 + dom 0.45',  strict: 0.85, med: 0.72, dom: 0.45 },
+        { name: 'C: strict 0.80 / med 0.70 + dom 0.45',  strict: 0.80, med: 0.70, dom: 0.45 },
+        { name: 'D: strict 0.82 / med 0.74 + dom 0.40',  strict: 0.82, med: 0.74, dom: 0.40 },
+      ];
+
+      for (const g of GATES) {
+        let pTP = 0, pFN = 0, nTN = 0, nFP = 0;
+        const fpRows = [], fnRows = [];
+        for (const r of combined) {
+          if (r.max === null || r.content === null) continue;
+          const pass = (r.max >= g.strict) || (r.max >= g.med && r.content >= g.dom);
+          if (r.kind === 'positive') {
+            if (pass) pTP++; else { pFN++; fnRows.push(r); }
+          } else {
+            if (!pass) nTN++; else { nFP++; fpRows.push(r); }
+          }
+        }
+        const total = pTP + pFN + nTN + nFP;
+        const score = total ? Math.round(((pTP + nTN) / total) * 100) : 0;
+        const tag = (pFN === 0 && nFP === 0) ? '✅ PERFECT'
+                  : (nFP === 0 ? '✅ no false positives'
+                  : (pFN === 0 ? '⚠️  no false negatives but some FP'
+                  : '❌ both FP and FN'));
+        console.log(`  ${g.name}`);
+        console.log(`    positives admitted: ${pTP}/${pTP + pFN}    negatives rejected: ${nTN}/${nTN + nFP}    overall ${score}%   ${tag}`);
+        if (fnRows.length) {
+          console.log(`    missed positives:  ${fnRows.map(r => `"${r.text.slice(0, 30)}…" (max=${fmt(r.max)} dom=${fmt(r.content)})`).join('; ')}`);
+        }
+        if (fpRows.length) {
+          console.log(`    admitted negatives: ${fpRows.map(r => `"${r.text.slice(0, 30)}…" (max=${fmt(r.max)} dom=${fmt(r.content)})`).join('; ')}`);
+        }
+        console.log('');
+      }
+    }
   }
 
   // ── 6. Readout ───────────────────────────────────────────────────────────
@@ -422,11 +540,17 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   console.log(`        against the SAME caller variants we tested in Part 1. If the`);
   console.log(`        scores jumped meaningfully, the architecture pivot is real.`);
   console.log('');
-  console.log(`PART 3 (threshold sweep): the recommendation is only valid if positives`);
-  console.log(`        and negatives separate cleanly. The "gap" line is the answer:`);
-  console.log(`        positive gap → ship the architectural change at the recommended`);
-  console.log(`        threshold. Negative gap → the section's vocabulary needs a new`);
-  console.log(`        callerPhrase OR Logic 2 needs a secondary signal beyond cosine.`);
+  console.log(`PART 3 (threshold sweep): per-phrase MAX alone — clean gap means ship.`);
+  console.log(`        Overlap zone means cosine on per-phrase isn't enough by itself.`);
+  console.log('');
+  console.log(`PART 4 (domain signal): cosine vs section.contentEmbedding. Tests`);
+  console.log(`        whether the section's full-content text discriminates by domain`);
+  console.log(`        independently of question-paraphrase syntax.`);
+  console.log('');
+  console.log(`PART 5 (hybrid gate): the architectural answer when neither signal`);
+  console.log(`        cleanly separates alone. Pass requires strict per-phrase MAX`);
+  console.log(`        OR (medium per-phrase MAX AND domain signal). The first GATE`);
+  console.log(`        config showing "PERFECT" is the candidate to ship.`);
   console.log('');
 
   await cleanup();
