@@ -104,6 +104,11 @@ const CORE_MATCH_THRESHOLD   = 0.80;  // Logic 2: cosine(callerCore, phraseCore)
 // ── CueExtractor — GATE 2.4 thresholds ──────────────────────────────────────
 // fieldCount ≥ this AND tradeMatch present → proceed to GATE 2.4b anchor confirm
 const CUE_MIN_FIELD_COUNT   = 3;  // At least 3 of 8 cue fields must be populated
+// Narrative bypass: TRADE hit + any context field → route at fieldCount 2.
+// Narrative callers describe problems without request/info/directive patterns —
+// they miss the 3-field threshold even with unambiguous signal. A trade term
+// plus any situation context (modifier, action, urgency) is sufficient to route.
+const CUE_NARRATIVE_BYPASS_FIELDS = ['modifierCore', 'actionCore', 'urgencyCore'];
 // Anchor confirmation reuses ANCHOR_MATCH_THRESHOLD above
 
 // ============================================================================
@@ -1420,7 +1425,12 @@ class KCDiscoveryRunner {
         }).catch(() => {});
       }
 
-      if (cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT && cueFrame.tradeMatches.length > 0) {
+      // Narrative bypass: TRADE hit + any context field qualifies at fieldCount 2
+      const _narrativeBypass = cueFrame.fieldCount === 2
+        && cueFrame.tradeMatches.length > 0
+        && CUE_NARRATIVE_BYPASS_FIELDS.some(f => !!cueFrame[f]);
+
+      if ((cueFrame.fieldCount >= CUE_MIN_FIELD_COUNT || _narrativeBypass) && cueFrame.tradeMatches.length > 0) {
         // ── GATE 2.4b — Route via best trade match ───────────────────────
         // Specificity-sorted (UAP/v1.md §25): CueExtractor._buildTradeIndex
         // pre-sorts entries per term by specificity=1/fanout DESC. So
@@ -1443,6 +1453,7 @@ class KCDiscoveryRunner {
           logger.info('[KC_ENGINE] CUE EXTRACT HIT — GATE 2.4b confirmed', {
             companyId, callSid, turn,
             fieldCount:      cueFrame.fieldCount,
+            narrativeBypass: _narrativeBypass,          // true = fired at fieldCount 2
             tradeTerm:       bestTrade.term,
             containerId:     bestTrade.containerId,
             sectionIdx:      -1,
@@ -1454,6 +1465,7 @@ class KCDiscoveryRunner {
             requestCue:      cueFrame.requestCue || null,
             actionCore:      cueFrame.actionCore || null,
             urgencyCore:     cueFrame.urgencyCore || null,
+            modifierCore:    cueFrame.modifierCore || null,
           });
           emit('KC_CUE_EXTRACT_HIT', {
             companyId, callSid, turn,
