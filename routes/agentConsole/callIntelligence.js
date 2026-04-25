@@ -9,6 +9,14 @@
 const express = require('express');
 const router = express.Router();
 const https = require('https');
+const SemanticMatchService = require('../../services/engine/kc/SemanticMatchService');
+
+function _cosineSimilarity(a, b) {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; normA += a[i] * a[i]; normB += b[i] * b[i]; }
+  return (normA && normB) ? dot / (Math.sqrt(normA) * Math.sqrt(normB)) : 0;
+}
 const CallIntelligenceService = require('../../services/CallIntelligenceService');
 const GPT4AnalysisService = require('../../services/GPT4AnalysisService');
 const CallTranscriptV2 = require('../../models/CallTranscriptV2');
@@ -3401,7 +3409,7 @@ For each signal produce a JSON object with these exact keys:
     "requestCue":    ONLY if caller explicitly asks for something to be done: "can you", "could you", "I want you to", "I need you to". NULL for statements or descriptions.
     "permissionCue": ONLY if caller asks whether they must do something: "do I have to", "am I required to", "is it okay if". NULL otherwise.
     "infoCue":       ONLY if caller asks a direct question for information: "what is", "how much", "when does", "do you know if". A caller STATING a problem (e.g. "it's not cooling") is NOT infoCue — that is modifierCore or tradeMatches.
-    "directiveCue":  ONLY if caller states why they are calling or gives a direct instruction: "I'm calling because", "I need to", "just", "please". NULL for descriptions.
+    "directiveCue":  ONLY explicit commands the caller gives to the agent: "just fix it", "please send someone", "I need you to come out". Narrative openers like "I'm calling because", "I just wanted to", "I'm having" are NOT directiveCue — leave null.
     "actionCore":    The core action or problem verb: "fix", "repair", "replace", "schedule", "pay", "not working", "leaking", "broke". Extract the action, not the equipment.
     "urgencyCore":   ONLY explicit time pressure: "today", "now", "asap", "emergency", "right away". NULL if no urgency stated.
     "modifierCore":  Context that qualifies the situation: "same problem", "again", "as before", "under warranty", "still broken". Equipment names belong in tradeMatches, not here.
@@ -3486,9 +3494,11 @@ router.post('/company/:companyId/cue-phrase-match', async (req, res) => {
     const UAP = require('../../services/engine/kc/UtteranceActParser');
     const KCS = require('../../services/engine/agent2/KnowledgeContainerService');
 
-    const [uapResult, containers] = await Promise.all([
+    // Run UAP phrase index lookup + load containers + embed input phrase in parallel
+    const [uapResult, containers, phraseEmbs] = await Promise.all([
       UAP.parse(companyId, phrase.trim()),
-      KCS.getActiveForCompany(companyId)
+      KCS.getActiveForCompany(companyId),
+      SemanticMatchService.embedBatch([phrase.trim()])
     ]);
 
     const matched = !!(uapResult.containerId && uapResult.matchType !== 'NONE');
@@ -3501,6 +3511,74 @@ router.post('/company/:companyId/cue-phrase-match', async (req, res) => {
       sectionLabel   = uapResult.sectionLabel || null;
     }
 
+    // ── Top-3 phrase matches via embedding cosine similarity ─────────────
+    // Load caller phrases from all active containers for this company
+    const phraseEmb = phraseEmbs[0];
+    let topMatches = [];
+    if (phraseEmb?.length) {
+      const allDocs = await CompanyKnowledgeContainer.collection.find(
+        { companyId, isActive: { $ne: false } },
+        { projection: {
+          title: 1, kcId: 1,
+          'sections.label': 1, 'sections.isActive': 1,
+          'sections.callerPhrases.text': 1, 'sections.callerPhrases.anchorWords': 1,
+        } }
+      ).toArray();
+
+      // Flatten all caller phrases with section metadata
+      const cpList = [];
+      for (const doc of allDocs) {
+        const docId = doc._id.toString();
+        (doc.sections || []).forEach((sec, idx) => {
+          if (sec.isActive === false) return;
+          const kcId = doc.kcId || null;
+          const sectionKcId = kcId ? `${kcId}-${String(idx + 1).padStart(2, '0')}` : null;
+          (sec.callerPhrases || []).forEach(cp => {
+            const text = typeof cp === 'string' ? cp : cp.text;
+            if (text) cpList.push({
+              text,
+              containerId:   docId,
+              containerName: doc.title || 'Untitled',
+              sectionIndex:  idx,
+              sectionLabel:  sec.label || `Section ${idx + 1}`,
+              sectionKcId,
+            });
+          });
+        });
+      }
+
+      const cpEmbs = cpList.length
+        ? await SemanticMatchService.embedBatch(cpList.map(c => c.text))
+        : [];
+
+      // Best match per section (highest cosine similarity)
+      const bestPerSection = new Map();
+      for (let i = 0; i < cpEmbs.length; i++) {
+        const sim = _cosineSimilarity(phraseEmb, cpEmbs[i]);
+        if (sim < 0.65) continue;
+        const cp = cpList[i];
+        const key = `${cp.containerId}:${cp.sectionIndex}`;
+        const prev = bestPerSection.get(key);
+        if (!prev || sim > prev.score) {
+          bestPerSection.set(key, { score: sim, phraseText: cp.text, ...cp });
+        }
+      }
+
+      topMatches = [...bestPerSection.values()]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(m => ({
+          containerId:   m.containerId,
+          containerName: m.containerName,
+          sectionIndex:  m.sectionIndex,
+          sectionLabel:  m.sectionLabel,
+          sectionKcId:   m.sectionKcId,
+          phraseText:    m.phraseText,
+          score:         Math.round(m.score * 1000) / 1000,
+          tier:          m.score >= 0.90 ? '90%+' : m.score >= 0.80 ? '80%+' : '70%+',
+        }));
+    }
+
     return res.json({
       ok: true,
       matched,
@@ -3510,7 +3588,8 @@ router.post('/company/:companyId/cue-phrase-match', async (req, res) => {
       containerId:    uapResult.containerId   || null,
       containerTitle,
       sectionLabel,
-      phrase
+      phrase,
+      topMatches,
     });
   } catch (err) {
     console.error('[cue-phrase-match]', err.message);

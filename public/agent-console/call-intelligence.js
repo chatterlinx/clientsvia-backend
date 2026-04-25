@@ -246,35 +246,67 @@ async function runAllPhraseMatches(turnNum) {
       apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
         { method: 'POST', body: JSON.stringify({ phrase }) })
         .then(d => ({ phrase, ...d }))
-        .catch(e => ({ phrase, matched: false, error: e.message }))
+        .catch(e => ({ phrase, matched: false, topMatches: [], error: e.message }))
     )
   );
 
-  const matched    = results.filter(r => r.matched);
-  const unmatched  = results.filter(r => !r.matched);
-  const companyId  = state.companyId;
+  const companyId = state.companyId;
 
-  const matchRows = matched.map(r => {
-    const conf = r.confidence != null ? ` ${(r.confidence * 100).toFixed(0)}%` : '';
-    return `<div style="font-size:12px;padding:3px 0;color:#1e40af;">
-      ✓ <strong>"${esc(r.phrase)}"</strong> → ${esc(r.containerTitle || '')}
-      <span style="color:#6b7280;font-size:11px;"> · ${r.matchType || ''}${conf}</span>
-    </div>`;
-  }).join('');
+  const TIER_STYLE = {
+    '90%+': 'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+    '80%+': 'background:#fef9c3;color:#713f12;border:1px solid #fde047;',
+    '70%+': 'background:#ffedd5;color:#9a3412;border:1px solid #fdba74;',
+  };
 
-  const noMatchRows = unmatched.map(r => {
+  const cards = results.map(r => {
+    const topMatches = Array.isArray(r.topMatches) ? r.topMatches : [];
     const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(r.phrase)}`;
-    return `<div style="font-size:12px;padding:3px 0;color:#991b1b;">
-      ✗ <strong>"${esc(r.phrase)}"</strong>
-      <a href="${pfUrl}" target="_blank" style="font-size:11px;color:#991b1b;text-decoration:underline;margin-left:8px;">Add to dictionary ↗</a>
+
+    // Header row — phrase + UAP match badge
+    const uapBadge = r.matched
+      ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;margin-left:6px;">UAP HIT · ${r.containerTitle || ''} · ${r.matchType || ''}</span>`
+      : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;margin-left:6px;">NOT IN DICTIONARY</span>`;
+
+    // Top-3 tier rows
+    const tierRows = topMatches.slice(0, 3).map(m => {
+      const tierStyle = TIER_STYLE[m.tier] || TIER_STYLE['70%+'];
+      const pct = Math.round(m.score * 100);
+      const kcUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&section=${encodeURIComponent(m.sectionKcId || '')}`;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;${tierStyle}">${pct}%</span>
+        <span style="font-size:11px;color:#374151;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          <strong>${esc(m.containerName)}</strong>
+          <span style="color:#6b7280;"> · ${esc(m.sectionLabel)}</span>
+          ${m.sectionKcId ? `<span style="color:#9ca3af;font-size:10px;margin-left:4px;">[${esc(m.sectionKcId)}]</span>` : ''}
+        </span>
+        <span style="font-size:10px;color:#9ca3af;white-space:nowrap;flex-shrink:0;">
+          "${esc((m.phraseText || '').slice(0, 30))}${(m.phraseText || '').length > 30 ? '…' : ''}"
+        </span>
+        <a href="${kcUrl}" target="_blank" style="font-size:10px;color:#6b7280;text-decoration:underline;white-space:nowrap;flex-shrink:0;">Edit ↗</a>
+      </div>`;
+    }).join('');
+
+    const noHitsNote = !topMatches.length
+      ? `<div style="font-size:11px;color:#9ca3af;padding:3px 0;font-style:italic;">No phrase matches ≥70% — <a href="${pfUrl}" target="_blank" style="color:#991b1b;">Add to dictionary ↗</a></div>`
+      : '';
+
+    return `<div style="border:1px solid #e5e7eb;border-radius:5px;padding:6px 8px;margin-bottom:6px;">
+      <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:4px;">
+        "${esc(r.phrase)}"${uapBadge}
+      </div>
+      ${tierRows}${noHitsNote}
     </div>`;
   }).join('');
 
   resultEl.innerHTML = `
-    ${matched.length ? `<div style="margin-bottom:4px;font-size:11px;font-weight:700;color:#1e40af;">EXISTS IN KC (${matched.length})</div>${matchRows}` : ''}
-    ${unmatched.length ? `<div style="margin:${matched.length ? '6px' : '0'} 0 4px;font-size:11px;font-weight:700;color:#991b1b;">NOT IN DICTIONARY (${unmatched.length})</div>${noMatchRows}` : ''}
-    <div style="font-size:10px;color:#9ca3af;margin-top:4px;font-style:italic;">
-      ⚠ EXISTS IN KC = phrase is in the dictionary but UAP missed it during the live call (raw utterance was too long to extract cleanly)
+    <div style="margin-top:4px;">
+      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;">
+        ⚡ Phrase matches — top 3 per value (edit section to modify phrases or add negative keywords)
+      </div>
+      ${cards}
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px;font-style:italic;">
+        ⚠ Score = cosine similarity between input and existing KC caller phrases · UAP HIT = live route taken
+      </div>
     </div>`;
 }
 
