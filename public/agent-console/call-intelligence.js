@@ -169,39 +169,32 @@ async function runCueGapAnalysis(btn, turnNum) {
 
     _cueCandidates.set(turnNum, candidates);
 
-    const cards = candidates.map((c, idx) => {
-      const colors  = _signalColors(c.signal);
+    const rows = candidates.map((c, idx) => {
+      const colors    = _signalColors(c.signal);
       const cellsHtml = _renderCueFrameMini(c.cueFrame, colors);
-      const cardId  = `cue-candidate-${turnNum}-${idx}`;
-      const matchId = `cue-match-${turnNum}-${idx}`;
-      const pfUrl   = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(c.phrase)}`;
+      const matchId   = `cue-match-${turnNum}-${idx}`;
+      const pfUrl     = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(c.phrase)}`;
 
-      return `<div id="${cardId}" style="margin-top:6px;padding:8px;border-radius:5px;background:${colors.bg};border:1px solid ${colors.border};">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-          <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
-          <span style="font-size:11px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
-        </div>
-        ${c.rationale ? `<div style="font-size:9px;color:${colors.fg};margin-bottom:5px;font-style:italic;">${c.rationale}</div>` : ''}
-        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:6px;">${cellsHtml}</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      return `<div id="cue-candidate-${turnNum}-${idx}" style="margin-top:5px;padding-left:6px;border-left:3px solid ${colors.border};">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
+          <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
+          <span style="font-size:10px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
           <button onclick="runCuePhraseMatch(${turnNum}, ${idx})"
-            style="font-size:9px;padding:2px 8px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;">
-            ⚡ Run phrase match →
+            style="font-size:9px;padding:1px 7px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;margin-left:auto;">
+            ⚡ Match →
           </button>
-          <a href="${pfUrl}" target="_blank"
-            style="font-size:9px;color:${colors.fg};text-decoration:underline;">
-            Open in Phrase Finder ↗
-          </a>
+          <a href="${pfUrl}" target="_blank" style="font-size:9px;color:#6b7280;text-decoration:underline;white-space:nowrap;">Phrase Finder ↗</a>
         </div>
-        <div id="${matchId}" style="margin-top:4px;"></div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:3px;">${cellsHtml}</div>
+        <div id="${matchId}"></div>
       </div>`;
     }).join('');
 
-    container.innerHTML = `<div style="margin-top:6px;">
-      <div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:2px;">
-        🔬 GROQ SIGNAL DECOMPOSITION — ${candidates.length} distinct signal${candidates.length > 1 ? 's' : ''} found
+    container.innerHTML = `<div style="margin-top:6px;padding-top:5px;border-top:1px dashed #e5e7eb;">
+      <div style="font-size:9px;color:#9ca3af;font-weight:600;margin-bottom:3px;letter-spacing:0.3px;">
+        🔬 GROQ — ${candidates.length} SIGNAL${candidates.length > 1 ? 'S' : ''} FOUND
       </div>
-      ${cards}
+      ${rows}
     </div>`;
 
     btn.style.display = 'none';
