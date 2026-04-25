@@ -75,6 +75,78 @@ function getCompanyId() {
   return new URLSearchParams(window.location.search).get('companyId') || '';
 }
 
+// ─── CUE GAP ANALYSIS ─────────────────────────────────────────────────────────
+// Stores caller utterances keyed by turnNumber for on-demand gap analysis.
+// Populated during _renderInlineUapSummary; consumed by runCueGapAnalysis.
+const _cueGapUtterances = new Map();
+
+async function runCueGapAnalysis(btn, turnNum) {
+  const utterance = _cueGapUtterances.get(turnNum);
+  if (!utterance) return;
+
+  const companyId = state.companyId;
+  const callSid   = state.currentCallSid;
+  const container = document.getElementById(`cue-gap-${turnNum}`);
+  if (!container) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Analyzing…';
+  container.innerHTML = '<div style="font-size:10px;color:#6b7280;padding:4px 0;">Asking Groq what should have been extracted…</div>';
+
+  const CUE_FIELDS = [
+    ['REQUEST',    'requestCue'],
+    ['PERMISSION', 'permissionCue'],
+    ['INFO',       'infoCue'],
+    ['DIRECTIVE',  'directiveCue'],
+    ['ACTION',     'actionCore'],
+    ['URGENCY',    'urgencyCore'],
+    ['MODIFIER',   'modifierCore'],
+    ['TRADE',      'tradeMatches']
+  ];
+
+  try {
+    const data = await apiFetch(
+      `/api/call-intelligence/company/${companyId}/cue-gap`,
+      { method: 'POST', body: JSON.stringify({ utterance, callSid, turnNumber: turnNum }) }
+    );
+    const suggested = data.suggested || {};
+    const cellBase = 'padding:4px 6px;border-radius:4px;font-size:10px;line-height:1.3;min-height:38px;display:flex;flex-direction:column;justify-content:center;';
+    const cells = CUE_FIELDS.map(([label, key]) => {
+      let val = '';
+      if (key === 'tradeMatches') {
+        const tm = Array.isArray(suggested.tradeMatches) ? suggested.tradeMatches : [];
+        if (tm.length) {
+          const terms = [...new Set(tm.map(t => t && t.term).filter(Boolean))];
+          val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
+        }
+      } else {
+        val = suggested[key] || '';
+      }
+      const present = !!val && String(val).trim();
+      if (present) {
+        return `<div style="${cellBase}background:#fef3c7;border:1px solid #fbbf24;">
+          <div style="font-weight:700;color:#92400e;font-size:9px;letter-spacing:0.4px;">${label}</div>
+          <div style="color:#78350f;font-weight:600;margin-top:2px;">${val.toString().slice(0, 48)}</div>
+        </div>`;
+      }
+      return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
+        <div style="font-weight:700;color:#cbd5e1;font-size:9px;letter-spacing:0.4px;">${label}</div>
+        <div style="color:#e2e8f0;font-style:italic;margin-top:2px;">—</div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<div style="margin-top:4px;">
+      <div style="font-size:10px;color:#92400e;font-weight:600;margin-bottom:3px;">🤖 GROQ SUGGESTS — add missing patterns to cuePhrases</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+    </div>`;
+    btn.style.display = 'none';
+  } catch (err) {
+    container.innerHTML = `<div style="font-size:10px;color:#991b1b;padding:4px 0;">Gap analysis failed: ${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Retry →';
+  }
+}
+
 // ─── App state ────────────────────────────────────────────────────────────────
 
 const state = {
@@ -711,6 +783,10 @@ function _renderInlineUapSummary(agentTurn, turns) {
   const responseText = agentTurn.text || '';
   if (!callerText && !qaEntries.length && !responseText) return '';
 
+  // Store utterance for gap analysis button (keyed by agent turn number)
+  const turnNum = agentTurn.turnNumber;
+  if (callerText && turnNum != null) _cueGapUtterances.set(turnNum, callerText);
+
   // Decision-carrying entries
   const cueEntry  = qaEntries.find(q => q && q.cueFrame);
   const cf        = cueEntry?.cueFrame || null;
@@ -779,9 +855,18 @@ function _renderInlineUapSummary(agentTurn, turns) {
       driftChip = ` <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">\u26a0 TOPIC DRIFT</span>`;
     }
 
+    // Gap analysis button + Card 2 placeholder
+    const gapBtn = callerText && turnNum != null
+      ? `<div style="margin-top:4px;">
+           <button onclick="runCueGapAnalysis(this, ${turnNum})" style="font-size:9px;padding:2px 8px;border-radius:3px;background:#fef3c7;color:#92400e;border:1px solid #fbbf24;cursor:pointer;font-weight:600;">🔍 Analyze gap →</button>
+         </div>
+         <div id="cue-gap-${turnNum}"></div>`
+      : '';
+
     gridLine = `<div style="margin-top:5px;">
-      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame${driftChip}</div>
+      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:3px;">\ud83e\udded UAP 8-FIELD cueFrame — ACTUAL${driftChip}</div>
       <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+      ${gapBtn}
     </div>`;
   }
 

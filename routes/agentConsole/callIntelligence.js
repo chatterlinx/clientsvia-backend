@@ -3317,4 +3317,104 @@ router.get('/:callSid/full-report', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /company/:companyId/cue-gap
+// On-demand Groq gap analysis: given a caller utterance, return what SHOULD
+// have been extracted into each of the 8 cueFrame buckets.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/company/:companyId/cue-gap', async (req, res) => {
+  const { companyId } = req.params;
+  const { utterance, callSid, turnNumber } = req.body || {};
+
+  if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 2) {
+    return res.status(400).json({ error: 'utterance required' });
+  }
+
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) {
+    return res.status(503).json({ error: 'GROQ_API_KEY not configured' });
+  }
+
+  const prompt = `You are a cue extraction engine for a voice AI phone agent system.
+
+Analyze the following caller utterance and extract signal into these 8 buckets:
+
+1. requestCue — Caller is asking for something to be done (e.g. "can you", "could you", "would you", "I want to", "I'd like to")
+2. permissionCue — Caller is asking if they need to do something (e.g. "do I have to", "am I required to", "is it okay if", "can I")
+3. infoCue — Caller is asking for information (e.g. "what is", "how much", "when does", "how do I", "what time")
+4. directiveCue — Caller is giving a direct instruction or stating a need (e.g. "just", "please", "I need to", "I'm calling about", "I'm here because")
+5. actionCore — Core action verb or request type (e.g. "schedule", "book", "pay", "fix", "replace", "install", "repair", "cancel", "refund", "check")
+6. urgencyCore — Time pressure or urgency signal (e.g. "today", "now", "asap", "emergency", "urgent", "right away", "as soon as possible")
+7. modifierCore — Context modifier that qualifies the action (e.g. "for my AC unit", "under warranty", "with the maintenance plan", equipment name/type)
+8. tradeMatches — Trade/industry vocabulary present (e.g. HVAC, plumbing, electrical, furnace, compressor, thermostat, water heater, drain)
+
+RULES:
+- Extract ONLY what is clearly present in the utterance. Do not infer or hallucinate.
+- For tradeMatches: return an array of objects like [{"term": "AC", "category": "hvac"}], or [] if none.
+- For all other fields: return a short extracted string (2-8 words max), or null if not present.
+- Return ONLY valid JSON, no markdown, no explanation.
+
+UTTERANCE: "${utterance.replace(/"/g, '\\"').slice(0, 400)}"
+
+Respond with this exact JSON structure:
+{
+  "requestCue": null,
+  "permissionCue": null,
+  "infoCue": null,
+  "directiveCue": null,
+  "actionCore": null,
+  "urgencyCore": null,
+  "modifierCore": null,
+  "tradeMatches": []
+}`;
+
+  try {
+    const body = JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      max_tokens: 300,
+      response_format: { type: 'json_object' }
+    });
+
+    const groqRes = await new Promise((resolve, reject) => {
+      const reqOpts = {
+        hostname: 'api.groq.com',
+        path: '/openai/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body)
+        },
+        timeout: 8000
+      };
+      const hreq = https.request(reqOpts, hres => {
+        let data = '';
+        hres.on('data', chunk => { data += chunk; });
+        hres.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error('Groq JSON parse failed')); }
+        });
+      });
+      hreq.on('error', reject);
+      hreq.on('timeout', () => { hreq.destroy(); reject(new Error('Groq timeout')); });
+      hreq.write(body);
+      hreq.end();
+    });
+
+    const raw = groqRes?.choices?.[0]?.message?.content;
+    if (!raw) return res.status(502).json({ error: 'Empty Groq response' });
+
+    let suggested;
+    try { suggested = JSON.parse(raw); }
+    catch (e) { return res.status(502).json({ error: 'Groq returned invalid JSON', raw }); }
+
+    return res.json({ ok: true, suggested, utterance, callSid, turnNumber });
+  } catch (err) {
+    console.error('[cue-gap]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
