@@ -76,12 +76,12 @@ function getCompanyId() {
 }
 
 // ─── CUE GAP ANALYSIS ─────────────────────────────────────────────────────────
-// _cueGapUtterances: caller text keyed by agentTurn.turnNumber.
-//   Populated during render; consumed by runCueGapAnalysis on button click.
-// _cueCandidates: Groq candidates[] keyed by turnNumber.
-//   Set after gap analysis resolves; consumed by runCuePhraseMatch.
-const _cueGapUtterances = new Map();
-const _cueCandidates    = new Map();
+// One ACTUAL card (green, rendered at paint time) + one GROQ card (amber,
+// on-demand). GROQ card merges all signals into a single 8-field grid where
+// each cell shows ALL unique values across signals, comma-separated.
+// Phrase match tests every unique extracted value in parallel.
+const _cueGapUtterances = new Map(); // turnNum → caller utterance
+const _cueGapMerged     = new Map(); // turnNum → merged {field→[values]}
 
 const _CUE_FIELDS = [
   ['REQUEST',    'requestCue'],
@@ -94,50 +94,35 @@ const _CUE_FIELDS = [
   ['TRADE',      'tradeMatches']
 ];
 
-const _SIGNAL_COLORS = {
-  repeat_visit:        { bg: '#fef3c7', border: '#fbbf24', fg: '#92400e', dark: '#78350f' },
-  equipment_failure:   { bg: '#fee2e2', border: '#fca5a5', fg: '#991b1b', dark: '#7f1d1d' },
-  new_symptom:         { bg: '#fde8d8', border: '#fb923c', fg: '#9a3412', dark: '#7c2d12' },
-  payment_inquiry:     { bg: '#ede9fe', border: '#a78bfa', fg: '#5b21b6', dark: '#4c1d95' },
-  scheduling_request:  { bg: '#dcfce7', border: '#86efac', fg: '#166534', dark: '#14532d' },
-  info_request:        { bg: '#dbeafe', border: '#93c5fd', fg: '#1e40af', dark: '#1e3a8a' },
-  complaint:           { bg: '#fce7f3', border: '#f9a8d4', fg: '#9d174d', dark: '#831843' },
-  warranty_question:   { bg: '#f0fdf4', border: '#86efac', fg: '#15803d', dark: '#14532d' },
-  other:               { bg: '#f9fafb', border: '#d1d5db', fg: '#374151', dark: '#111827' }
-};
-
-function _signalColors(signal) {
-  return _SIGNAL_COLORS[signal] || _SIGNAL_COLORS.other;
-}
-
-function _signalLabel(signal) {
-  return (signal || 'other').replace(/_/g, ' ').toUpperCase();
-}
-
-function _renderCueFrameMini(cf, colors) {
-  const cellBase = `padding:4px 6px;border-radius:3px;font-size:11px;line-height:1.3;min-height:36px;display:flex;flex-direction:column;justify-content:center;`;
-  return _CUE_FIELDS.map(([label, key]) => {
-    let val = '';
-    if (key === 'tradeMatches') {
-      const tm = Array.isArray(cf?.tradeMatches) ? cf.tradeMatches : [];
-      if (tm.length) {
-        const terms = [...new Set(tm.map(t => t?.term).filter(Boolean))];
-        val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
+// Merge N signal cueFrames into one {field → unique-values[]}
+function _mergeCueFrames(candidates) {
+  const merged = {};
+  for (const [, key] of _CUE_FIELDS) merged[key] = [];
+  for (const c of candidates) {
+    const cf = c.cueFrame || {};
+    for (const [, key] of _CUE_FIELDS) {
+      if (key === 'tradeMatches') {
+        const terms = (Array.isArray(cf.tradeMatches) ? cf.tradeMatches : [])
+          .map(t => t?.term).filter(Boolean);
+        for (const t of terms) {
+          if (!merged[key].includes(t)) merged[key].push(t);
+        }
+      } else if (cf[key] && String(cf[key]).trim()) {
+        const v = String(cf[key]).trim();
+        if (!merged[key].includes(v)) merged[key].push(v);
       }
-    } else {
-      val = cf?.[key] || '';
     }
-    if (val && String(val).trim()) {
-      return `<div style="${cellBase}background:${colors.bg};border:1px solid ${colors.border};">
-        <div style="font-weight:700;color:${colors.fg};font-size:10px;letter-spacing:0.4px;">${label}</div>
-        <div style="color:${colors.dark};font-weight:600;margin-top:1px;">${String(val).slice(0, 44)}</div>
-      </div>`;
-    }
-    return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
-      <div style="font-weight:700;color:#d1d5db;font-size:10px;letter-spacing:0.4px;">${label}</div>
-      <div style="color:#e5e7eb;font-style:italic;margin-top:1px;">—</div>
-    </div>`;
-  }).join('');
+  }
+  return merged;
+}
+
+// Collect every unique text value across all fields for phrase matching
+function _allPhraseValues(merged) {
+  const vals = new Set();
+  for (const [, key] of _CUE_FIELDS) {
+    for (const v of (merged[key] || [])) vals.add(v.toLowerCase().trim());
+  }
+  return [...vals].filter(v => v.length >= 3);
 }
 
 async function runCueGapAnalysis(btn, turnNum) {
@@ -151,8 +136,7 @@ async function runCueGapAnalysis(btn, turnNum) {
 
   btn.disabled = true;
   btn.textContent = 'Analyzing…';
-  container.innerHTML = `<div style="font-size:10px;color:#6b7280;padding:6px 0;font-style:italic;">
-    Asking Groq to decompose utterance into distinct signals…</div>`;
+  container.innerHTML = `<div style="font-size:11px;color:#6b7280;padding:4px 0;font-style:italic;">Asking Groq…</div>`;
 
   try {
     const data = await apiFetch(
@@ -162,159 +146,144 @@ async function runCueGapAnalysis(btn, turnNum) {
 
     const candidates = Array.isArray(data.candidates) ? data.candidates : [];
     if (!candidates.length) {
-      container.innerHTML = `<div style="font-size:10px;color:#991b1b;padding:4px 0;">No candidates returned.</div>`;
+      container.innerHTML = `<div style="font-size:11px;color:#991b1b;padding:4px 0;">No signals returned.</div>`;
       btn.disabled = false; btn.textContent = 'Retry →';
       return;
     }
 
-    _cueCandidates.set(turnNum, candidates);
+    const merged = _mergeCueFrames(candidates);
+    _cueGapMerged.set(turnNum, merged);
 
-    const rows = candidates.map((c, idx) => {
-      const colors    = _signalColors(c.signal);
-      const cellsHtml = _renderCueFrameMini(c.cueFrame, colors);
-      const matchId   = `cue-match-${turnNum}-${idx}`;
-      const pfUrl     = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(c.phrase)}`;
-
-      return `<div id="cue-candidate-${turnNum}-${idx}" style="margin-top:6px;padding-left:8px;border-left:3px solid ${colors.border};">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-          <span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
-          <span style="font-size:12px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
-          <button onclick="runCuePhraseMatch(${turnNum}, ${idx})"
-            style="font-size:11px;padding:2px 10px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;margin-left:auto;">
-            ⚡ Match →
-          </button>
-          <button onclick="toggleCuePatternPanel(${turnNum}, ${idx})"
-            style="font-size:11px;padding:2px 10px;border-radius:3px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
-            ＋ Add patterns
-          </button>
-          <a href="${pfUrl}" target="_blank" style="font-size:11px;color:#6b7280;text-decoration:underline;white-space:nowrap;">Phrase Finder ↗</a>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:3px;">${cellsHtml}</div>
-        <div id="${matchId}"></div>
-        <div id="cue-patterns-${turnNum}-${idx}" style="display:none;"></div>
+    // Build the merged GROQ 8-field grid
+    const cellBase = 'padding:4px 6px;border-radius:3px;font-size:11px;line-height:1.3;min-height:36px;display:flex;flex-direction:column;justify-content:center;';
+    const cells = _CUE_FIELDS.map(([label, key]) => {
+      const vals = merged[key] || [];
+      if (vals.length) {
+        const display = vals.join(', ');
+        return `<div style="${cellBase}background:#fef3c7;border:1px solid #fbbf24;">
+          <div style="font-weight:700;color:#92400e;font-size:10px;letter-spacing:0.4px;">${label}</div>
+          <div style="color:#78350f;font-weight:600;margin-top:1px;font-size:11px;">${esc(display.slice(0, 60))}${display.length > 60 ? '…' : ''}</div>
+        </div>`;
+      }
+      return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
+        <div style="font-weight:700;color:#d1d5db;font-size:10px;letter-spacing:0.4px;">${label}</div>
+        <div style="color:#e5e7eb;font-style:italic;margin-top:1px;">—</div>
       </div>`;
     }).join('');
 
+    const matchResultId  = `cue-match-result-${turnNum}`;
+    const patternPanelId = `cue-pattern-panel-${turnNum}`;
+
     container.innerHTML = `<div style="margin-top:6px;padding-top:5px;border-top:1px dashed #e5e7eb;">
-      <div style="font-size:9px;color:#9ca3af;font-weight:600;margin-bottom:3px;letter-spacing:0.3px;">
-        🔬 GROQ — ${candidates.length} SIGNAL${candidates.length > 1 ? 'S' : ''} FOUND
+      <div style="font-size:10px;color:#92400e;font-weight:700;margin-bottom:4px;">🤖 GROQ — all signals merged</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:6px;">${cells}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+        <button onclick="runAllPhraseMatches(${turnNum})"
+          style="font-size:12px;padding:3px 12px;border-radius:4px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;">
+          ⚡ Match all values →
+        </button>
+        <button onclick="toggleMergedPatternPanel(${turnNum})"
+          style="font-size:12px;padding:3px 12px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
+          ＋ Add patterns
+        </button>
       </div>
-      ${rows}
+      <div id="${matchResultId}"></div>
+      <div id="${patternPanelId}" style="display:none;"></div>
     </div>`;
 
     btn.style.display = 'none';
   } catch (err) {
-    container.innerHTML = `<div style="font-size:10px;color:#991b1b;padding:4px 0;">Gap analysis failed: ${err.message}</div>`;
+    container.innerHTML = `<div style="font-size:11px;color:#991b1b;padding:4px 0;">Gap analysis failed: ${err.message}</div>`;
     btn.disabled = false;
     btn.textContent = 'Retry →';
   }
 }
 
-async function runCuePhraseMatch(turnNum, idx) {
-  const candidates = _cueCandidates.get(turnNum);
-  if (!candidates || !candidates[idx]) return;
+async function runAllPhraseMatches(turnNum) {
+  const merged  = _cueGapMerged.get(turnNum);
+  const resultEl = document.getElementById(`cue-match-result-${turnNum}`);
+  if (!merged || !resultEl) return;
 
-  const { phrase } = candidates[idx];
-  const matchEl = document.getElementById(`cue-match-${turnNum}-${idx}`);
-  const btnEl   = document.querySelector(`#cue-candidate-${turnNum}-${idx} button`);
-  if (!matchEl) return;
-
-  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Matching…'; }
-  matchEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Running phrase match…</div>`;
-
-  try {
-    const data = await apiFetch(
-      `/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
-      { method: 'POST', body: JSON.stringify({ phrase }) }
-    );
-
-    if (data.matched) {
-      const conf    = data.confidence != null ? ` ${(data.confidence * 100).toFixed(0)}%` : '';
-      const mt      = data.matchType || 'MATCH';
-      const title   = data.containerTitle ? `<strong>${data.containerTitle}</strong>` : '';
-      const section = data.sectionLabel ? ` · ${data.sectionLabel}` : '';
-      matchEl.innerHTML = `<div style="font-size:12px;padding:6px 8px;border-radius:4px;background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;margin-top:4px;">
-        <span style="font-weight:700;">EXISTS IN KC →</span> ${title}<span style="color:#3b82f6;">${section}</span>
-        <span style="font-size:11px;color:#6b7280;margin-left:6px;">${mt} · ${conf}</span>
-        <div style="font-size:11px;color:#4b5563;margin-top:3px;">
-          KC phrase: <em>"${data.matchedPhrase || phrase}"</em>
-        </div>
-        <div style="font-size:11px;color:#1e40af;margin-top:2px;font-style:italic;">
-          ⚠ UAP missed this during the live call — the raw utterance was too long to extract this signal
-        </div>
-      </div>`;
-    } else {
-      const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(state.companyId)}&openPf=${encodeURIComponent(phrase)}`;
-      matchEl.innerHTML = `<div style="font-size:12px;padding:6px 8px;border-radius:4px;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;margin-top:4px;">
-        <span style="font-weight:700;">✗ NOT IN DICTIONARY</span> — <em>"${phrase}"</em> has no matching KC phrase
-        <div style="margin-top:4px;">
-          <a href="${pfUrl}" target="_blank"
-            style="font-size:12px;font-weight:700;color:#991b1b;text-decoration:underline;">
-            → Add to KC phrase dictionary ↗
-          </a>
-        </div>
-      </div>`;
-    }
-    if (btnEl) btnEl.style.display = 'none';
-  } catch (err) {
-    matchEl.innerHTML = `<div style="font-size:11px;color:#991b1b;">Match failed: ${err.message}</div>`;
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⚡ Match →'; }
-  }
-}
-
-// Token label map for display
-const _CUE_TOKEN_LABELS = {
-  requestCue:    'REQUEST',
-  permissionCue: 'PERMISSION',
-  infoCue:       'INFO',
-  directiveCue:  'DIRECTIVE',
-  actionCore:    'ACTION',
-  urgencyCore:   'URGENCY',
-  modifierCore:  'MODIFIER'
-};
-
-function toggleCuePatternPanel(turnNum, idx) {
-  const panelEl = document.getElementById(`cue-patterns-${turnNum}-${idx}`);
-  if (!panelEl) return;
-
-  if (panelEl.style.display !== 'none') {
-    panelEl.style.display = 'none';
+  const values = _allPhraseValues(merged);
+  if (!values.length) {
+    resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;">No values to match.</div>`;
     return;
   }
 
-  const candidates = _cueCandidates.get(turnNum);
-  const c = candidates?.[idx];
-  if (!c) return;
+  resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Matching ${values.length} values…</div>`;
 
-  // Collect non-null cueFrame fields (excluding tradeMatches — different store)
-  const fields = Object.entries(_CUE_TOKEN_LABELS)
-    .map(([token, label]) => ({ token, label, value: c.cueFrame?.[token] || '' }))
-    .filter(f => f.value.trim());
+  const results = await Promise.all(
+    values.map(phrase =>
+      apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
+        { method: 'POST', body: JSON.stringify({ phrase }) })
+        .then(d => ({ phrase, ...d }))
+        .catch(e => ({ phrase, matched: false, error: e.message }))
+    )
+  );
 
-  if (!fields.length) {
-    panelEl.innerHTML = `<div style="font-size:12px;color:#6b7280;padding:6px 0;font-style:italic;">No extractable patterns in this signal.</div>`;
-    panelEl.style.display = 'block';
-    return;
-  }
+  const matched    = results.filter(r => r.matched);
+  const unmatched  = results.filter(r => !r.matched);
+  const companyId  = state.companyId;
 
-  const rows = fields.map(f => {
-    const inputId  = `cue-pi-input-${turnNum}-${idx}-${f.token}`;
-    const statusId = `cue-pi-status-${turnNum}-${idx}-${f.token}`;
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-      <span style="font-size:10px;font-weight:700;color:#374151;width:76px;flex-shrink:0;">${f.label}</span>
-      <input id="${inputId}" type="text" value="${f.value.replace(/"/g, '&quot;')}"
-        style="flex:1;min-width:160px;font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" />
-      <button onclick="saveCuePattern('${inputId}','${f.token}','${statusId}')"
-        style="font-size:11px;padding:3px 12px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;white-space:nowrap;">
-        Save
-      </button>
-      <span id="${statusId}" style="font-size:11px;"></span>
+  const matchRows = matched.map(r => {
+    const conf = r.confidence != null ? ` ${(r.confidence * 100).toFixed(0)}%` : '';
+    return `<div style="font-size:12px;padding:3px 0;color:#1e40af;">
+      ✓ <strong>"${esc(r.phrase)}"</strong> → ${esc(r.containerTitle || '')}
+      <span style="color:#6b7280;font-size:11px;"> · ${r.matchType || ''}${conf}</span>
     </div>`;
   }).join('');
 
+  const noMatchRows = unmatched.map(r => {
+    const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(r.phrase)}`;
+    return `<div style="font-size:12px;padding:3px 0;color:#991b1b;">
+      ✗ <strong>"${esc(r.phrase)}"</strong>
+      <a href="${pfUrl}" target="_blank" style="font-size:11px;color:#991b1b;text-decoration:underline;margin-left:8px;">Add to dictionary ↗</a>
+    </div>`;
+  }).join('');
+
+  resultEl.innerHTML = `
+    ${matched.length ? `<div style="margin-bottom:4px;font-size:11px;font-weight:700;color:#1e40af;">EXISTS IN KC (${matched.length})</div>${matchRows}` : ''}
+    ${unmatched.length ? `<div style="margin:${matched.length ? '6px' : '0'} 0 4px;font-size:11px;font-weight:700;color:#991b1b;">NOT IN DICTIONARY (${unmatched.length})</div>${noMatchRows}` : ''}
+    <div style="font-size:10px;color:#9ca3af;margin-top:4px;font-style:italic;">
+      ⚠ EXISTS IN KC = phrase is in the dictionary but UAP missed it during the live call (raw utterance was too long to extract cleanly)
+    </div>`;
+}
+
+function toggleMergedPatternPanel(turnNum) {
+  const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
+  if (!panelEl) return;
+  if (panelEl.style.display !== 'none') { panelEl.style.display = 'none'; return; }
+
+  const merged = _cueGapMerged.get(turnNum);
+  if (!merged) return;
+
+  const tokenLabels = {
+    requestCue: 'REQUEST', permissionCue: 'PERMISSION', infoCue: 'INFO',
+    directiveCue: 'DIRECTIVE', actionCore: 'ACTION', urgencyCore: 'URGENCY', modifierCore: 'MODIFIER'
+  };
+
+  const rows = Object.entries(tokenLabels).map(([token, label]) => {
+    const vals = merged[token] || [];
+    if (!vals.length) return '';
+    return vals.map((v, vi) => {
+      const inputId  = `cue-pi-${turnNum}-${token}-${vi}`;
+      const statusId = `cue-ps-${turnNum}-${token}-${vi}`;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;color:#374151;width:80px;flex-shrink:0;">${label}</span>
+        <input id="${inputId}" type="text" value="${v.replace(/"/g, '&quot;')}"
+          style="flex:1;min-width:140px;font-size:12px;padding:3px 7px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" />
+        <button onclick="saveCuePattern('${inputId}','${token}','${statusId}')"
+          style="font-size:11px;padding:2px 10px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
+          Save
+        </button>
+        <span id="${statusId}" style="font-size:11px;"></span>
+      </div>`;
+    }).join('');
+  }).filter(Boolean).join('');
+
   panelEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:5px;">
-    <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px;">＋ Add to GlobalShare cuePhrases</div>
-    ${rows}
+    <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px;">＋ Add to GlobalShare cuePhrases</div>
+    ${rows || '<div style="font-size:11px;color:#6b7280;">No text values to add.</div>'}
   </div>`;
   panelEl.style.display = 'block';
 }
