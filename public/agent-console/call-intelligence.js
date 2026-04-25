@@ -125,6 +125,106 @@ function _allPhraseValues(merged) {
   return [...vals].filter(v => v.length >= 3);
 }
 
+// ── Shared GATE 2.4 status chip ──────────────────────────────────────────────
+// Used by both the ACTUAL cueFrame display and the GROQ simulated grid.
+// isSimulated=true uses "would route / would fall" language.
+function _gate24StatusHtml(fc, hasTrade, cf, isSimulated) {
+  const bypass = fc === 2 && hasTrade &&
+    !!(cf?.modifierCore || cf?.actionCore || cf?.urgencyCore);
+  const pass   = (fc >= 3 && hasTrade) || bypass;
+  const verb     = isSimulated ? 'would route' : 'routes';
+  const fallVerb = isSimulated ? 'would fall'  : 'falls';
+
+  const chip = (bg, border, color, label) =>
+    `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:${bg};color:${color};border:1px solid ${border};">${label}</span>`;
+
+  let inner;
+  if (pass) {
+    const bypassNote = bypass ? ' <span style="color:#059669;">(narrative bypass)</span>' : '';
+    inner = chip('#dcfce7','#86efac','#166534','GATE 2.4 PASS') +
+      `<span style="font-size:11px;color:#374151;margin-left:4px;">${fc}/8 fields · trade hit → ${verb} via CueExtractor${bypassNote}</span>`;
+  } else if (fc > 0) {
+    const missing = 3 - fc;
+    const note = (hasTrade && fc === 2)
+      ? ' · has trade but needs modifier/action/urgency for bypass'
+      : (!hasTrade ? ' · no trade hit' : '');
+    inner = chip('#fee2e2','#fca5a5','#991b1b','GATE 2.4 FAIL') +
+      `<span style="font-size:11px;color:#374151;margin-left:4px;">${fc}/8 fields · needs ${missing} more${note} → ${fallVerb} to UAP phrase index</span>`;
+  } else {
+    inner = chip('#f3f4f6','#e5e7eb','#6b7280','GATE 2.4 SKIP') +
+      `<span style="font-size:11px;color:#9ca3af;margin-left:4px;">0 fields extracted</span>`;
+  }
+  return `<div style="line-height:1.5;">${inner}</div>`;
+}
+
+// ── Single phrase match result card (one per extracted value) ─────────────────
+const _TIER_STYLE = {
+  '90%+': 'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+  '80%+': 'background:#fef9c3;color:#713f12;border:1px solid #fde047;',
+  '70%+': 'background:#ffedd5;color:#9a3412;border:1px solid #fdba74;',
+};
+
+function _buildPhraseMatchCard(r, companyId) {
+  const topMatches = Array.isArray(r.topMatches) ? r.topMatches : [];
+  const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(r.phrase)}`;
+
+  const uapBadge = r.matched
+    ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;margin-left:6px;">UAP HIT · ${esc(r.containerTitle || '')} · ${esc(r.matchType || '')}</span>`
+    : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;margin-left:6px;">NOT IN DICTIONARY</span>`;
+
+  const tierRows = topMatches.slice(0, 3).map(m => {
+    const tierStyle = _TIER_STYLE[m.tier] || _TIER_STYLE['70%+'];
+    const pct = Math.round(m.score * 100);
+    const kcUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&section=${encodeURIComponent(m.sectionKcId || '')}`;
+    const preview = (m.phraseText || '').slice(0, 30);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f3f4f6;">
+      <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;${tierStyle}">${pct}%</span>
+      <span style="font-size:11px;color:#374151;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        <strong>${esc(m.containerName)}</strong>
+        <span style="color:#6b7280;"> · ${esc(m.sectionLabel)}</span>
+        ${m.sectionKcId ? `<span style="color:#9ca3af;font-size:10px;margin-left:4px;">[${esc(m.sectionKcId)}]</span>` : ''}
+      </span>
+      <span style="font-size:10px;color:#9ca3af;white-space:nowrap;flex-shrink:0;">"${esc(preview)}${preview.length < (m.phraseText||'').length ? '…' : ''}"</span>
+      <a href="${kcUrl}" target="_blank" style="font-size:10px;color:#6b7280;text-decoration:underline;white-space:nowrap;flex-shrink:0;">Edit ↗</a>
+    </div>`;
+  }).join('');
+
+  const noHits = !topMatches.length
+    ? `<div style="font-size:11px;color:#9ca3af;padding:3px 0;font-style:italic;">No phrase matches ≥70% — <a href="${pfUrl}" target="_blank" style="color:#991b1b;">Add to dictionary ↗</a></div>`
+    : '';
+
+  return `<div style="border:1px solid #e5e7eb;border-radius:5px;padding:6px 8px;margin-bottom:6px;">
+    <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:4px;">"${esc(r.phrase)}"${uapBadge}</div>
+    ${tierRows}${noHits}
+  </div>`;
+}
+
+// ── Combined phrase match (all values joined → single UAP lookup) ─────────────
+function _runCombinedMatchAsync(turnNum, combinedPhrase) {
+  apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
+    { method: 'POST', body: JSON.stringify({ phrase: combinedPhrase }) })
+    .then(d => {
+      const el = document.getElementById(`cue-combined-result-${turnNum}`);
+      if (!el) return;
+      if (d.matched) {
+        const conf = d.confidence != null ? ` · ${(d.confidence * 100).toFixed(0)}%` : '';
+        el.innerHTML =
+          `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;">UAP HIT</span>
+           <span style="margin-left:6px;color:#111827;font-weight:600;">${esc(d.containerTitle || '')}</span>
+           <span style="color:#6b7280;margin-left:4px;">${esc(d.matchType || '')}${conf}</span>
+           <span style="color:#9ca3af;font-size:10px;margin-left:6px;">— combined phrase routes correctly</span>`;
+      } else {
+        el.innerHTML =
+          `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">NO ROUTE</span>
+           <span style="color:#6b7280;margin-left:6px;font-size:11px;">combined phrase not in KC — add missing terms to dictionary</span>`;
+      }
+    })
+    .catch(() => {
+      const el = document.getElementById(`cue-combined-result-${turnNum}`);
+      if (el) el.textContent = 'Combined match failed.';
+    });
+}
+
 async function runCueGapAnalysis(btn, turnNum) {
   const utterance = _cueGapUtterances.get(turnNum);
   if (!utterance) return;
@@ -172,32 +272,10 @@ async function runCueGapAnalysis(btn, turnNum) {
     }).join('');
 
     // Simulated GATE 2.4 from merged Groq values
-    const _mTrade  = (merged.tradeMatches || []).length;
-    const _mNonTrade = _CUE_FIELDS
-      .filter(([,k]) => k !== 'tradeMatches')
-      .filter(([,k]) => (merged[k] || []).length > 0).length;
-    const _mFc     = _mNonTrade + (_mTrade > 0 ? 1 : 0);  // fieldCount sim
-    const _mHasTrade = _mTrade > 0;
-    const _mBypass = _mFc === 2 && _mHasTrade &&
-                     !!(merged.modifierCore?.length || merged.actionCore?.length || merged.urgencyCore?.length);
-    const _mPass   = (_mFc >= 3 && _mHasTrade) || _mBypass;
-    let simGate24Html;
-    if (_mPass) {
-      const bNote = _mBypass ? ' <span style="color:#059669;">(narrative bypass)</span>' : '';
-      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #86efac;">GATE 2.4 PASS</span>
-        <span style="font-size:11px;color:#374151;margin-left:4px;">${_mFc}/8 fields · trade hit → would route via CueExtractor${bNote}</span>`;
-    } else if (_mFc > 0) {
-      const missing = 3 - _mFc;
-      const bNote = _mHasTrade && _mFc === 2
-        ? ' · has trade but needs modifier/action/urgency for bypass'
-        : !_mHasTrade ? ' · no trade hit' : '';
-      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">GATE 2.4 FAIL</span>
-        <span style="font-size:11px;color:#374151;margin-left:4px;">${_mFc}/8 fields · needs ${missing} more${bNote} → would fall to UAP phrase index</span>`;
-    } else {
-      simGate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;">GATE 2.4 SKIP</span>
-        <span style="font-size:11px;color:#9ca3af;margin-left:4px;">0 fields extracted</span>`;
-    }
-    const simGateLine = `<div style="margin-bottom:6px;line-height:1.5;">${simGate24Html}</div>`;
+    const _mTrade    = (merged.tradeMatches || []).length;
+    const _mNonTrade = _CUE_FIELDS.filter(([,k]) => k !== 'tradeMatches' && (merged[k]||[]).length > 0).length;
+    const _mFc       = _mNonTrade + (_mTrade > 0 ? 1 : 0);
+    const simGateLine = `<div style="margin-bottom:6px;">${_gate24StatusHtml(_mFc, _mTrade > 0, merged, true)}</div>`;
 
     const matchResultId  = `cue-match-result-${turnNum}`;
     const patternPanelId = `cue-pattern-panel-${turnNum}`;
@@ -229,7 +307,7 @@ async function runCueGapAnalysis(btn, turnNum) {
 }
 
 async function runAllPhraseMatches(turnNum) {
-  const merged  = _cueGapMerged.get(turnNum);
+  const merged   = _cueGapMerged.get(turnNum);
   const resultEl = document.getElementById(`cue-match-result-${turnNum}`);
   if (!merged || !resultEl) return;
 
@@ -241,72 +319,18 @@ async function runAllPhraseMatches(turnNum) {
 
   resultEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Embedding &amp; matching ${values.length} values against KC phrase index… (5-10s)</div>`;
 
+  const companyId = state.companyId;
   const results = await Promise.all(
     values.map(phrase =>
-      apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
+      apiFetch(`/api/call-intelligence/company/${companyId}/cue-phrase-match`,
         { method: 'POST', body: JSON.stringify({ phrase }) })
         .then(d => ({ phrase, ...d }))
         .catch(e => ({ phrase, matched: false, topMatches: [], error: e.message }))
     )
   );
 
-  const companyId = state.companyId;
-
-  const TIER_STYLE = {
-    '90%+': 'background:#dcfce7;color:#166534;border:1px solid #86efac;',
-    '80%+': 'background:#fef9c3;color:#713f12;border:1px solid #fde047;',
-    '70%+': 'background:#ffedd5;color:#9a3412;border:1px solid #fdba74;',
-  };
-
-  const cards = results.map(r => {
-    const topMatches = Array.isArray(r.topMatches) ? r.topMatches : [];
-    const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(r.phrase)}`;
-
-    // Header row — phrase + UAP match badge
-    const uapBadge = r.matched
-      ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;margin-left:6px;">UAP HIT · ${r.containerTitle || ''} · ${r.matchType || ''}</span>`
-      : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;margin-left:6px;">NOT IN DICTIONARY</span>`;
-
-    // Top-3 tier rows
-    const tierRows = topMatches.slice(0, 3).map(m => {
-      const tierStyle = TIER_STYLE[m.tier] || TIER_STYLE['70%+'];
-      const pct = Math.round(m.score * 100);
-      const kcUrl = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&section=${encodeURIComponent(m.sectionKcId || '')}`;
-      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f3f4f6;">
-        <span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;white-space:nowrap;${tierStyle}">${pct}%</span>
-        <span style="font-size:11px;color:#374151;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-          <strong>${esc(m.containerName)}</strong>
-          <span style="color:#6b7280;"> · ${esc(m.sectionLabel)}</span>
-          ${m.sectionKcId ? `<span style="color:#9ca3af;font-size:10px;margin-left:4px;">[${esc(m.sectionKcId)}]</span>` : ''}
-        </span>
-        <span style="font-size:10px;color:#9ca3af;white-space:nowrap;flex-shrink:0;">
-          "${esc((m.phraseText || '').slice(0, 30))}${(m.phraseText || '').length > 30 ? '…' : ''}"
-        </span>
-        <a href="${kcUrl}" target="_blank" style="font-size:10px;color:#6b7280;text-decoration:underline;white-space:nowrap;flex-shrink:0;">Edit ↗</a>
-      </div>`;
-    }).join('');
-
-    const noHitsNote = !topMatches.length
-      ? `<div style="font-size:11px;color:#9ca3af;padding:3px 0;font-style:italic;">No phrase matches ≥70% — <a href="${pfUrl}" target="_blank" style="color:#991b1b;">Add to dictionary ↗</a></div>`
-      : '';
-
-    return `<div style="border:1px solid #e5e7eb;border-radius:5px;padding:6px 8px;margin-bottom:6px;">
-      <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:4px;">
-        "${esc(r.phrase)}"${uapBadge}
-      </div>
-      ${tierRows}${noHitsNote}
-    </div>`;
-  }).join('');
-
-  // Combined phrase match — join all unique values into one phrase → simulate routing
   const combinedPhrase = values.join(' ');
-  const combinedEl = `<div id="cue-combined-${turnNum}" style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:5px;">
-    <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;">
-      🔗 Combined phrase match — all values as one utterance
-    </div>
-    <div style="font-size:11px;font-family:monospace;color:#6b7280;margin-bottom:6px;">"${esc(combinedPhrase)}"</div>
-    <div id="cue-combined-result-${turnNum}" style="font-size:11px;color:#6b7280;font-style:italic;">Running…</div>
-  </div>`;
+  const cards = results.map(r => _buildPhraseMatchCard(r, companyId)).join('');
 
   resultEl.innerHTML = `
     <div style="margin-top:4px;">
@@ -315,37 +339,20 @@ async function runAllPhraseMatches(turnNum) {
       </div>
       ${cards}
       <div style="font-size:10px;color:#9ca3af;margin-top:2px;margin-bottom:6px;font-style:italic;">
-        Score = cosine similarity between input and existing KC caller phrases · UAP HIT = live route taken
+        Score = cosine similarity against KC caller phrases · UAP HIT = live route taken
       </div>
-      ${combinedEl}
+      <div id="cue-combined-${turnNum}" style="margin-top:6px;padding:6px 8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:5px;">
+        <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:4px;">🔗 Combined phrase match — all values as one utterance</div>
+        <div style="font-size:11px;font-family:monospace;color:#6b7280;margin-bottom:6px;">"${esc(combinedPhrase)}"</div>
+        <div id="cue-combined-result-${turnNum}" style="font-size:11px;color:#6b7280;font-style:italic;">Running…</div>
+      </div>
     </div>`;
 
-  // Auto-expand the Add patterns panel
+  // Auto-expand the Add patterns panel, then kick off combined match
   _renderAddPatternsContent(turnNum);
   const panelEl = document.getElementById(`cue-pattern-panel-${turnNum}`);
   if (panelEl) panelEl.style.display = 'block';
-
-  // Run combined phrase match async
-  apiFetch(`/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
-    { method: 'POST', body: JSON.stringify({ phrase: combinedPhrase }) })
-    .then(d => {
-      const el = document.getElementById(`cue-combined-result-${turnNum}`);
-      if (!el) return;
-      if (d.matched) {
-        const conf = d.confidence != null ? ` · ${(d.confidence * 100).toFixed(0)}%` : '';
-        el.innerHTML = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#1e3a8a;color:#fff;">UAP HIT</span>
-          <span style="margin-left:6px;color:#111827;font-weight:600;">${esc(d.containerTitle || '')}</span>
-          <span style="color:#6b7280;margin-left:4px;">${esc(d.matchType || '')}${conf}</span>
-          <span style="color:#9ca3af;font-size:10px;margin-left:6px;">— combined phrase would route correctly</span>`;
-      } else {
-        el.innerHTML = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">NO ROUTE</span>
-          <span style="color:#6b7280;margin-left:6px;font-size:11px;">combined phrase not found in KC — phrases need to be added to dictionary</span>`;
-      }
-    })
-    .catch(() => {
-      const el = document.getElementById(`cue-combined-result-${turnNum}`);
-      if (el) el.textContent = 'Combined match failed.';
-    });
+  _runCombinedMatchAsync(turnNum, combinedPhrase);
 }
 
 function _renderAddPatternsContent(turnNum) {
@@ -1149,28 +1156,9 @@ function _renderInlineUapSummary(agentTurn, turns) {
     }
 
     // GATE 2.4 status — computed from actual cueFrame values
-    const _fc        = cf.fieldCount ?? 0;
-    const _hasTrade  = tradeCount > 0;
-    const _bypass    = _fc === 2 && _hasTrade &&
-                       !!(cf.modifierCore || cf.actionCore || cf.urgencyCore);
-    const _gate24Pass = (_fc >= 3 && _hasTrade) || _bypass;
-    let gate24Html;
-    if (_gate24Pass) {
-      const bypassNote = _bypass ? ' <span style="color:#059669;">(narrative bypass)</span>' : '';
-      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;border:1px solid #86efac;">GATE 2.4 PASS</span>
-        <span style="font-size:11px;color:#374151;margin-left:4px;">${_fc}/8 fields · trade hit → routes to CueExtractor${bypassNote}</span>`;
-    } else if (_fc > 0) {
-      const missing = 3 - _fc;
-      const bypassNote = _hasTrade && _fc === 2
-        ? ' · has trade but needs modifier/action/urgency for bypass'
-        : !_hasTrade ? ' · no trade hit' : '';
-      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;">GATE 2.4 FAIL</span>
-        <span style="font-size:11px;color:#374151;margin-left:4px;">${_fc}/8 fields · needs ${missing} more${bypassNote} → falls to UAP phrase index</span>`;
-    } else {
-      gate24Html = `<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:700;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;">GATE 2.4 SKIP</span>
-        <span style="font-size:11px;color:#9ca3af;margin-left:4px;">0 fields extracted</span>`;
-    }
-    const gateLine = `<div style="margin-top:5px;line-height:1.5;">${gate24Html}</div>`;
+    const _fc       = cf.fieldCount ?? 0;
+    const _hasTrade = tradeCount > 0;
+    const gateLine  = `<div style="margin-top:5px;">${_gate24StatusHtml(_fc, _hasTrade, cf, false)}</div>`;
 
     // Gap analysis button + Card 2 placeholder
     const gapBtn = callerText && turnNum != null
