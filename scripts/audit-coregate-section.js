@@ -490,11 +490,26 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
       }));
 
       // Try several gate configurations.
+      // A–D: original sweep — all admitted the parking false positive
+      //   because dom threshold (≤0.45) sits below parking's dom score
+      //   (~0.5100) AND med threshold (≤0.74) sits below parking's max
+      //   (~0.7655). Both conditions were satisfied → false admit.
+      //
+      // E–G: engineered configs based on Part 3+4 data. The clean
+      //   separator is DOM (gap +0.046, parking 0.5100 vs positives ≥0.5556),
+      //   not MAX (gap −0.02, parking 0.7655 > 2 positives 0.7443).
+      //   So med is held LOW (basic structural floor) while dom does the
+      //   cutting. Parking max 0.7655 ≥ med, but dom 0.5100 < 0.55 → REJECT.
+      //   Positives max ≥ 0.7443 ≥ med, dom ≥ 0.5556 ≥ 0.55 → ADMIT.
       const GATES = [
         { name: 'A: strict 0.85 / med 0.70 + dom 0.40',  strict: 0.85, med: 0.70, dom: 0.40 },
         { name: 'B: strict 0.85 / med 0.72 + dom 0.45',  strict: 0.85, med: 0.72, dom: 0.45 },
         { name: 'C: strict 0.80 / med 0.70 + dom 0.45',  strict: 0.80, med: 0.70, dom: 0.45 },
         { name: 'D: strict 0.82 / med 0.74 + dom 0.40',  strict: 0.82, med: 0.74, dom: 0.40 },
+        // ── Engineered configs (use Part 4 dom signal as primary cutter) ──
+        { name: 'E: strict 0.85 / med 0.70 + dom 0.55',  strict: 0.85, med: 0.70, dom: 0.55 },
+        { name: 'F: strict 0.85 / med 0.65 + dom 0.55',  strict: 0.85, med: 0.65, dom: 0.55 },
+        { name: 'G: strict 0.80 / med 0.70 + dom 0.53',  strict: 0.80, med: 0.70, dom: 0.53 },
       ];
 
       for (const g of GATES) {
