@@ -1810,23 +1810,45 @@ class KCDiscoveryRunner {
                 sectionLabel: targetSection?.label,
               });
 
-              // ── LOGIC 2 — Core Confirmation ──────────────────────────────
-              // UAP topicWords (free) → embed → cosine vs phraseCoreEmbedding.
-              // If phraseCoreEmbedding absent (Re-score not yet run) → skip
-              // Logic 2, route on Logic 1 alone (backward compatible).
+              // ── LOGIC 2 — Core Confirmation (3-tier dispatch, C3) ────────
+              //
+              // Per-phrase MAX cosine over the PhraseEmbedding sidecar +
+              // three-tier dispatch. Cross-section audits (Configs A–G +
+              // REDUCED) proved no single threshold pair over the legacy
+              // kitchen-sink phraseCoreEmbedding cosine can separate real
+              // paraphrases from anchor-false-positives ("do I have to PAY
+              // for parking AGAIN" looks identical to "do I have to pay
+              // again" in averaged-vector space).
+              //
+              //   Tier 1  perPhraseMAX ≥ thresholdHigh          → strict_pass  (skip judge)
+              //   Tier 2  perPhraseMAX <  thresholdLow           → definite_fail (skip judge)
+              //   Tier 3  thresholdLow ≤ perPhraseMAX < thresholdHigh
+              //                                                  → judge       (LLM rules)
+              //
+              // Backward compat: if the PhraseEmbedding sidecar is empty for
+              // this section (Re-score not yet run, or schema migration in
+              // progress), fall back to the legacy kitchen-sink cosine + 0.80
+              // threshold. Window rescue is preserved as an additive helper
+              // (can flip a fail → pass but never the reverse).
               try {
-                const SemanticMatchService      = require('./SemanticMatchService');
-                const CompanyKnowledgeContainer = require('../../../models/CompanyKnowledgeContainer');
+                const SemanticMatchService        = require('./SemanticMatchService');
+                const CompanyKnowledgeContainer   = require('../../../models/CompanyKnowledgeContainer');
+                const CoreGateConfigResolver      = require('./CoreGateConfigResolver');
+                const CoreGateLLMJudge            = require('./CoreGateLLMJudge');
+                const CoreGateJudgeCircuitBreaker = require('./CoreGateJudgeCircuitBreaker');
+                const AdminSettings_              = require('../../../models/AdminSettings');
 
                 const callerCore = (uapResult.topicWords || []).join(' ');
                 if (callerCore) {
                   // ⚠️ FIX (April 2026, audit): was SemanticMatchService.embed()
                   // which doesn't exist on the module — silently returned undefined,
-                  // disabling Logic 2 entirely in production for an unknown period.
-                  // The exported function is .embedText (single-string embedder).
-                  // GapReplay's mirrored implementation already used embedText, which
-                  // is why GapReplay diagnostics could show Logic 2 cosine scores
-                  // (e.g. 0.527) while production silently bypassed Logic 2 entirely.
+                  // disabling Logic 2 entirely in production. The exported function
+                  // is .embedText (single-string embedder).
+
+                  // Resolve config + load section + embed caller in parallel.
+                  const _adminDoc = await AdminSettings_.findOne().lean().catch(() => null);
+                  const cfg       = await CoreGateConfigResolver.resolveCoreGateConfig({ company, adminSettings: _adminDoc });
+
                   const [callerCoreEmb, secDoc] = await Promise.all([
                     SemanticMatchService.embedText(callerCore),
                     CompanyKnowledgeContainer.findById(uapResult.containerId)
@@ -1834,12 +1856,21 @@ class KCDiscoveryRunner {
                       .lean(),
                   ]);
 
-                  const phraseCoreEmb = secDoc?.sections?.[uapResult.sectionIdx]?.phraseCoreEmbedding;
+                  const sec           = secDoc?.sections?.[uapResult.sectionIdx];
+                  const phraseCoreEmb = sec?.phraseCoreEmbedding;
+                  const callerPhrases = sec?.callerPhrases || [];
+                  const sectionId     = String(sec?._id || '');
 
-                  // Defensive observability — if embedding came back falsy on a
-                  // non-empty callerCore, log it loudly so a future broken
-                  // embedder (OpenAI down, function rename, etc.) can't silently
-                  // disable Logic 2 again. Routes on Logic 1 alone (graceful).
+                  // Hydrate per-phrase embeddings from the PhraseEmbedding sidecar.
+                  // Mutates secDoc in-place; on failure, leaves callerPhrases without
+                  // .embedding and we fall back to the legacy kitchen-sink path.
+                  try { await PhraseEmbeddingService.hydrate(secDoc); }
+                  catch (hyErr) {
+                    logger.warn('[KC_ENGINE] LOGIC 2 — PhraseEmbedding hydrate failed; legacy fallback only', {
+                      companyId, callSid, turn, err: hyErr?.message,
+                    });
+                  }
+
                   if (!callerCoreEmb?.length) {
                     logger.warn('[KC_ENGINE] LOGIC 2 SKIP — callerCore embed unavailable, routing on Logic 1 alone', {
                       companyId, callSid, turn,
@@ -1849,62 +1880,163 @@ class KCDiscoveryRunner {
                     });
                   }
 
-                  if (callerCoreEmb?.length && phraseCoreEmb?.length) {
-                    // Cosine similarity
-                    let dot = 0, ma = 0, mb = 0;
-                    for (let _i = 0; _i < callerCoreEmb.length; _i++) {
-                      dot += callerCoreEmb[_i] * phraseCoreEmb[_i];
-                      ma  += callerCoreEmb[_i] * callerCoreEmb[_i];
-                      mb  += phraseCoreEmb[_i] * phraseCoreEmb[_i];
+                  if (callerCoreEmb?.length) {
+                    // ── Per-phrase MAX cosine ───────────────────────────────
+                    let perPhraseMAX = -1;
+                    let bestPhrase   = null;
+                    let phrasesScored = 0;
+                    const dim = callerCoreEmb.length;
+                    for (const p of callerPhrases) {
+                      if (!Array.isArray(p?.embedding) || p.embedding.length !== dim) continue;
+                      phrasesScored++;
+                      let dot = 0, ma = 0, mb = 0;
+                      for (let i = 0; i < dim; i++) {
+                        dot += callerCoreEmb[i] * p.embedding[i];
+                        ma  += callerCoreEmb[i] * callerCoreEmb[i];
+                        mb  += p.embedding[i]   * p.embedding[i];
+                      }
+                      const cs = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
+                      if (cs > perPhraseMAX) {
+                        perPhraseMAX = cs;
+                        bestPhrase   = p.text;
+                      }
                     }
-                    const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
 
-                    // ── LOGIC 2 RESCUE — anchor-anchored window embed ─────
-                    // Compound utterances dilute the averaged callerCore embedding.
-                    // When the full-input score fails, slice a window of the raw
-                    // input bounded by the matched-anchor positions (with small
-                    // padding) and embed THAT slice. The rescue is purely additive:
-                    // it can turn a failure into a pass but never the reverse.
-                    //
-                    // Cost cap: only runs when (a) full coreScore < threshold,
-                    // (b) input is long enough to plausibly have dilution, (c)
-                    // platform/tenant kill switch allows it. Adds ~50ms (one
-                    // OpenAI embed call) on the rescue path only.
+                    // ── Legacy kitchen-sink cosine (kept for diagnostics + window rescue) ──
+                    let legacyCoreScore = null;
+                    if (phraseCoreEmb?.length === dim) {
+                      let dot = 0, ma = 0, mb = 0;
+                      for (let i = 0; i < dim; i++) {
+                        dot += callerCoreEmb[i] * phraseCoreEmb[i];
+                        ma  += callerCoreEmb[i] * callerCoreEmb[i];
+                        mb  += phraseCoreEmb[i] * phraseCoreEmb[i];
+                      }
+                      legacyCoreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
+                    }
+
+                    // ── Three-tier dispatch ─────────────────────────────────
+                    // decision values: 'strict_pass' | 'definite_fail' |
+                    // 'judge_pass' | 'judge_fail' | 'judge_skipped' |
+                    // 'judge_error_fallback' | 'legacy_fallback' | 'no_embeddings'
+                    let decision;
+                    let finalCorePass;
+                    let judgeResult = null;
+                    let judgeError  = null;
+                    // Threshold-only fallback used whenever the judge is
+                    // unavailable (disabled, breaker open, or upstream error).
+                    // Default 0.78 at H=0.85 — strict enough that real
+                    // paraphrases still pass and parking-style FPs still fail.
+                    const fallbackThreshold = Math.max(0.50, cfg.thresholdHigh - 0.07);
+
+                    if (phrasesScored === 0) {
+                      // Backward compat — no per-phrase embeddings available.
+                      // Use the legacy kitchen-sink cosine + 0.80 threshold.
+                      if (legacyCoreScore !== null) {
+                        finalCorePass = legacyCoreScore >= CORE_MATCH_THRESHOLD;
+                        decision = 'legacy_fallback';
+                      } else {
+                        // Truly nothing to score against — route on Logic 1 alone.
+                        finalCorePass = true;
+                        decision = 'no_embeddings';
+                      }
+                    } else if (perPhraseMAX >= cfg.thresholdHigh) {
+                      decision = 'strict_pass';
+                      finalCorePass = true;
+                    } else if (perPhraseMAX < cfg.thresholdLow) {
+                      decision = 'definite_fail';
+                      finalCorePass = false;
+                    } else {
+                      // ── Ambiguous zone — judge it ─────────────────────────
+                      const breakerOpen = await CoreGateJudgeCircuitBreaker.isOpen().catch(() => false);
+                      if (cfg.judgeEnabled && !breakerOpen) {
+                        try {
+                          judgeResult = await CoreGateLLMJudge.judgeMatch({
+                            companyId,
+                            sectionId,
+                            sectionLabel:   sec?.label,
+                            sectionContent: sec?.content || sec?.groqContent,
+                            callerPhrases:  callerPhrases.map(p => p?.text).filter(Boolean),
+                            anchorWords:    Array.from(new Set(callerPhrases.flatMap(p => Array.isArray(p?.anchorWords) ? p.anchorWords : []))),
+                            rawInput:       userInput,
+                            perPhraseMAX,
+                            timeoutMs:      cfg.judgeTimeoutMs,
+                            model:          cfg.judgeModel,
+                            provider:       cfg.judgeProvider,
+                          });
+                          finalCorePass = (judgeResult.verdict === 'pass');
+                          decision = finalCorePass ? 'judge_pass' : 'judge_fail';
+                          // Cached hits also count as success (the verdict is
+                          // a known-good result for this exact input).
+                          await CoreGateJudgeCircuitBreaker.recordSuccess({
+                            companyId, sectionId,
+                            latencyMs: judgeResult.latencyMs,
+                            cached:    judgeResult.cached,
+                          });
+                        } catch (jErr) {
+                          judgeError = jErr;
+                          finalCorePass = perPhraseMAX >= fallbackThreshold;
+                          decision = 'judge_error_fallback';
+                          // Don't count an empty / missing API key as a
+                          // judge "failure" — that's a config issue, not
+                          // an upstream provider problem. Counting it would
+                          // open the breaker and bury the misconfig.
+                          if (jErr.code !== 'JUDGE_NO_API_KEY' && jErr.code !== 'JUDGE_NO_MODEL' && jErr.code !== 'JUDGE_UNSUPPORTED_PROVIDER') {
+                            await CoreGateJudgeCircuitBreaker.recordFailure({
+                              companyId, sectionId,
+                              reason: jErr.code || jErr.message,
+                            });
+                          }
+                          logger.warn('[KC_ENGINE] LOGIC 2 judge error — threshold-only fallback', {
+                            companyId, callSid, turn,
+                            perPhraseMAX:      Math.round(perPhraseMAX * 1000) / 1000,
+                            fallbackThreshold,
+                            finalCorePass,
+                            error:   jErr.code || 'unknown',
+                            message: jErr.message,
+                          });
+                        }
+                      } else {
+                        // Judge disabled (cfg) or breaker open — threshold-only fallback.
+                        finalCorePass = perPhraseMAX >= fallbackThreshold;
+                        decision = 'judge_skipped';
+                      }
+                    }
+
+                    // ── Window rescue (additive — preserves legacy safety net) ─
+                    // Only fires when finalCorePass===false. Slices a window
+                    // of raw input bounded by anchor positions, embeds it, and
+                    // tests against the legacy phraseCoreEmbedding. Cannot
+                    // turn a pass into a fail. Largely subsumed by the judge
+                    // tier (judge sees the raw input directly), but kept for
+                    // sections that haven't been migrated to PhraseEmbedding
+                    // sidecar yet (decision === 'legacy_fallback') and as a
+                    // failsafe if the breaker stays open for long.
                     let rescueResult = null;
                     let rescueScore  = null;
-                    let finalCorePass = coreScore >= CORE_MATCH_THRESHOLD;
-
-                    if (!finalCorePass) {
+                    let rescuedFromFail = false;
+                    if (!finalCorePass && phraseCoreEmb?.length === dim) {
                       try {
-                        // Resolve rescue config: tenant override → platform default → hardcoded fallback.
-                        const tenantRescue = company?.aiAgentSettings?.agent2?.speechDetection?.coreGate?.rescueEnabled;
-                        const AdminSettings_ = require('../../../models/AdminSettings');
-                        // Reuse the cached AdminSettings from the resolver — same module-level cache,
-                        // so the second call here is a free lookup.
-                        const _adminDoc = await AdminSettings_.findOne().lean().catch(() => null);
-                        const platformRescue   = _adminDoc?.globalHub?.coreGateRescueEnabled;
-                        const rescueMinWords   = _adminDoc?.globalHub?.coreGateRescueMinWords ?? 6;
-                        const rescuePadding    = _adminDoc?.globalHub?.coreGateRescuePadding  ?? 2;
-                        // tenantRescue null/undefined → inherit. true/false → override.
-                        const rescueEnabled = (tenantRescue === true || tenantRescue === false)
+                        const tenantRescue   = company?.aiAgentSettings?.agent2?.speechDetection?.coreGate?.rescueEnabled;
+                        const platformRescue = _adminDoc?.globalHub?.coreGateRescueEnabled;
+                        const rescueMinWords = _adminDoc?.globalHub?.coreGateRescueMinWords ?? 6;
+                        const rescuePadding  = _adminDoc?.globalHub?.coreGateRescuePadding  ?? 2;
+                        const rescueEnabled  = (tenantRescue === true || tenantRescue === false)
                           ? tenantRescue
-                          : (platformRescue !== false);  // platform default is true
-
+                          : (platformRescue !== false);
                         const callerWordCount = (uapResult.topicWords || []).length;
 
                         if (rescueEnabled && callerWordCount >= rescueMinWords) {
                           rescueResult = AnchorSynonymResolver.computeAnchorAnchoredWindow({
-                            rawInput:      userInput,
+                            rawInput:     userInput,
                             anchorWords,
                             synonymMap,
-                            paddingWords:  rescuePadding,
+                            paddingWords: rescuePadding,
                           });
-
                           if (rescueResult?.window && rescueResult.window !== callerCore) {
                             const windowEmb = await SemanticMatchService.embedText(rescueResult.window);
-                            if (windowEmb?.length && phraseCoreEmb?.length) {
+                            if (windowEmb?.length === dim) {
                               let dotW = 0, mwA = 0, mwB = 0;
-                              for (let _j = 0; _j < windowEmb.length; _j++) {
+                              for (let _j = 0; _j < dim; _j++) {
                                 dotW += windowEmb[_j] * phraseCoreEmb[_j];
                                 mwA  += windowEmb[_j] * windowEmb[_j];
                                 mwB  += phraseCoreEmb[_j] * phraseCoreEmb[_j];
@@ -1912,68 +2044,91 @@ class KCDiscoveryRunner {
                               rescueScore = (mwA && mwB) ? dotW / (Math.sqrt(mwA) * Math.sqrt(mwB)) : 0;
                               if (rescueScore >= CORE_MATCH_THRESHOLD) {
                                 finalCorePass = true;
+                                rescuedFromFail = true;
                               }
                             }
                           }
                         }
                       } catch (rescueErr) {
-                        logger.warn('[KC_ENGINE] LOGIC 2 RESCUE error — falling back to original score', {
+                        logger.warn('[KC_ENGINE] LOGIC 2 RESCUE error — falling back to original decision', {
                           companyId, callSid, turn, err: rescueErr?.message,
                         });
                       }
                     }
 
+                    // ── Diagnostic ──────────────────────────────────────────
                     if (uapDiagnostic) uapDiagnostic.coreGate = {
-                      ran:        true,
-                      score:      Math.round(coreScore * 1000) / 1000,
-                      threshold:  CORE_MATCH_THRESHOLD,
-                      passed:     finalCorePass,
-                      callerCore: callerCore.slice(0, 120),
-                      // Rescue forensics — null when rescue didn't run.
+                      ran:            true,
+                      decision,
+                      perPhraseMAX:   perPhraseMAX !== -1 ? Math.round(perPhraseMAX * 1000) / 1000 : null,
+                      bestPhrase:     bestPhrase ? String(bestPhrase).slice(0, 80) : null,
+                      phrasesScored,
+                      legacyCoreScore: legacyCoreScore !== null ? Math.round(legacyCoreScore * 1000) / 1000 : null,
+                      thresholdHigh:  cfg.thresholdHigh,
+                      thresholdLow:   cfg.thresholdLow,
+                      passed:         finalCorePass,
+                      callerCore:     callerCore.slice(0, 120),
+                      configSource:   cfg._source || null,
+                      judge: judgeResult ? {
+                        verdict:    judgeResult.verdict,
+                        confidence: judgeResult.confidence,
+                        reason:     judgeResult.reason,
+                        latencyMs:  judgeResult.latencyMs,
+                        cached:     judgeResult.cached,
+                        model:      judgeResult.model,
+                        provider:   judgeResult.provider,
+                      } : null,
+                      judgeError: judgeError ? { code: judgeError.code || null, message: String(judgeError.message || '').slice(0, 160) } : null,
                       rescue: rescueResult ? {
-                        window:      rescueResult.window.slice(0, 120),
-                        windowSpan:  rescueResult.span,
-                        score:       rescueScore !== null ? Math.round(rescueScore * 1000) / 1000 : null,
-                        passed:      rescueScore !== null && rescueScore >= CORE_MATCH_THRESHOLD,
-                        reason:      finalCorePass && coreScore < CORE_MATCH_THRESHOLD ? 'CORE_PASSED_VIA_WINDOW_RESCUE' : null,
+                        window:     rescueResult.window.slice(0, 120),
+                        windowSpan: rescueResult.span,
+                        score:      rescueScore !== null ? Math.round(rescueScore * 1000) / 1000 : null,
+                        passed:     rescueScore !== null && rescueScore >= CORE_MATCH_THRESHOLD,
+                        reason:     rescuedFromFail ? 'CORE_PASSED_VIA_WINDOW_RESCUE' : null,
                       } : null,
                     };
 
                     logger.info('[KC_ENGINE] LOGIC 2 scored', {
                       companyId, callSid, turn,
-                      callerCore:  callerCore.slice(0, 60),
-                      coreScore:   Math.round(coreScore * 100) / 100,
-                      rescueScore: rescueScore !== null ? Math.round(rescueScore * 100) / 100 : null,
-                      rescueWindow: rescueResult?.window?.slice(0, 60) || null,
-                      threshold:   CORE_MATCH_THRESHOLD,
-                      pass:        finalCorePass,
-                      passVia:     coreScore >= CORE_MATCH_THRESHOLD ? 'full' :
-                                   (finalCorePass ? 'window_rescue' : 'fail'),
-                      sectionLabel: targetSection?.label,
+                      decision,
+                      perPhraseMAX:   perPhraseMAX !== -1 ? Math.round(perPhraseMAX * 100) / 100 : null,
+                      bestPhrase:     bestPhrase ? String(bestPhrase).slice(0, 60) : null,
+                      phrasesScored,
+                      legacyCoreScore: legacyCoreScore !== null ? Math.round(legacyCoreScore * 100) / 100 : null,
+                      thresholdHigh:  cfg.thresholdHigh,
+                      thresholdLow:   cfg.thresholdLow,
+                      judgeUsed:      Boolean(judgeResult),
+                      judgeVerdict:   judgeResult?.verdict || null,
+                      judgeLatencyMs: judgeResult?.latencyMs ?? null,
+                      judgeCached:    judgeResult?.cached || false,
+                      pass:           finalCorePass,
+                      rescuedFromFail,
+                      sectionLabel:   targetSection?.label,
                     });
 
                     if (!finalCorePass) {
                       anchorGatePassed = false;
-                      logger.info('[KC_ENGINE] LOGIC 2 FAIL — core mismatch (rescue too low or skipped), falling through to Groq', {
+                      logger.info('[KC_ENGINE] LOGIC 2 FAIL — falling through to Groq', {
                         companyId, callSid, turn,
-                        coreScore:   Math.round(coreScore * 100) / 100,
-                        rescueScore: rescueScore !== null ? Math.round(rescueScore * 100) / 100 : null,
-                        threshold:   CORE_MATCH_THRESHOLD,
+                        decision,
+                        perPhraseMAX: perPhraseMAX !== -1 ? Math.round(perPhraseMAX * 100) / 100 : null,
+                        thresholdHigh: cfg.thresholdHigh,
+                        thresholdLow:  cfg.thresholdLow,
                       });
                     }
                   } else if (uapDiagnostic) {
-                    // Logic 2 couldn't run (no embeddings available) — record "skipped"
+                    // callerCoreEmb absent — embedding service down or empty result.
                     uapDiagnostic.coreGate = {
-                      ran:       false,
-                      reason:    !callerCoreEmb?.length ? 'CALLER_EMBED_UNAVAILABLE' : 'PHRASE_CORE_ABSENT',
-                      threshold: CORE_MATCH_THRESHOLD,
+                      ran:    false,
+                      reason: 'CALLER_EMBED_UNAVAILABLE',
+                      thresholdHigh: cfg.thresholdHigh,
+                      thresholdLow:  cfg.thresholdLow,
                     };
                   }
-                  // phraseCoreEmbedding absent → skip Logic 2, route on Logic 1 alone
                 }
               } catch (_l2Err) {
                 logger.warn('[KC_ENGINE] Logic 2 error — routing on Logic 1 alone', {
-                  companyId, callSid, err: _l2Err.message,
+                  companyId, callSid, err: _l2Err.message, stack: _l2Err.stack?.split('\n').slice(0, 3).join(' | '),
                 });
               }
             }
