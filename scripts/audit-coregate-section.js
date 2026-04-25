@@ -68,6 +68,7 @@ const PhraseReducerService     = require('../services/phraseIntelligence/PhraseR
 const SemanticMatchService     = require('../services/engine/kc/SemanticMatchService');
 const AnchorSynonymResolver    = require('../services/engine/kc/AnchorSynonymResolver');
 const CompanyKnowledgeContainer = require('../models/CompanyKnowledgeContainer');
+const PhraseEmbedding           = require('../models/PhraseEmbedding');
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -203,9 +204,10 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
     D: { text: anchorOnly,     score: cosine(embD, phraseCoreEmb), embedded: !!embD },
   };
 
-  // ── 5. Print verdict ─────────────────────────────────────────────────────
+  // ── 5. Print verdict — kitchen-sink phraseCore comparison ────────────────
   hr('═');
-  console.log(`SCORING — cosine vs phraseCoreEmbedding (threshold ≥ 0.80)`);
+  console.log(`PART 1 — cosine vs section.phraseCoreEmbedding (current Logic-2 target)`);
+  console.log(`         threshold ≥ 0.80`);
   hr('═');
   const rows = [
     { id: 'A', label: 'Logic-2 full (reduced caller)', ...scores.A },
@@ -221,22 +223,85 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   }
   console.log('');
 
-  // ── 6. Recommendation ────────────────────────────────────────────────────
+  // ── 5b. PER-PHRASE MAX — alternative architecture ────────────────────────
+  // Per-phrase 512-dim embeddings already exist in the PhraseEmbedding sidecar
+  // collection — built at the same Re-score that builds phraseCore. They're
+  // tight, focused, ONE-PHRASE-EACH vectors. The thesis: comparing the
+  // caller's vector to EACH stored phrase and taking max should bypass the
+  // kitchen-sink centroid problem entirely. This part of the audit confirms
+  // (with real data) whether the architectural fix works.
+  hr('═');
+  console.log(`PART 2 — cosine vs section.callerPhrases[].embedding (per-phrase MAX)`);
+  console.log(`         threshold ≥ 0.80 — same threshold, different target`);
+  hr('═');
+
+  // Load per-phrase embeddings for this container, filter to the section's
+  // callerPhrase texts (normalized: trim+lower) so cross-section bleed is
+  // impossible.
+  const sectionPhraseTexts = new Set(
+    (section.callerPhrases || [])
+      .map(p => String(p.text || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  const allPhraseEmbs = await PhraseEmbedding
+    .find({ containerId })
+    .select('phraseText embedding')
+    .lean();
+
+  const sectionPhraseEmbs = allPhraseEmbs.filter(r =>
+    sectionPhraseTexts.has(String(r.phraseText || '').trim().toLowerCase())
+  );
+
+  console.log(`per-phrase embeddings loaded: ${allPhraseEmbs.length} (container) → ${sectionPhraseEmbs.length} (this section)`);
+  console.log('');
+
+  if (sectionPhraseEmbs.length === 0) {
+    console.log('⚠️  No per-phrase embeddings found for this section — sidecar not populated.');
+    console.log('    Re-score may need to run, or PhraseEmbeddingService.saveBatch failed previously.');
+  } else {
+    // Score each caller-side variant against the BEST per-phrase match.
+    const variants = [
+      { id: 'A', label: 'Logic-2 full (reduced caller)', emb: embA, text: callerCoreFull },
+      { id: 'B', label: 'Rescue raw (current Step-2)',   emb: embB, text: rescueRaw },
+      { id: 'C', label: 'Rescue reduced (symmetric)',    emb: embC, text: rescueReduced },
+      { id: 'D', label: 'Anchor-only (stems joined)',    emb: embD, text: anchorOnly },
+    ];
+
+    for (const v of variants) {
+      if (!v.emb) {
+        console.log(`  ${v.id}. ${v.label.padEnd(34)}  (no embed)`);
+        continue;
+      }
+      let bestScore = -Infinity;
+      let bestText  = null;
+      for (const row of sectionPhraseEmbs) {
+        const s = cosine(v.emb, row.embedding);
+        if (s !== null && s > bestScore) { bestScore = s; bestText = row.phraseText; }
+      }
+      const pass = bestScore >= 0.80;
+      const flag = pass ? '✅' : '❌';
+      console.log(`  ${v.id}. ${v.label.padEnd(34)}  MAX=${fmt(bestScore)} ${flag}`);
+      console.log(`     caller text:    ${JSON.stringify(v.text || '(empty)')}`);
+      console.log(`     winning phrase: ${JSON.stringify(bestText || '(none)')}`);
+    }
+  }
+  console.log('');
+
+  // ── 6. Readout ───────────────────────────────────────────────────────────
   hr('═');
   console.log(`READOUT`);
   hr('═');
-  const winners = rows.filter(r => r.score !== null && r.score >= 0.80);
-  if (winners.length === 0) {
-    console.log('❌ No strategy passes 0.80. Vocabulary mismatch is the bottleneck.');
-    console.log('   Likely fix: section\'s callerPhrases need at least one phrase');
-    console.log('   that uses the caller\'s actual words ("come back", "somebody").');
-    console.log('   Cosine has nothing to grip on if the stored phrases never use');
-    console.log('   those tokens.');
-  } else {
-    const best = winners.reduce((a, b) => (a.score > b.score ? a : b));
-    console.log(`✅ Winner: strategy ${best.id} — "${best.label}" — ${fmt(best.score)}`);
-    console.log('   Recommend wiring this shape into the Step-2 rescue path.');
-  }
+  console.log(`PART 1 (vs phraseCoreEmbedding): all 4 strategies fail → kitchen-sink`);
+  console.log(`        centroid is in the wrong region of embedding space for short`);
+  console.log(`        focused utterances. This is the architecture issue.`);
+  console.log('');
+  console.log(`PART 2 (per-phrase MAX): if any variant passes 0.80, the architectural`);
+  console.log(`        fix is — replace Logic 2's full-input vs phraseCore comparison`);
+  console.log(`        with per-phrase MAX cosine over callerPhrases[].embedding.`);
+  console.log(`        The per-phrase embeddings already exist (sidecar collection),`);
+  console.log(`        Re-score already builds them, so the change is purely on the`);
+  console.log(`        Logic 2 read side.`);
   console.log('');
 
   await cleanup();
