@@ -183,10 +183,15 @@ async function runCueGapAnalysis(btn, turnNum) {
             style="font-size:11px;padding:2px 10px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;margin-left:auto;">
             ⚡ Match →
           </button>
+          <button onclick="toggleCuePatternPanel(${turnNum}, ${idx})"
+            style="font-size:11px;padding:2px 10px;border-radius:3px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;">
+            ＋ Add patterns
+          </button>
           <a href="${pfUrl}" target="_blank" style="font-size:11px;color:#6b7280;text-decoration:underline;white-space:nowrap;">Phrase Finder ↗</a>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:3px;">${cellsHtml}</div>
         <div id="${matchId}"></div>
+        <div id="cue-patterns-${turnNum}-${idx}" style="display:none;"></div>
       </div>`;
     }).join('');
 
@@ -254,6 +259,108 @@ async function runCuePhraseMatch(turnNum, idx) {
   } catch (err) {
     matchEl.innerHTML = `<div style="font-size:11px;color:#991b1b;">Match failed: ${err.message}</div>`;
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⚡ Match →'; }
+  }
+}
+
+// Token label map for display
+const _CUE_TOKEN_LABELS = {
+  requestCue:    'REQUEST',
+  permissionCue: 'PERMISSION',
+  infoCue:       'INFO',
+  directiveCue:  'DIRECTIVE',
+  actionCore:    'ACTION',
+  urgencyCore:   'URGENCY',
+  modifierCore:  'MODIFIER'
+};
+
+function toggleCuePatternPanel(turnNum, idx) {
+  const panelEl = document.getElementById(`cue-patterns-${turnNum}-${idx}`);
+  if (!panelEl) return;
+
+  if (panelEl.style.display !== 'none') {
+    panelEl.style.display = 'none';
+    return;
+  }
+
+  const candidates = _cueCandidates.get(turnNum);
+  const c = candidates?.[idx];
+  if (!c) return;
+
+  // Collect non-null cueFrame fields (excluding tradeMatches — different store)
+  const fields = Object.entries(_CUE_TOKEN_LABELS)
+    .map(([token, label]) => ({ token, label, value: c.cueFrame?.[token] || '' }))
+    .filter(f => f.value.trim());
+
+  if (!fields.length) {
+    panelEl.innerHTML = `<div style="font-size:12px;color:#6b7280;padding:6px 0;font-style:italic;">No extractable patterns in this signal.</div>`;
+    panelEl.style.display = 'block';
+    return;
+  }
+
+  const rows = fields.map(f => {
+    const inputId  = `cue-pi-input-${turnNum}-${idx}-${f.token}`;
+    const statusId = `cue-pi-status-${turnNum}-${idx}-${f.token}`;
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+      <span style="font-size:10px;font-weight:700;color:#374151;width:76px;flex-shrink:0;">${f.label}</span>
+      <input id="${inputId}" type="text" value="${f.value.replace(/"/g, '&quot;')}"
+        style="flex:1;min-width:160px;font-size:12px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" />
+      <button onclick="saveCuePattern('${inputId}','${f.token}','${statusId}')"
+        style="font-size:11px;padding:3px 12px;border-radius:4px;background:#059669;color:#fff;border:none;cursor:pointer;font-weight:600;white-space:nowrap;">
+        Save
+      </button>
+      <span id="${statusId}" style="font-size:11px;"></span>
+    </div>`;
+  }).join('');
+
+  panelEl.innerHTML = `<div style="margin-top:6px;padding:8px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:5px;">
+    <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:6px;">＋ Add to GlobalShare cuePhrases</div>
+    ${rows}
+  </div>`;
+  panelEl.style.display = 'block';
+}
+
+async function saveCuePattern(inputId, token, statusId) {
+  const inputEl  = document.getElementById(inputId);
+  const statusEl = document.getElementById(statusId);
+  if (!inputEl || !statusEl) return;
+
+  const pattern = inputEl.value.trim().toLowerCase();
+  if (!pattern) { statusEl.textContent = '⚠ empty'; statusEl.style.color = '#d97706'; return; }
+
+  statusEl.textContent = 'Saving…';
+  statusEl.style.color = '#6b7280';
+
+  try {
+    // 1. Load current cuePhrases
+    const piData = await fetch('/api/admin/globalshare/phrase-intelligence')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    const cuePhrases = Array.isArray(piData.cuePhrases) ? piData.cuePhrases : [];
+
+    // 2. Duplicate check
+    const exists = cuePhrases.some(c =>
+      (c.pattern || '').toLowerCase() === pattern && c.token === token
+    );
+    if (exists) {
+      statusEl.textContent = '✓ already exists';
+      statusEl.style.color = '#6b7280';
+      return;
+    }
+
+    // 3. Append and save
+    cuePhrases.push({ pattern, token });
+    const saveRes = await fetch('/api/admin/globalshare/phrase-intelligence/cuePhrases', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: cuePhrases })
+    });
+    if (!saveRes.ok) throw new Error(`HTTP ${saveRes.status}`);
+
+    statusEl.textContent = '✓ saved';
+    statusEl.style.color = '#059669';
+    inputEl.style.background = '#f0fdf4';
+  } catch (err) {
+    statusEl.textContent = `✗ ${err.message}`;
+    statusEl.style.color = '#991b1b';
   }
 }
 
