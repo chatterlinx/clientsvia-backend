@@ -3388,33 +3388,36 @@ router.post('/company/:companyId/cue-gap', async (req, res) => {
 
   const systemPrompt = `You are a multi-signal extraction engine for a voice AI phone agent.
 
-A caller utterance often contains MULTIPLE DISTINCT intent signals that must be matched against a knowledge base separately — like a repeat-visit complaint, an equipment failure symptom, and a new secondary issue all in the same breath.
+A caller utterance often contains MULTIPLE DISTINCT intent signals — like a repeat-visit complaint, an equipment failure symptom, and a new secondary issue all in one breath.
 
 Your job: decompose the utterance into 1-3 DISTINCT, NON-OVERLAPPING signals.
 
 For each signal produce a JSON object with these exact keys:
 - "signal": one of: repeat_visit | equipment_failure | new_symptom | payment_inquiry | scheduling_request | info_request | complaint | warranty_question | other
-- "phrase": a 3-7 word compact phrase in natural caller language for THIS signal only — written as a caller would say it (e.g. "ac not cooling again", "water leaking garage", "same problem as before", "how much does it cost"). This is a SEARCH KEY, not a sentence.
-- "rationale": one sentence — why this is a distinct signal worth matching separately
-- "cueFrame": extract ONLY what belongs to THIS signal:
+- "phrase": a 3-7 word compact phrase in natural caller language for THIS signal only. This is a SEARCH KEY fed into a phrase matcher — keep it caller-natural (e.g. "ac not cooling again", "water leaking garage", "same problem as before").
+- "rationale": one sentence — why this is a distinct signal worth matching separately.
+- "cueFrame": extract ONLY what belongs to THIS signal using these STRICT definitions:
   {
-    "requestCue": short string or null,
-    "permissionCue": short string or null,
-    "infoCue": short string or null,
-    "directiveCue": short string or null,
-    "actionCore": short string or null,
-    "urgencyCore": short string or null,
-    "modifierCore": short string or null,
-    "tradeMatches": [ {"term": "...", "category": "hvac|plumbing|electrical|general"} ] or []
+    "requestCue":    ONLY if caller explicitly asks for something to be done: "can you", "could you", "I want you to", "I need you to". NULL for statements or descriptions.
+    "permissionCue": ONLY if caller asks whether they must do something: "do I have to", "am I required to", "is it okay if". NULL otherwise.
+    "infoCue":       ONLY if caller asks a direct question for information: "what is", "how much", "when does", "do you know if". A caller STATING a problem (e.g. "it's not cooling") is NOT infoCue — that is modifierCore or tradeMatches.
+    "directiveCue":  ONLY if caller states why they are calling or gives a direct instruction: "I'm calling because", "I need to", "just", "please". NULL for descriptions.
+    "actionCore":    The core action or problem verb: "fix", "repair", "replace", "schedule", "pay", "not working", "leaking", "broke". Extract the action, not the equipment.
+    "urgencyCore":   ONLY explicit time pressure: "today", "now", "asap", "emergency", "right away". NULL if no urgency stated.
+    "modifierCore":  Context that qualifies the situation: "same problem", "again", "as before", "under warranty", "still broken". Equipment names belong in tradeMatches, not here.
+    "tradeMatches":  Trade/industry terms and equipment names only: [ {"term": "AC", "category": "hvac"}, {"term": "thermostat", "category": "hvac"} ] or []
   }
 
-STRICT RULES:
-1. Each candidate must address a DIFFERENT topic or intent — never paraphrase the same thing twice
-2. "phrase" must be 3-7 lowercase words, natural caller speech — it feeds directly into a phrase matcher
-3. Extract ONLY what is clearly stated — never hallucinate or infer
-4. cueFrame fields: 2-8 words or null (not full sentences)
-5. If utterance has only one clear signal, return exactly 1 candidate
-6. Return ONLY: { "candidates": [ ...1-3 objects... ] }`;
+CRITICAL CLASSIFICATION RULES:
+1. A value must appear in EXACTLY ONE field — never duplicate a value across multiple fields.
+2. infoCue = QUESTIONS ONLY. "not cooling", "leaking", "broke" are NEVER infoCue — they are actionCore or tradeMatches.
+3. modifierCore = situation context ("same problem", "again") NOT equipment names. Equipment → tradeMatches.
+4. Each candidate must address a DIFFERENT topic — never paraphrase the same signal twice.
+5. "phrase" must be 3-7 lowercase words of natural caller speech.
+6. Extract ONLY what is clearly stated — never infer or hallucinate.
+7. cueFrame field values: 2-8 words or null. Never full sentences.
+8. If utterance has only one clear signal, return exactly 1 candidate.
+9. Return ONLY: { "candidates": [ ...1-3 objects... ] }`;
 
   const userMsg = `UTTERANCE: "${safeUtterance}"`;
 
