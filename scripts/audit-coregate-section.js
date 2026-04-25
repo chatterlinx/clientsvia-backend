@@ -418,6 +418,9 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
     // high; a caller asking about parking scores low — even if both share
     // the "pay X again" structure. This gives us a DOMAIN signal independent
     // of the per-phrase syntax/structure signal.
+    // Hoist contentResults out of the inner else so Part 6 can reference it
+    // for the RAW-vs-REDUCED side-by-side comparison.
+    let contentResults = null;
     hr('═');
     if (!section.contentEmbedding?.length) {
       console.log(`PART 4 — content domain signal — SKIPPED`);
@@ -433,7 +436,7 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
       const contentEmb = section.contentEmbedding;
 
       // Reuse the same allEmbs we already computed.
-      const contentResults = testInputs.map((t, i) => {
+      contentResults = testInputs.map((t, i) => {
         const emb = allEmbs[i];
         if (!emb) return { ...t, content: null };
         return { ...t, content: cosine(emb, contentEmb) };
@@ -541,6 +544,147 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
         console.log('');
       }
     }
+
+    // ── PART 6 — REDUCED INPUTS (production shape) ──────────────────────────
+    // Production calls Logic 2 with `(uapResult.topicWords || []).join(' ')` —
+    // content tokens after stopword strip + intent normalisation. The audit
+    // so far has tested RAW caller utterances, which is NOT what production
+    // embeds. This part reduces every positive + negative through
+    // PhraseReducerService.reduce(text, sectionContent) before embedding,
+    // then re-runs the per-phrase MAX + content-domain sweep.
+    //
+    // Key questions:
+    //   - Do positives' scores shift up under reduction? (Part 1 hint:
+    //     "how much do you charge for an annual maintenance plan" went from
+    //     0.7666 raw → 0.9201 reduced on per-phrase MAX.)
+    //   - Do anchor-FP scores stay flat (good) or also shift up (bad)?
+    //   - Where does the AMBIGUOUS ZONE land in production-shape scoring?
+    //     This sets the tier thresholds for the LLM-judge architecture:
+    //       strict-pass:    score ≥ T_high  → PASS without judge
+    //       definite-fail:  score < T_low   → FAIL without judge
+    //       ambiguous:      T_low..T_high   → call LLM judge
+    hr('═');
+    console.log(`PART 6 — REDUCED INPUTS (production shape)`);
+    console.log(`         Each test input reduced via PhraseReducerService before embedding,`);
+    console.log(`         mirroring how Logic 2 is actually called in production.`);
+    hr('═');
+    console.log('');
+
+    if (sectionPhraseEmbs.length === 0) {
+      console.log('SKIPPED — no per-phrase embeddings.');
+      console.log('');
+    } else {
+      // Reduce every test input through PhraseReducerService (sequential —
+      // small set, async-safe).
+      const reducedInputs = [];
+      for (const t of testInputs) {
+        const r = await PhraseReducerService.reduce(t.text, sectionContentText);
+        reducedInputs.push({ ...t, reducedText: r?.core || '' });
+      }
+
+      // Embed reduced text in parallel.
+      const reducedEmbs = await Promise.all(
+        reducedInputs.map(t =>
+          t.reducedText ? SemanticMatchService.embedText(t.reducedText) : Promise.resolve(null)
+        )
+      );
+
+      // Compute per-phrase MAX + content cosine for each reduced input.
+      const reducedResults = reducedInputs.map((t, i) => {
+        const emb = reducedEmbs[i];
+        if (!emb) return { ...t, max: null, content: null, winner: null };
+        let best = -Infinity, winText = null;
+        for (const row of sectionPhraseEmbs) {
+          const s = cosine(emb, row.embedding);
+          if (s !== null && s > best) { best = s; winText = row.phraseText; }
+        }
+        return {
+          ...t,
+          max:     best,
+          content: section.contentEmbedding?.length
+            ? cosine(emb, section.contentEmbedding)
+            : null,
+          winner:  winText,
+        };
+      });
+
+      // Side-by-side: RAW vs REDUCED for each input.
+      console.log(`  Side-by-side: RAW vs REDUCED (per-phrase MAX, content cos)`);
+      console.log('');
+      console.log(`  kind      RAWmax  REDmax   ΔMAX     RAWdom  REDdom   ΔDOM    text → reducedText`);
+      console.log('  ' + '─'.repeat(108));
+      for (let i = 0; i < testInputs.length; i++) {
+        // Look up raw scores from previously-computed Part 3 + Part 4 results.
+        // contentResults is hoisted to outer scope; null when contentEmbedding
+        // wasn't populated (Part 4 skipped).
+        const rawMax     = (results?.[i]?.max) ?? null;
+        const rawContent = (contentResults?.[i]?.content) ?? null;
+        const red = reducedResults[i];
+        if (red.max == null) {
+          console.log(`  ${red.kind.padEnd(9)} (no embed)`);
+          continue;
+        }
+        const sign = (n) => n == null ? '   ---' : ((n >= 0 ? '+' : '') + n.toFixed(4));
+        const dMax = (rawMax != null) ? (red.max - rawMax) : null;
+        const dDom = (rawContent != null && red.content != null) ? (red.content - rawContent) : null;
+        console.log(
+          `  ${red.kind.padEnd(9)} ${fmt(rawMax)}  ${fmt(red.max)}  ${sign(dMax).padStart(7)}   ` +
+          `${fmt(rawContent)}  ${fmt(red.content)}  ${sign(dDom).padStart(7)}   ` +
+          `"${red.text.slice(0, 30)}…" → "${red.reducedText.slice(0, 30)}…"`
+        );
+      }
+      console.log('');
+
+      // Threshold sweep on REDUCED per-phrase MAX.
+      console.log(`  REDUCED per-phrase MAX threshold sweep:`);
+      console.log('');
+      const RED_THRESH = [0.70, 0.75, 0.78, 0.80, 0.85];
+      const rHdr = RED_THRESH.map(t => `≥${t.toFixed(2)}`.padStart(8)).join('');
+      console.log(`  kind      MAX     ${rHdr}   input`);
+      console.log('  ' + '─'.repeat(96));
+      for (const r of reducedResults) {
+        if (r.max == null) continue;
+        const cells = RED_THRESH.map(t => {
+          const passes = r.max >= t;
+          const correct = (r.kind === 'positive') ? passes : !passes;
+          return (correct ? '✅' : '❌').padStart(8);
+        }).join('');
+        console.log(`  ${r.kind.padEnd(9)} ${fmt(r.max)} ${cells}   "${r.text.slice(0, 50)}${r.text.length > 50 ? '…' : ''}"`);
+      }
+      console.log('');
+
+      // Separation analysis on REDUCED scores.
+      const rPos = reducedResults.filter(r => r.kind === 'positive' && r.max != null).map(r => r.max);
+      const rNeg = reducedResults.filter(r => r.kind === 'negative' && r.max != null).map(r => r.max);
+      if (rPos.length && rNeg.length) {
+        const rPosMin = Math.min(...rPos);
+        const rPosMax = Math.max(...rPos);
+        const rNegMin = Math.min(...rNeg);
+        const rNegMax = Math.max(...rNeg);
+        const rGap = rPosMin - rNegMax;
+        console.log(`  REDUCED separation:  pos [${fmt(rPosMin)} … ${fmt(rPosMax)}]    neg [${fmt(rNegMin)} … ${fmt(rNegMax)}]    gap = ${fmt(rGap)}`);
+        console.log('');
+
+        // Tier boundary recommendations for the JUDGE architecture.
+        console.log(`  ── JUDGE TIER RECOMMENDATIONS (production-shape thresholds) ────────`);
+        const T_high_rec = Math.min(0.95, rNegMax + 0.02);  // above all negs + margin
+        const T_low_rec  = Math.max(0.50, rPosMin - 0.02);  // below all pos + margin
+        console.log(`  strict-pass T_high ≈ ${T_high_rec.toFixed(2)}  (≥this → PASS, no judge)`);
+        console.log(`  definite-fail T_low ≈ ${T_low_rec.toFixed(2)}  (<this → FAIL, no judge)`);
+        const total     = reducedResults.filter(r => r.max != null).length;
+        const ambiguous = reducedResults.filter(r => r.max != null && r.max >= T_low_rec && r.max < T_high_rec).length;
+        const pctAmb    = total ? Math.round((ambiguous / total) * 100) : 0;
+        console.log(`  ambiguous zone: ${ambiguous}/${total} test inputs (${pctAmb}%) → would call judge`);
+        if (rGap > 0) {
+          console.log(`  ✅ Reduction CLOSED the gap. Could possibly ship per-phrase MAX`);
+          console.log(`     alone at threshold ${(rNegMax + rGap * 0.5).toFixed(2)} and skip the judge entirely.`);
+        } else {
+          console.log(`  ⚠️  Reduction did not fully close the gap. Judge needed for the`);
+          console.log(`     ambiguous zone (${pctAmb}% of inputs in this audit set).`);
+        }
+        console.log('');
+      }
+    }
   }
 
   // ── 6. Readout ───────────────────────────────────────────────────────────
@@ -566,6 +710,12 @@ const hr = (c = '─', n = 90) => console.log(c.repeat(n));
   console.log(`        cleanly separates alone. Pass requires strict per-phrase MAX`);
   console.log(`        OR (medium per-phrase MAX AND domain signal). The first GATE`);
   console.log(`        config showing "PERFECT" is the candidate to ship.`);
+  console.log('');
+  console.log(`PART 6 (REDUCED inputs): re-runs the score sweep using PhraseReducerService-`);
+  console.log(`        reduced text — the same shape Logic 2 receives in production.`);
+  console.log(`        Calibrates JUDGE TIER thresholds for the LLM-judge architecture:`);
+  console.log(`        T_high (above = PASS, no judge), T_low (below = FAIL, no judge),`);
+  console.log(`        ambiguous zone (judge call required).`);
   console.log('');
 
   await cleanup();
