@@ -3318,101 +3318,199 @@ router.get('/:callSid/full-report', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Shared Groq HTTP helper (reused by both gap endpoints below)
+// ─────────────────────────────────────────────────────────────────────────────
+function _groqChat({ messages, maxTokens = 400, temperature = 0.1 }) {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) return Promise.reject(new Error('GROQ_API_KEY not configured'));
+
+  const body = JSON.stringify({
+    model: 'llama-3.3-70b-versatile',
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    response_format: { type: 'json_object' }
+  });
+
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'api.groq.com',
+      path: '/openai/v1/chat/completions',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      },
+      timeout: 10000
+    };
+    const req = https.request(opts, res => {
+      let raw = '';
+      res.on('data', c => { raw += c; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(raw);
+          const content = parsed?.choices?.[0]?.message?.content;
+          if (!content) return reject(new Error('Empty Groq response'));
+          resolve(JSON.parse(content));
+        } catch (e) {
+          reject(new Error(`Groq parse failed: ${e.message}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Groq timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /company/:companyId/cue-gap
-// On-demand Groq gap analysis: given a caller utterance, return what SHOULD
-// have been extracted into each of the 8 cueFrame buckets.
+//
+// Multi-signal gap analysis. Groq identifies 1-3 DISTINCT intent signals
+// in the caller utterance — each with a UAP-matchable phrase candidate and
+// its own 8-field cueFrame extraction. Returns candidates[] for rendering
+// and downstream phrase matching.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/company/:companyId/cue-gap', async (req, res) => {
   const { companyId } = req.params;
   const { utterance, callSid, turnNumber } = req.body || {};
 
-  if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 2) {
-    return res.status(400).json({ error: 'utterance required' });
+  if (!utterance || typeof utterance !== 'string' || utterance.trim().length < 3) {
+    return res.status(400).json({ error: 'utterance required (min 3 chars)' });
   }
-
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) {
+  if (!process.env.GROQ_API_KEY) {
     return res.status(503).json({ error: 'GROQ_API_KEY not configured' });
   }
 
-  const prompt = `You are a cue extraction engine for a voice AI phone agent system.
+  const safeUtterance = utterance.replace(/\\/g, '\\\\').replace(/"/g, '\\"').slice(0, 500);
 
-Analyze the following caller utterance and extract signal into these 8 buckets:
+  const systemPrompt = `You are a multi-signal extraction engine for a voice AI phone agent.
 
-1. requestCue — Caller is asking for something to be done (e.g. "can you", "could you", "would you", "I want to", "I'd like to")
-2. permissionCue — Caller is asking if they need to do something (e.g. "do I have to", "am I required to", "is it okay if", "can I")
-3. infoCue — Caller is asking for information (e.g. "what is", "how much", "when does", "how do I", "what time")
-4. directiveCue — Caller is giving a direct instruction or stating a need (e.g. "just", "please", "I need to", "I'm calling about", "I'm here because")
-5. actionCore — Core action verb or request type (e.g. "schedule", "book", "pay", "fix", "replace", "install", "repair", "cancel", "refund", "check")
-6. urgencyCore — Time pressure or urgency signal (e.g. "today", "now", "asap", "emergency", "urgent", "right away", "as soon as possible")
-7. modifierCore — Context modifier that qualifies the action (e.g. "for my AC unit", "under warranty", "with the maintenance plan", equipment name/type)
-8. tradeMatches — Trade/industry vocabulary present (e.g. HVAC, plumbing, electrical, furnace, compressor, thermostat, water heater, drain)
+A caller utterance often contains MULTIPLE DISTINCT intent signals that must be matched against a knowledge base separately — like a repeat-visit complaint, an equipment failure symptom, and a new secondary issue all in the same breath.
 
-RULES:
-- Extract ONLY what is clearly present in the utterance. Do not infer or hallucinate.
-- For tradeMatches: return an array of objects like [{"term": "AC", "category": "hvac"}], or [] if none.
-- For all other fields: return a short extracted string (2-8 words max), or null if not present.
-- Return ONLY valid JSON, no markdown, no explanation.
+Your job: decompose the utterance into 1-3 DISTINCT, NON-OVERLAPPING signals.
 
-UTTERANCE: "${utterance.replace(/"/g, '\\"').slice(0, 400)}"
+For each signal produce a JSON object with these exact keys:
+- "signal": one of: repeat_visit | equipment_failure | new_symptom | payment_inquiry | scheduling_request | info_request | complaint | warranty_question | other
+- "phrase": a 3-7 word compact phrase in natural caller language for THIS signal only — written as a caller would say it (e.g. "ac not cooling again", "water leaking garage", "same problem as before", "how much does it cost"). This is a SEARCH KEY, not a sentence.
+- "rationale": one sentence — why this is a distinct signal worth matching separately
+- "cueFrame": extract ONLY what belongs to THIS signal:
+  {
+    "requestCue": short string or null,
+    "permissionCue": short string or null,
+    "infoCue": short string or null,
+    "directiveCue": short string or null,
+    "actionCore": short string or null,
+    "urgencyCore": short string or null,
+    "modifierCore": short string or null,
+    "tradeMatches": [ {"term": "...", "category": "hvac|plumbing|electrical|general"} ] or []
+  }
 
-Respond with this exact JSON structure:
-{
-  "requestCue": null,
-  "permissionCue": null,
-  "infoCue": null,
-  "directiveCue": null,
-  "actionCore": null,
-  "urgencyCore": null,
-  "modifierCore": null,
-  "tradeMatches": []
-}`;
+STRICT RULES:
+1. Each candidate must address a DIFFERENT topic or intent — never paraphrase the same thing twice
+2. "phrase" must be 3-7 lowercase words, natural caller speech — it feeds directly into a phrase matcher
+3. Extract ONLY what is clearly stated — never hallucinate or infer
+4. cueFrame fields: 2-8 words or null (not full sentences)
+5. If utterance has only one clear signal, return exactly 1 candidate
+6. Return ONLY: { "candidates": [ ...1-3 objects... ] }`;
+
+  const userMsg = `UTTERANCE: "${safeUtterance}"`;
 
   try {
-    const body = JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 300,
-      response_format: { type: 'json_object' }
+    const result = await _groqChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMsg }
+      ],
+      maxTokens: 700,
+      temperature: 0.05
     });
 
-    const groqRes = await new Promise((resolve, reject) => {
-      const reqOpts = {
-        hostname: 'api.groq.com',
-        path: '/openai/v1/chat/completions',
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${groqKey}`,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body)
-        },
-        timeout: 8000
-      };
-      const hreq = https.request(reqOpts, hres => {
-        let data = '';
-        hres.on('data', chunk => { data += chunk; });
-        hres.on('end', () => {
-          try { resolve(JSON.parse(data)); }
-          catch (e) { reject(new Error('Groq JSON parse failed')); }
-        });
-      });
-      hreq.on('error', reject);
-      hreq.on('timeout', () => { hreq.destroy(); reject(new Error('Groq timeout')); });
-      hreq.write(body);
-      hreq.end();
-    });
+    // Validate and sanitise candidates
+    const raw = Array.isArray(result?.candidates) ? result.candidates : [];
+    const candidates = raw
+      .filter(c => c && typeof c.phrase === 'string' && c.phrase.trim().length >= 3)
+      .slice(0, 3)
+      .map((c, idx) => ({
+        idx,
+        signal:    typeof c.signal === 'string' ? c.signal : 'other',
+        phrase:    c.phrase.trim().toLowerCase().slice(0, 80),
+        rationale: typeof c.rationale === 'string' ? c.rationale.slice(0, 200) : '',
+        cueFrame: {
+          requestCue:    c.cueFrame?.requestCue    || null,
+          permissionCue: c.cueFrame?.permissionCue || null,
+          infoCue:       c.cueFrame?.infoCue       || null,
+          directiveCue:  c.cueFrame?.directiveCue  || null,
+          actionCore:    c.cueFrame?.actionCore    || null,
+          urgencyCore:   c.cueFrame?.urgencyCore   || null,
+          modifierCore:  c.cueFrame?.modifierCore  || null,
+          tradeMatches:  Array.isArray(c.cueFrame?.tradeMatches) ? c.cueFrame.tradeMatches : []
+        }
+      }));
 
-    const raw = groqRes?.choices?.[0]?.message?.content;
-    if (!raw) return res.status(502).json({ error: 'Empty Groq response' });
+    if (!candidates.length) {
+      return res.status(422).json({ error: 'Groq returned no valid candidates', raw: result });
+    }
 
-    let suggested;
-    try { suggested = JSON.parse(raw); }
-    catch (e) { return res.status(502).json({ error: 'Groq returned invalid JSON', raw }); }
-
-    return res.json({ ok: true, suggested, utterance, callSid, turnNumber });
+    return res.json({ ok: true, candidates, utterance, callSid, turnNumber });
   } catch (err) {
     console.error('[cue-gap]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /company/:companyId/cue-phrase-match
+//
+// Run a phrase candidate through the live UAP phrase index. Returns whether
+// it matched a KC container, and if so which one — so the operator knows
+// whether to add the phrase to the dictionary or if it already routes correctly.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/company/:companyId/cue-phrase-match', async (req, res) => {
+  const { companyId } = req.params;
+  const { phrase } = req.body || {};
+
+  if (!phrase || typeof phrase !== 'string' || phrase.trim().length < 3) {
+    return res.status(400).json({ error: 'phrase required (min 3 chars)' });
+  }
+  if (!companyId) {
+    return res.status(400).json({ error: 'companyId required' });
+  }
+
+  try {
+    const UAP = require('../../services/engine/kc/UtteranceActParser');
+    const KCS = require('../../services/engine/agent2/KnowledgeContainerService');
+
+    const [uapResult, containers] = await Promise.all([
+      UAP.parse(companyId, phrase.trim()),
+      KCS.getActiveForCompany(companyId)
+    ]);
+
+    const matched = !!(uapResult.containerId && uapResult.matchType !== 'NONE');
+
+    let containerTitle = null;
+    let sectionLabel   = null;
+    if (matched) {
+      const container = containers.find(c => String(c._id) === uapResult.containerId);
+      containerTitle = container?.title || null;
+      sectionLabel   = uapResult.sectionLabel || null;
+    }
+
+    return res.json({
+      ok: true,
+      matched,
+      matchType:      uapResult.matchType,
+      confidence:     uapResult.confidence ?? null,
+      matchedPhrase:  uapResult.matchedPhrase || null,
+      containerId:    uapResult.containerId   || null,
+      containerTitle,
+      sectionLabel,
+      phrase
+    });
+  } catch (err) {
+    console.error('[cue-phrase-match]', err.message);
     return res.status(500).json({ error: err.message });
   }
 });

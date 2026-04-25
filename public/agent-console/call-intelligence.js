@@ -76,9 +76,69 @@ function getCompanyId() {
 }
 
 // ─── CUE GAP ANALYSIS ─────────────────────────────────────────────────────────
-// Stores caller utterances keyed by turnNumber for on-demand gap analysis.
-// Populated during _renderInlineUapSummary; consumed by runCueGapAnalysis.
+// _cueGapUtterances: caller text keyed by agentTurn.turnNumber.
+//   Populated during render; consumed by runCueGapAnalysis on button click.
+// _cueCandidates: Groq candidates[] keyed by turnNumber.
+//   Set after gap analysis resolves; consumed by runCuePhraseMatch.
 const _cueGapUtterances = new Map();
+const _cueCandidates    = new Map();
+
+const _CUE_FIELDS = [
+  ['REQUEST',    'requestCue'],
+  ['PERMISSION', 'permissionCue'],
+  ['INFO',       'infoCue'],
+  ['DIRECTIVE',  'directiveCue'],
+  ['ACTION',     'actionCore'],
+  ['URGENCY',    'urgencyCore'],
+  ['MODIFIER',   'modifierCore'],
+  ['TRADE',      'tradeMatches']
+];
+
+const _SIGNAL_COLORS = {
+  repeat_visit:        { bg: '#fef3c7', border: '#fbbf24', fg: '#92400e', dark: '#78350f' },
+  equipment_failure:   { bg: '#fee2e2', border: '#fca5a5', fg: '#991b1b', dark: '#7f1d1d' },
+  new_symptom:         { bg: '#fde8d8', border: '#fb923c', fg: '#9a3412', dark: '#7c2d12' },
+  payment_inquiry:     { bg: '#ede9fe', border: '#a78bfa', fg: '#5b21b6', dark: '#4c1d95' },
+  scheduling_request:  { bg: '#dcfce7', border: '#86efac', fg: '#166534', dark: '#14532d' },
+  info_request:        { bg: '#dbeafe', border: '#93c5fd', fg: '#1e40af', dark: '#1e3a8a' },
+  complaint:           { bg: '#fce7f3', border: '#f9a8d4', fg: '#9d174d', dark: '#831843' },
+  warranty_question:   { bg: '#f0fdf4', border: '#86efac', fg: '#15803d', dark: '#14532d' },
+  other:               { bg: '#f9fafb', border: '#d1d5db', fg: '#374151', dark: '#111827' }
+};
+
+function _signalColors(signal) {
+  return _SIGNAL_COLORS[signal] || _SIGNAL_COLORS.other;
+}
+
+function _signalLabel(signal) {
+  return (signal || 'other').replace(/_/g, ' ').toUpperCase();
+}
+
+function _renderCueFrameMini(cf, colors) {
+  const cellBase = `padding:3px 5px;border-radius:3px;font-size:9px;line-height:1.25;min-height:32px;display:flex;flex-direction:column;justify-content:center;`;
+  return _CUE_FIELDS.map(([label, key]) => {
+    let val = '';
+    if (key === 'tradeMatches') {
+      const tm = Array.isArray(cf?.tradeMatches) ? cf.tradeMatches : [];
+      if (tm.length) {
+        const terms = [...new Set(tm.map(t => t?.term).filter(Boolean))];
+        val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
+      }
+    } else {
+      val = cf?.[key] || '';
+    }
+    if (val && String(val).trim()) {
+      return `<div style="${cellBase}background:${colors.bg};border:1px solid ${colors.border};">
+        <div style="font-weight:700;color:${colors.fg};font-size:8px;letter-spacing:0.4px;">${label}</div>
+        <div style="color:${colors.dark};font-weight:600;margin-top:1px;">${String(val).slice(0, 44)}</div>
+      </div>`;
+    }
+    return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
+      <div style="font-weight:700;color:#d1d5db;font-size:8px;letter-spacing:0.4px;">${label}</div>
+      <div style="color:#e5e7eb;font-style:italic;margin-top:1px;">—</div>
+    </div>`;
+  }).join('');
+}
 
 async function runCueGapAnalysis(btn, turnNum) {
   const utterance = _cueGapUtterances.get(turnNum);
@@ -91,59 +151,113 @@ async function runCueGapAnalysis(btn, turnNum) {
 
   btn.disabled = true;
   btn.textContent = 'Analyzing…';
-  container.innerHTML = '<div style="font-size:10px;color:#6b7280;padding:4px 0;">Asking Groq what should have been extracted…</div>';
-
-  const CUE_FIELDS = [
-    ['REQUEST',    'requestCue'],
-    ['PERMISSION', 'permissionCue'],
-    ['INFO',       'infoCue'],
-    ['DIRECTIVE',  'directiveCue'],
-    ['ACTION',     'actionCore'],
-    ['URGENCY',    'urgencyCore'],
-    ['MODIFIER',   'modifierCore'],
-    ['TRADE',      'tradeMatches']
-  ];
+  container.innerHTML = `<div style="font-size:10px;color:#6b7280;padding:6px 0;font-style:italic;">
+    Asking Groq to decompose utterance into distinct signals…</div>`;
 
   try {
     const data = await apiFetch(
       `/api/call-intelligence/company/${companyId}/cue-gap`,
       { method: 'POST', body: JSON.stringify({ utterance, callSid, turnNumber: turnNum }) }
     );
-    const suggested = data.suggested || {};
-    const cellBase = 'padding:4px 6px;border-radius:4px;font-size:10px;line-height:1.3;min-height:38px;display:flex;flex-direction:column;justify-content:center;';
-    const cells = CUE_FIELDS.map(([label, key]) => {
-      let val = '';
-      if (key === 'tradeMatches') {
-        const tm = Array.isArray(suggested.tradeMatches) ? suggested.tradeMatches : [];
-        if (tm.length) {
-          const terms = [...new Set(tm.map(t => t && t.term).filter(Boolean))];
-          val = terms.slice(0, 3).join(', ') + (tm.length > 3 ? ` +${tm.length - 3}` : '');
-        }
-      } else {
-        val = suggested[key] || '';
-      }
-      const present = !!val && String(val).trim();
-      if (present) {
-        return `<div style="${cellBase}background:#fef3c7;border:1px solid #fbbf24;">
-          <div style="font-weight:700;color:#92400e;font-size:9px;letter-spacing:0.4px;">${label}</div>
-          <div style="color:#78350f;font-weight:600;margin-top:2px;">${val.toString().slice(0, 48)}</div>
-        </div>`;
-      }
-      return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
-        <div style="font-weight:700;color:#cbd5e1;font-size:9px;letter-spacing:0.4px;">${label}</div>
-        <div style="color:#e2e8f0;font-style:italic;margin-top:2px;">—</div>
+
+    const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+    if (!candidates.length) {
+      container.innerHTML = `<div style="font-size:10px;color:#991b1b;padding:4px 0;">No candidates returned.</div>`;
+      btn.disabled = false; btn.textContent = 'Retry →';
+      return;
+    }
+
+    _cueCandidates.set(turnNum, candidates);
+
+    const cards = candidates.map((c, idx) => {
+      const colors  = _signalColors(c.signal);
+      const cellsHtml = _renderCueFrameMini(c.cueFrame, colors);
+      const cardId  = `cue-candidate-${turnNum}-${idx}`;
+      const matchId = `cue-match-${turnNum}-${idx}`;
+      const pfUrl   = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(c.phrase)}`;
+
+      return `<div id="${cardId}" style="margin-top:6px;padding:8px;border-radius:5px;background:${colors.bg};border:1px solid ${colors.border};">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
+          <span style="font-size:11px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
+        </div>
+        ${c.rationale ? `<div style="font-size:9px;color:${colors.fg};margin-bottom:5px;font-style:italic;">${c.rationale}</div>` : ''}
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:6px;">${cellsHtml}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <button onclick="runCuePhraseMatch(${turnNum}, ${idx})"
+            style="font-size:9px;padding:2px 8px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;">
+            ⚡ Run phrase match →
+          </button>
+          <a href="${pfUrl}" target="_blank"
+            style="font-size:9px;color:${colors.fg};text-decoration:underline;">
+            Open in Phrase Finder ↗
+          </a>
+        </div>
+        <div id="${matchId}" style="margin-top:4px;"></div>
       </div>`;
     }).join('');
 
-    container.innerHTML = `<div style="margin-top:4px;">
-      <div style="font-size:10px;color:#92400e;font-weight:600;margin-bottom:3px;">🤖 GROQ SUGGESTS — add missing patterns to cuePhrases</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;">${cells}</div>
+    container.innerHTML = `<div style="margin-top:6px;">
+      <div style="font-size:10px;color:#6b7280;font-weight:600;margin-bottom:2px;">
+        🔬 GROQ SIGNAL DECOMPOSITION — ${candidates.length} distinct signal${candidates.length > 1 ? 's' : ''} found
+      </div>
+      ${cards}
     </div>`;
+
     btn.style.display = 'none';
   } catch (err) {
     container.innerHTML = `<div style="font-size:10px;color:#991b1b;padding:4px 0;">Gap analysis failed: ${err.message}</div>`;
     btn.disabled = false;
     btn.textContent = 'Retry →';
+  }
+}
+
+async function runCuePhraseMatch(turnNum, idx) {
+  const candidates = _cueCandidates.get(turnNum);
+  if (!candidates || !candidates[idx]) return;
+
+  const { phrase } = candidates[idx];
+  const matchEl = document.getElementById(`cue-match-${turnNum}-${idx}`);
+  const btnEl   = document.querySelector(`#cue-candidate-${turnNum}-${idx} button`);
+  if (!matchEl) return;
+
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Matching…'; }
+  matchEl.innerHTML = `<div style="font-size:9px;color:#6b7280;font-style:italic;">Running UAP phrase match…</div>`;
+
+  try {
+    const data = await apiFetch(
+      `/api/call-intelligence/company/${state.companyId}/cue-phrase-match`,
+      { method: 'POST', body: JSON.stringify({ phrase }) }
+    );
+
+    if (data.matched) {
+      const conf   = data.confidence != null ? ` · ${(data.confidence * 100).toFixed(0)}%` : '';
+      const mt     = data.matchType || 'MATCH';
+      const title  = data.containerTitle ? ` → <strong>${data.containerTitle}</strong>` : '';
+      const section = data.sectionLabel ? ` <span style="color:#166534;">· ${data.sectionLabel}</span>` : '';
+      matchEl.innerHTML = `<div style="font-size:10px;padding:4px 6px;border-radius:3px;background:#dcfce7;border:1px solid #86efac;color:#166534;">
+        ✓ MATCHED${title}${section}
+        <span style="color:#15803d;font-size:9px;margin-left:4px;">${mt}${conf}</span>
+        <div style="font-size:9px;color:#4b7c59;margin-top:2px;">
+          Matched phrase: <em>"${data.matchedPhrase || phrase}"</em>
+        </div>
+      </div>`;
+    } else {
+      const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(state.companyId)}&openPf=${encodeURIComponent(phrase)}`;
+      matchEl.innerHTML = `<div style="font-size:10px;padding:4px 6px;border-radius:3px;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;">
+        ✗ NO MATCH — <strong>"${phrase}"</strong> is not in the phrase dictionary
+        <div style="margin-top:3px;">
+          <a href="${pfUrl}" target="_blank"
+            style="font-size:9px;font-weight:700;color:#991b1b;text-decoration:underline;">
+            → Add "${phrase}" to KC phrase dictionary ↗
+          </a>
+        </div>
+      </div>`;
+    }
+    if (btnEl) btnEl.style.display = 'none';
+  } catch (err) {
+    matchEl.innerHTML = `<div style="font-size:9px;color:#991b1b;">Match failed: ${err.message}</div>`;
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⚡ Run phrase match →'; }
   }
 }
 
