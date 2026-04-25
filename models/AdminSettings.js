@@ -1073,6 +1073,75 @@ const adminSettingsSchema = new mongoose.Schema({
         phraseIntelligenceUpdatedBy: { type: String, default: null },
 
         // ────────────────────────────────────────────────────────────────────
+        // ANCHOR SYNONYMS — Platform synonym map for the UAP anchor gate
+        // ────────────────────────────────────────────────────────────────────
+        // The UAP "Logic 1 / Word Gate" (KCDiscoveryRunner) requires ≥90% of
+        // a phrase's anchorWords[] to appear in the caller's input — measured
+        // by literal stem comparison. Real callers paraphrase: "system's not
+        // cooling" instead of "ac is not cooling". Without synonyms the gate
+        // fails on a perfectly valid utterance and KC never commits.
+        //
+        // SHAPE: { "<anchorWord>": ["<synonym1>", "<synonym2>", ...] }
+        //   Keys are single anchor words (the same form admins enter on KC
+        //   cards). Values are arrays of synonym phrases — single OR
+        //   multi-token. Multi-token synonyms match only when ALL tokens
+        //   are present in the input ("central air" → both words required).
+        //
+        // RESOLVER: services/engine/kc/AnchorSynonymResolver.js
+        //   Each tenant may override any anchor's list via
+        //   aiAgentSettings.agent2.speechDetection.anchorSynonyms (REPLACE
+        //   semantics — empty array = explicit disable for that anchor).
+        //
+        // ROLLOUT SAFETY: empty map = literal-only matching (legacy behaviour).
+        // ────────────────────────────────────────────────────────────────────
+        anchorSynonyms: {
+            type:    mongoose.Schema.Types.Mixed,
+            default: {},
+            description: 'Anchor synonym map { anchorWord: [synonyms] } — used by UAP anchor gate (Logic 1) to expand literal stem matching. Empty = literal-only.'
+        },
+        anchorSynonymsUpdatedAt: { type: Date,   default: null },
+        anchorSynonymsUpdatedBy: { type: String, default: null },
+
+        // ────────────────────────────────────────────────────────────────────
+        // CORE GATE — Compound-question rescue for UAP "Logic 2"
+        // ────────────────────────────────────────────────────────────────────
+        // Logic 2 embeds the caller's joined topicWords[] as a single string and
+        // compares it against the matched section's pre-computed phraseCore
+        // embedding. Compound questions ("how much would it cost — do I have
+        // to pay again?") dilute the embedding average across many words; the
+        // tight section phrase "Do I have to pay again" never gets above the
+        // threshold even though it's clearly the routing intent.
+        //
+        // RESCUE: when coreScore < threshold but the anchor gate passed and
+        // the caller's input is long, slice a window of the input bounded by
+        // the positions of the matched anchor tokens (with small padding),
+        // embed that window, and accept if either score clears the threshold.
+        // Additive — never lowers a pass to a fail.
+        //
+        // Implementation: KCDiscoveryRunner Logic 2 block. Per-tenant override
+        // at aiAgentSettings.agent2.speechDetection.coreGate.rescueEnabled.
+        // ────────────────────────────────────────────────────────────────────
+        coreGateRescueEnabled: {
+            type:        Boolean,
+            default:     true,
+            description: 'Platform kill switch for the Logic 2 anchor-anchored window rescue. Disable only if window rescue starts producing false positives (rare).'
+        },
+        coreGateRescueMinWords: {
+            type:        Number,
+            default:     6,
+            min:         3,
+            max:         20,
+            description: 'Caller topicWords[] count threshold below which window rescue is skipped (short inputs have no dilution problem).'
+        },
+        coreGateRescuePadding: {
+            type:        Number,
+            default:     2,
+            min:         0,
+            max:         5,
+            description: 'Word padding around the bounded anchor span when slicing the rescue window.'
+        },
+
+        // ────────────────────────────────────────────────────────────────────
         // MEDIA STREAMS — Platform defaults for direct Deepgram live STT (C2+)
         // Consumed by services/mediaStream/ConfigResolver.js. Each tenant can
         // override any field via company.aiAgentSettings.agent2.mediaStreams.

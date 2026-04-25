@@ -3990,7 +3990,40 @@ const companySchema = new mongoose.Schema({
                     boost:    { type: Number, default: 3, min: 1, max: 10 },
                     category: { type: String, enum: ['brand', 'symptom', 'technical', 'booking', 'custom'], default: 'custom' },
                     enabled:  { type: Boolean, default: true }
-                }]
+                }],
+                // ────────────────────────────────────────────────────────────
+                // ANCHOR SYNONYMS — Per-tenant override of the UAP anchor map
+                // ────────────────────────────────────────────────────────────
+                // Tenant-level companion to AdminSettings.globalHub.anchorSynonyms.
+                // Same shape: { "<anchorWord>": ["<synonym1>", "<synonym2>", ...] }.
+                // REPLACE semantics — a tenant key fully overrides the platform
+                // list for that anchor (no surprise unions). An empty array
+                // explicitly disables synonyms for that anchor (useful when an
+                // industry term collides — e.g. "unit" means a real estate
+                // unit in property management, not an HVAC unit).
+                //
+                // Resolver: services/engine/kc/AnchorSynonymResolver.js
+                // Default {} → tenant inherits platform synonyms unchanged.
+                // ────────────────────────────────────────────────────────────
+                anchorSynonyms: {
+                    type:    mongoose.Schema.Types.Mixed,
+                    default: {}
+                },
+                // ────────────────────────────────────────────────────────────
+                // CORE GATE OVERRIDES — Per-tenant Logic 2 rescue toggle
+                // ────────────────────────────────────────────────────────────
+                // Tenant-level kill switch for the Logic 2 anchor-anchored
+                // window rescue (platform default lives at
+                // AdminSettings.globalHub.coreGateRescueEnabled).
+                //
+                // null  → inherit platform default (recommended).
+                // false → disable rescue for this tenant (e.g. if their
+                //         vocabulary causes false positives).
+                // true  → force enable even when platform is off.
+                // ────────────────────────────────────────────────────────────
+                coreGate: {
+                    rescueEnabled: { type: Boolean, default: null }
+                }
             },
             // ─────────────────────────────────────────────────────────────────
             // MEDIA STREAMS — Direct Deepgram Nova-3 STT (C2+)

@@ -232,6 +232,14 @@ function _gracefulAck() {
 // correct utterance. Single source of truth now lives at utils/stem.js.
 const { stem: _stem } = require('../../../utils/stem');
 
+// AnchorSynonymResolver — expands the UAP "Logic 1 / Word Gate" hit-counter
+// to recognise contextually equivalent terms. Without it, a caller saying
+// "system's not cooling" misses the anchor "ac" → KC never commits → control
+// jumps straight to Claude LLM. Resolver reads platform defaults from
+// AdminSettings.globalHub.anchorSynonyms with per-tenant override at
+// company.aiAgentSettings.agent2.speechDetection.anchorSynonyms.
+const AnchorSynonymResolver = require('./AnchorSynonymResolver');
+
 /** Clip a string to maxLen characters for safe logging. */
 function _clip(str, maxLen = 80) {
   if (!str) return '';
@@ -1693,15 +1701,42 @@ class KCDiscoveryRunner {
             const rawWords = (userInput || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
 
             // ── LOGIC 1 — Word Gate ────────────────────────────────────────
-            // Ratio-based: count how many anchor words are present (exact or stemmed)
+            // Ratio-based: count how many anchor words are present (exact, stemmed,
+            // OR matched via the platform/tenant synonym map). Synonym expansion
+            // catches contextually equivalent terms — e.g. "system's not cooling"
+            // satisfies the anchor "ac" via the platform synonym list. Without
+            // this layer the gate fails on a perfectly valid utterance and KC
+            // never commits, sending control to the Claude LLM agent.
             const inputStems   = new Set(rawWords.map(_stem));
             const inputExact   = new Set(rawWords);
-            const anchorHits   = anchorWords.filter(aw => inputExact.has(aw) || inputStems.has(_stem(aw))).length;
-            const anchorRatio  = anchorHits / anchorWords.length;
 
-            const missedAnchorWords = anchorWords.filter(aw =>
-              !inputExact.has(aw) && !inputStems.has(_stem(aw))
-            );
+            // Resolve once per turn — cheap (in-process 60s cache for AdminSettings).
+            // If neither layer has data, returns an empty Map and matchAnchor()
+            // falls back to literal-only matching (legacy behaviour).
+            let synonymMap = new Map();
+            try {
+              synonymMap = await AnchorSynonymResolver.resolveSynonyms({ company });
+            } catch (synErr) {
+              logger.warn('[KC_ENGINE] Anchor synonym resolver failed — falling back to literal matching', {
+                companyId, callSid, turn, error: synErr?.message,
+              });
+            }
+
+            // Hit-counting with diagnostic provenance per anchor word.
+            const anchorMatchDetails = anchorWords.map(aw => {
+              const m = AnchorSynonymResolver.matchAnchor({
+                anchorWord: aw, inputExact, inputStems, synonymMap,
+              });
+              return { anchorWord: aw, ...m };
+            });
+
+            const anchorHits  = anchorMatchDetails.filter(d => d.matched).length;
+            const anchorRatio = anchorHits / anchorWords.length;
+
+            const missedAnchorWords  = anchorMatchDetails.filter(d => !d.matched).map(d => d.anchorWord);
+            const synonymMatches     = anchorMatchDetails
+              .filter(d => d.matched && d.via === 'synonym')
+              .map(d => ({ anchor: d.anchorWord, viaSynonym: d.synonymPhrase }));
 
             if (anchorRatio < ANCHOR_MATCH_THRESHOLD) {
               // ── LOGIC 1 FAIL — discriminating words missing → Groq ──
@@ -1712,6 +1747,8 @@ class KCDiscoveryRunner {
                 ratio:     Math.round(anchorRatio * 100) / 100,
                 threshold: ANCHOR_MATCH_THRESHOLD,
                 missed:    missedAnchorWords,
+                synonymMatches,                  // [{ anchor, viaSynonym }] — empty if no synonyms hit
+                synonymMapSize: synonymMap.size, // forensic: was the platform/tenant map even loaded?
                 passed:    false,
                 reason:    'ANCHOR_WORDS_MISSING',
               };
@@ -1722,6 +1759,7 @@ class KCDiscoveryRunner {
                 anchorRatio: Math.round(anchorRatio * 100) + '%',
                 threshold:   Math.round(ANCHOR_MATCH_THRESHOLD * 100) + '%',
                 missed:      missedAnchorWords,
+                synonymMatches,
                 sectionLabel: targetSection?.label,
               });
             } else if (uapResult.matchType === 'EXACT') {
@@ -1735,6 +1773,8 @@ class KCDiscoveryRunner {
                 ratio:     Math.round(anchorRatio * 100) / 100,
                 threshold: ANCHOR_MATCH_THRESHOLD,
                 missed:    [],
+                synonymMatches,
+                synonymMapSize: synonymMap.size,
                 passed:    true,
                 reason:    'EXACT_BYPASS',
               };
@@ -1744,6 +1784,7 @@ class KCDiscoveryRunner {
                 anchorHits,
                 anchorRatio: Math.round(anchorRatio * 100) + '%',
                 matchType:   uapResult.matchType,
+                synonymMatches,
                 sectionLabel: targetSection?.label,
               });
             } else {
@@ -1754,8 +1795,10 @@ class KCDiscoveryRunner {
                 ratio:     Math.round(anchorRatio * 100) / 100,
                 threshold: ANCHOR_MATCH_THRESHOLD,
                 missed:    missedAnchorWords,
+                synonymMatches,
+                synonymMapSize: synonymMap.size,
                 passed:    true,
-                reason:    'ANCHOR_WORDS_CONFIRMED',
+                reason:    synonymMatches.length > 0 ? 'ANCHOR_WORDS_CONFIRMED_VIA_SYNONYM' : 'ANCHOR_WORDS_CONFIRMED',
               };
               logger.info('[KC_ENGINE] LOGIC 1 PASS — anchor words confirmed', {
                 companyId, callSid, turn,
@@ -1763,6 +1806,7 @@ class KCDiscoveryRunner {
                 anchorHits,
                 anchorRatio: Math.round(anchorRatio * 100) + '%',
                 matchType:   uapResult.matchType,
+                synonymMatches,
                 sectionLabel: targetSection?.label,
               });
 
@@ -1815,29 +1859,106 @@ class KCDiscoveryRunner {
                     }
                     const coreScore = (ma && mb) ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0;
 
+                    // ── LOGIC 2 RESCUE — anchor-anchored window embed ─────
+                    // Compound utterances dilute the averaged callerCore embedding.
+                    // When the full-input score fails, slice a window of the raw
+                    // input bounded by the matched-anchor positions (with small
+                    // padding) and embed THAT slice. The rescue is purely additive:
+                    // it can turn a failure into a pass but never the reverse.
+                    //
+                    // Cost cap: only runs when (a) full coreScore < threshold,
+                    // (b) input is long enough to plausibly have dilution, (c)
+                    // platform/tenant kill switch allows it. Adds ~50ms (one
+                    // OpenAI embed call) on the rescue path only.
+                    let rescueResult = null;
+                    let rescueScore  = null;
+                    let finalCorePass = coreScore >= CORE_MATCH_THRESHOLD;
+
+                    if (!finalCorePass) {
+                      try {
+                        // Resolve rescue config: tenant override → platform default → hardcoded fallback.
+                        const tenantRescue = company?.aiAgentSettings?.agent2?.speechDetection?.coreGate?.rescueEnabled;
+                        const AdminSettings_ = require('../../../models/AdminSettings');
+                        // Reuse the cached AdminSettings from the resolver — same module-level cache,
+                        // so the second call here is a free lookup.
+                        const _adminDoc = await AdminSettings_.findOne().lean().catch(() => null);
+                        const platformRescue   = _adminDoc?.globalHub?.coreGateRescueEnabled;
+                        const rescueMinWords   = _adminDoc?.globalHub?.coreGateRescueMinWords ?? 6;
+                        const rescuePadding    = _adminDoc?.globalHub?.coreGateRescuePadding  ?? 2;
+                        // tenantRescue null/undefined → inherit. true/false → override.
+                        const rescueEnabled = (tenantRescue === true || tenantRescue === false)
+                          ? tenantRescue
+                          : (platformRescue !== false);  // platform default is true
+
+                        const callerWordCount = (uapResult.topicWords || []).length;
+
+                        if (rescueEnabled && callerWordCount >= rescueMinWords) {
+                          rescueResult = AnchorSynonymResolver.computeAnchorAnchoredWindow({
+                            rawInput:      userInput,
+                            anchorWords,
+                            synonymMap,
+                            paddingWords:  rescuePadding,
+                          });
+
+                          if (rescueResult?.window && rescueResult.window !== callerCore) {
+                            const windowEmb = await SemanticMatchService.embedText(rescueResult.window);
+                            if (windowEmb?.length && phraseCoreEmb?.length) {
+                              let dotW = 0, mwA = 0, mwB = 0;
+                              for (let _j = 0; _j < windowEmb.length; _j++) {
+                                dotW += windowEmb[_j] * phraseCoreEmb[_j];
+                                mwA  += windowEmb[_j] * windowEmb[_j];
+                                mwB  += phraseCoreEmb[_j] * phraseCoreEmb[_j];
+                              }
+                              rescueScore = (mwA && mwB) ? dotW / (Math.sqrt(mwA) * Math.sqrt(mwB)) : 0;
+                              if (rescueScore >= CORE_MATCH_THRESHOLD) {
+                                finalCorePass = true;
+                              }
+                            }
+                          }
+                        }
+                      } catch (rescueErr) {
+                        logger.warn('[KC_ENGINE] LOGIC 2 RESCUE error — falling back to original score', {
+                          companyId, callSid, turn, err: rescueErr?.message,
+                        });
+                      }
+                    }
+
                     if (uapDiagnostic) uapDiagnostic.coreGate = {
                       ran:        true,
                       score:      Math.round(coreScore * 1000) / 1000,
                       threshold:  CORE_MATCH_THRESHOLD,
-                      passed:     coreScore >= CORE_MATCH_THRESHOLD,
+                      passed:     finalCorePass,
                       callerCore: callerCore.slice(0, 120),
+                      // Rescue forensics — null when rescue didn't run.
+                      rescue: rescueResult ? {
+                        window:      rescueResult.window.slice(0, 120),
+                        windowSpan:  rescueResult.span,
+                        score:       rescueScore !== null ? Math.round(rescueScore * 1000) / 1000 : null,
+                        passed:      rescueScore !== null && rescueScore >= CORE_MATCH_THRESHOLD,
+                        reason:      finalCorePass && coreScore < CORE_MATCH_THRESHOLD ? 'CORE_PASSED_VIA_WINDOW_RESCUE' : null,
+                      } : null,
                     };
 
                     logger.info('[KC_ENGINE] LOGIC 2 scored', {
                       companyId, callSid, turn,
                       callerCore:  callerCore.slice(0, 60),
                       coreScore:   Math.round(coreScore * 100) / 100,
+                      rescueScore: rescueScore !== null ? Math.round(rescueScore * 100) / 100 : null,
+                      rescueWindow: rescueResult?.window?.slice(0, 60) || null,
                       threshold:   CORE_MATCH_THRESHOLD,
-                      pass:        coreScore >= CORE_MATCH_THRESHOLD,
+                      pass:        finalCorePass,
+                      passVia:     coreScore >= CORE_MATCH_THRESHOLD ? 'full' :
+                                   (finalCorePass ? 'window_rescue' : 'fail'),
                       sectionLabel: targetSection?.label,
                     });
 
-                    if (coreScore < CORE_MATCH_THRESHOLD) {
+                    if (!finalCorePass) {
                       anchorGatePassed = false;
-                      logger.info('[KC_ENGINE] LOGIC 2 FAIL — core mismatch, falling through to Groq', {
+                      logger.info('[KC_ENGINE] LOGIC 2 FAIL — core mismatch (rescue too low or skipped), falling through to Groq', {
                         companyId, callSid, turn,
-                        coreScore: Math.round(coreScore * 100) / 100,
-                        threshold: CORE_MATCH_THRESHOLD,
+                        coreScore:   Math.round(coreScore * 100) / 100,
+                        rescueScore: rescueScore !== null ? Math.round(rescueScore * 100) / 100 : null,
+                        threshold:   CORE_MATCH_THRESHOLD,
                       });
                     }
                   } else if (uapDiagnostic) {
