@@ -115,7 +115,7 @@ function _signalLabel(signal) {
 }
 
 function _renderCueFrameMini(cf, colors) {
-  const cellBase = `padding:3px 5px;border-radius:3px;font-size:9px;line-height:1.25;min-height:32px;display:flex;flex-direction:column;justify-content:center;`;
+  const cellBase = `padding:4px 6px;border-radius:3px;font-size:11px;line-height:1.3;min-height:36px;display:flex;flex-direction:column;justify-content:center;`;
   return _CUE_FIELDS.map(([label, key]) => {
     let val = '';
     if (key === 'tradeMatches') {
@@ -129,12 +129,12 @@ function _renderCueFrameMini(cf, colors) {
     }
     if (val && String(val).trim()) {
       return `<div style="${cellBase}background:${colors.bg};border:1px solid ${colors.border};">
-        <div style="font-weight:700;color:${colors.fg};font-size:8px;letter-spacing:0.4px;">${label}</div>
+        <div style="font-weight:700;color:${colors.fg};font-size:10px;letter-spacing:0.4px;">${label}</div>
         <div style="color:${colors.dark};font-weight:600;margin-top:1px;">${String(val).slice(0, 44)}</div>
       </div>`;
     }
     return `<div style="${cellBase}background:#fafafa;border:1px dashed #e5e7eb;">
-      <div style="font-weight:700;color:#d1d5db;font-size:8px;letter-spacing:0.4px;">${label}</div>
+      <div style="font-weight:700;color:#d1d5db;font-size:10px;letter-spacing:0.4px;">${label}</div>
       <div style="color:#e5e7eb;font-style:italic;margin-top:1px;">—</div>
     </div>`;
   }).join('');
@@ -175,15 +175,15 @@ async function runCueGapAnalysis(btn, turnNum) {
       const matchId   = `cue-match-${turnNum}-${idx}`;
       const pfUrl     = `/agent-console/services.html?companyId=${encodeURIComponent(companyId)}&openPf=${encodeURIComponent(c.phrase)}`;
 
-      return `<div id="cue-candidate-${turnNum}-${idx}" style="margin-top:5px;padding-left:6px;border-left:3px solid ${colors.border};">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap;">
-          <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
-          <span style="font-size:10px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
+      return `<div id="cue-candidate-${turnNum}-${idx}" style="margin-top:6px;padding-left:8px;border-left:3px solid ${colors.border};">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+          <span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;background:${colors.fg};color:#fff;white-space:nowrap;">${_signalLabel(c.signal)}</span>
+          <span style="font-size:12px;font-weight:700;color:${colors.dark};font-family:monospace;">"${c.phrase}"</span>
           <button onclick="runCuePhraseMatch(${turnNum}, ${idx})"
-            style="font-size:9px;padding:1px 7px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;margin-left:auto;">
+            style="font-size:11px;padding:2px 10px;border-radius:3px;background:#1e40af;color:#fff;border:none;cursor:pointer;font-weight:600;margin-left:auto;">
             ⚡ Match →
           </button>
-          <a href="${pfUrl}" target="_blank" style="font-size:9px;color:#6b7280;text-decoration:underline;white-space:nowrap;">Phrase Finder ↗</a>
+          <a href="${pfUrl}" target="_blank" style="font-size:11px;color:#6b7280;text-decoration:underline;white-space:nowrap;">Phrase Finder ↗</a>
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:3px;">${cellsHtml}</div>
         <div id="${matchId}"></div>
@@ -215,7 +215,7 @@ async function runCuePhraseMatch(turnNum, idx) {
   if (!matchEl) return;
 
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Matching…'; }
-  matchEl.innerHTML = `<div style="font-size:9px;color:#6b7280;font-style:italic;">Running UAP phrase match…</div>`;
+  matchEl.innerHTML = `<div style="font-size:11px;color:#6b7280;font-style:italic;">Running phrase match…</div>`;
 
   try {
     const data = await apiFetch(
@@ -224,33 +224,36 @@ async function runCuePhraseMatch(turnNum, idx) {
     );
 
     if (data.matched) {
-      const conf   = data.confidence != null ? ` · ${(data.confidence * 100).toFixed(0)}%` : '';
-      const mt     = data.matchType || 'MATCH';
-      const title  = data.containerTitle ? ` → <strong>${data.containerTitle}</strong>` : '';
-      const section = data.sectionLabel ? ` <span style="color:#166534;">· ${data.sectionLabel}</span>` : '';
-      matchEl.innerHTML = `<div style="font-size:10px;padding:4px 6px;border-radius:3px;background:#dcfce7;border:1px solid #86efac;color:#166534;">
-        ✓ MATCHED${title}${section}
-        <span style="color:#15803d;font-size:9px;margin-left:4px;">${mt}${conf}</span>
-        <div style="font-size:9px;color:#4b7c59;margin-top:2px;">
-          Matched phrase: <em>"${data.matchedPhrase || phrase}"</em>
+      const conf    = data.confidence != null ? ` ${(data.confidence * 100).toFixed(0)}%` : '';
+      const mt      = data.matchType || 'MATCH';
+      const title   = data.containerTitle ? `<strong>${data.containerTitle}</strong>` : '';
+      const section = data.sectionLabel ? ` · ${data.sectionLabel}` : '';
+      matchEl.innerHTML = `<div style="font-size:12px;padding:6px 8px;border-radius:4px;background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;margin-top:4px;">
+        <span style="font-weight:700;">EXISTS IN KC →</span> ${title}<span style="color:#3b82f6;">${section}</span>
+        <span style="font-size:11px;color:#6b7280;margin-left:6px;">${mt} · ${conf}</span>
+        <div style="font-size:11px;color:#4b5563;margin-top:3px;">
+          KC phrase: <em>"${data.matchedPhrase || phrase}"</em>
+        </div>
+        <div style="font-size:11px;color:#1e40af;margin-top:2px;font-style:italic;">
+          ⚠ UAP missed this during the live call — the raw utterance was too long to extract this signal
         </div>
       </div>`;
     } else {
       const pfUrl = `/agent-console/services.html?companyId=${encodeURIComponent(state.companyId)}&openPf=${encodeURIComponent(phrase)}`;
-      matchEl.innerHTML = `<div style="font-size:10px;padding:4px 6px;border-radius:3px;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;">
-        ✗ NO MATCH — <strong>"${phrase}"</strong> is not in the phrase dictionary
-        <div style="margin-top:3px;">
+      matchEl.innerHTML = `<div style="font-size:12px;padding:6px 8px;border-radius:4px;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;margin-top:4px;">
+        <span style="font-weight:700;">✗ NOT IN DICTIONARY</span> — <em>"${phrase}"</em> has no matching KC phrase
+        <div style="margin-top:4px;">
           <a href="${pfUrl}" target="_blank"
-            style="font-size:9px;font-weight:700;color:#991b1b;text-decoration:underline;">
-            → Add "${phrase}" to KC phrase dictionary ↗
+            style="font-size:12px;font-weight:700;color:#991b1b;text-decoration:underline;">
+            → Add to KC phrase dictionary ↗
           </a>
         </div>
       </div>`;
     }
     if (btnEl) btnEl.style.display = 'none';
   } catch (err) {
-    matchEl.innerHTML = `<div style="font-size:9px;color:#991b1b;">Match failed: ${err.message}</div>`;
-    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⚡ Run phrase match →'; }
+    matchEl.innerHTML = `<div style="font-size:11px;color:#991b1b;">Match failed: ${err.message}</div>`;
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '⚡ Match →'; }
   }
 }
 
